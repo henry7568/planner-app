@@ -1,29 +1,36 @@
-const itemType = document.getElementById("itemType");
-const titleInput = document.getElementById("titleInput");
-
-const todoFields = document.getElementById("todoFields");
-const scheduleFields = document.getElementById("scheduleFields");
-
-const todoDueDate = document.getElementById("todoDueDate");
-const todoDueTime = document.getElementById("todoDueTime");
-
-const scheduleStartDate = document.getElementById("scheduleStartDate");
-const scheduleStartTime = document.getElementById("scheduleStartTime");
-const scheduleEndDate = document.getElementById("scheduleEndDate");
-const scheduleEndTime = document.getElementById("scheduleEndTime");
-
-const saveBtn = document.getElementById("saveBtn");
-const cancelEditBtn = document.getElementById("cancelEditBtn");
-const formTitle = document.getElementById("formTitle");
-
-const typeFilter = document.getElementById("typeFilter");
-const monthFilter = document.getElementById("monthFilter");
-const itemList = document.getElementById("itemList");
+const tabButtons = document.querySelectorAll(".tab-btn");
+const tabSections = document.querySelectorAll(".tab-section");
 
 const totalCount = document.getElementById("totalCount");
 const pendingCount = document.getElementById("pendingCount");
 const failCount = document.getElementById("failCount");
 const successCount = document.getElementById("successCount");
+
+const homeTodoCount = document.getElementById("homeTodoCount");
+const homeScheduleCount = document.getElementById("homeScheduleCount");
+const homeTodayScheduleCount = document.getElementById("homeTodayScheduleCount");
+const homeUrgentTodoCount = document.getElementById("homeUrgentTodoCount");
+
+const todoTitleInput = document.getElementById("todoTitleInput");
+const todoDueDate = document.getElementById("todoDueDate");
+const todoDueTime = document.getElementById("todoDueTime");
+const saveTodoBtn = document.getElementById("saveTodoBtn");
+const cancelTodoEditBtn = document.getElementById("cancelTodoEditBtn");
+const todoFormTitle = document.getElementById("todoFormTitle");
+const todoList = document.getElementById("todoList");
+
+const scheduleTitleInput = document.getElementById("scheduleTitleInput");
+const scheduleStartDate = document.getElementById("scheduleStartDate");
+const scheduleStartTime = document.getElementById("scheduleStartTime");
+const scheduleEndDate = document.getElementById("scheduleEndDate");
+const scheduleEndTime = document.getElementById("scheduleEndTime");
+const saveScheduleBtn = document.getElementById("saveScheduleBtn");
+const cancelScheduleEditBtn = document.getElementById("cancelScheduleEditBtn");
+const scheduleFormTitle = document.getElementById("scheduleFormTitle");
+
+const typeFilter = document.getElementById("typeFilter");
+const monthFilter = document.getElementById("monthFilter");
+const allItemList = document.getElementById("allItemList");
 
 const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
@@ -36,9 +43,13 @@ const clearSelectedDateBtn = document.getElementById("clearSelectedDateBtn");
 const calendarPopupOverlay = document.getElementById("calendarPopupOverlay");
 
 let items = loadItems();
-let selectedMonth = "";
-let selectedTypeFilter = "";
-let editingId = null;
+let selectedAllMonth = "";
+let selectedAllType = "";
+let currentTab = "home";
+
+let todoEditingId = null;
+let scheduleEditingId = null;
+
 let selectedDate = "";
 
 const now = new Date();
@@ -48,29 +59,29 @@ let calendarMonth = now.getMonth();
 init();
 
 function init() {
-  toggleTypeFields();
-  syncCalendarWithFilter();
-  renderMonthOptions();
-  renderItems();
-  renderSummary();
-  renderCalendar();
-  renderSelectedDateSchedules();
+  setupTabs();
 
-  itemType.addEventListener("change", toggleTypeFields);
-  saveBtn.addEventListener("click", saveItem);
-  cancelEditBtn.addEventListener("click", cancelEdit);
+  saveTodoBtn.addEventListener("click", saveTodo);
+  cancelTodoEditBtn.addEventListener("click", resetTodoForm);
+
+  saveScheduleBtn.addEventListener("click", saveSchedule);
+  cancelScheduleEditBtn.addEventListener("click", resetScheduleForm);
 
   typeFilter.addEventListener("change", (e) => {
-    selectedTypeFilter = e.target.value;
-    renderItems();
-    renderSummary();
+    selectedAllType = e.target.value;
+    renderAllList();
   });
 
   monthFilter.addEventListener("change", (e) => {
-    selectedMonth = e.target.value;
-    syncCalendarWithFilter();
-    renderItems();
-    renderSummary();
+    selectedAllMonth = e.target.value;
+    renderAllList();
+
+    if (selectedAllMonth) {
+      const [year, month] = selectedAllMonth.split("-");
+      calendarYear = Number(year);
+      calendarMonth = Number(month) - 1;
+    }
+
     renderCalendar();
     renderSelectedDateSchedules();
   });
@@ -108,208 +119,313 @@ function init() {
       renderSelectedDateSchedules();
     }
   });
+
+  renderMonthOptions();
+  renderAll();
 }
 
-function toggleTypeFields() {
-  const type = itemType.value;
+function setupTabs() {
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetTab = button.dataset.tab;
+      currentTab = targetTab;
 
-  if (type === "todo") {
-    todoFields.classList.remove("hidden");
-    scheduleFields.classList.add("hidden");
-  } else {
-    todoFields.classList.add("hidden");
-    scheduleFields.classList.remove("hidden");
-  }
+      tabButtons.forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+
+      tabSections.forEach((section) => section.classList.add("hidden"));
+      document.getElementById(`tab-${targetTab}`).classList.remove("hidden");
+
+      if (targetTab !== "schedule") {
+        selectedDate = "";
+        renderSelectedDateSchedules();
+      }
+
+      if (targetTab === "schedule") {
+        renderCalendar();
+        renderSelectedDateSchedules();
+      }
+    });
+  });
 }
 
-function saveItem() {
-  const type = itemType.value;
-  const title = titleInput.value.trim();
-
-  if (!title) {
-    alert("제목을 입력하세요.");
-    titleInput.focus();
-    return;
-  }
-
-  if (type === "todo") {
-    saveTodo(title);
-  } else {
-    saveSchedule(title);
-  }
+function renderAll() {
+  renderSummary();
+  renderTodoList();
+  renderMonthOptions();
+  renderAllList();
+  renderCalendar();
+  renderSelectedDateSchedules();
 }
 
-function saveTodo(title) {
+function saveTodo() {
+  const title = todoTitleInput.value.trim();
   const dueDate = todoDueDate.value;
   const dueTime = todoDueTime.value;
 
+  if (!title) {
+    alert("할일 제목을 입력하세요.");
+    todoTitleInput.focus();
+    return;
+  }
+
   if (!dueDate) {
-    alert("할일의 기한 날짜를 입력하세요.");
+    alert("기한 날짜를 입력하세요.");
     todoDueDate.focus();
     return;
   }
 
-  const todoData = {
-    id: editingId ?? Date.now(),
+  const newItem = {
+    id: todoEditingId ?? Date.now(),
     type: "todo",
     title,
     dueDate,
     dueTime,
-    status: getExistingStatus(editingId),
+    status: getExistingStatus(todoEditingId),
     createdAt: getTodayString()
   };
 
-  upsertItem(todoData);
+  upsertItem(newItem);
+  resetTodoForm();
 }
 
-function saveSchedule(title) {
+function saveSchedule() {
+  const title = scheduleTitleInput.value.trim();
   const startDate = scheduleStartDate.value;
   const startTime = scheduleStartTime.value;
   const endDate = scheduleEndDate.value;
   const endTime = scheduleEndTime.value;
 
+  if (!title) {
+    alert("일정 제목을 입력하세요.");
+    scheduleTitleInput.focus();
+    return;
+  }
+
   if (!startDate || !endDate) {
-    alert("일정의 시작 날짜와 종료 날짜를 입력하세요.");
+    alert("시작 날짜와 종료 날짜를 입력하세요.");
     return;
   }
 
   const startDateTime = makeDateTime(startDate, startTime);
   const endDateTime = makeDateTime(endDate, endTime);
 
-  if (startDateTime && endDateTime && new Date(startDateTime) > new Date(endDateTime)) {
+  if (new Date(startDateTime) > new Date(endDateTime)) {
     alert("종료 시점은 시작 시점보다 뒤여야 합니다.");
     return;
   }
 
-  const scheduleData = {
-    id: editingId ?? Date.now(),
+  const newItem = {
+    id: scheduleEditingId ?? Date.now(),
     type: "schedule",
     title,
     startDate,
     startTime,
     endDate,
     endTime,
-    status: getExistingStatus(editingId),
+    status: getExistingStatus(scheduleEditingId),
     createdAt: getTodayString()
   };
 
-  upsertItem(scheduleData);
+  upsertItem(newItem);
+  resetScheduleForm();
 }
 
 function upsertItem(newItem) {
-  if (editingId === null) {
-    items.push(newItem);
+  const exists = items.some((item) => item.id === newItem.id);
+
+  if (exists) {
+    items = items.map((item) => (item.id === newItem.id ? newItem : item));
   } else {
-    items = items.map((item) => (item.id === editingId ? newItem : item));
+    items.push(newItem);
   }
 
   saveItems();
-  resetForm();
-  renderMonthOptions();
-  renderItems();
-  renderSummary();
-  renderCalendar();
-  renderSelectedDateSchedules();
+  renderAll();
 }
 
 function getExistingStatus(id) {
   if (id === null) return "pending";
-  const existing = items.find((item) => item.id === id);
-  return existing ? existing.status : "pending";
+  const found = items.find((item) => item.id === id);
+  return found ? found.status : "pending";
 }
 
-function resetForm() {
-  editingId = null;
-  formTitle.textContent = "항목 추가";
-  saveBtn.textContent = "추가하기";
-  cancelEditBtn.classList.add("hidden");
-
-  itemType.value = "todo";
-  titleInput.value = "";
-
+function resetTodoForm() {
+  todoEditingId = null;
+  todoFormTitle.textContent = "할일 추가";
+  saveTodoBtn.textContent = "추가하기";
+  cancelTodoEditBtn.classList.add("hidden");
+  todoTitleInput.value = "";
   todoDueDate.value = "";
   todoDueTime.value = "";
+}
 
+function resetScheduleForm() {
+  scheduleEditingId = null;
+  scheduleFormTitle.textContent = "일정 추가";
+  saveScheduleBtn.textContent = "추가하기";
+  cancelScheduleEditBtn.classList.add("hidden");
+  scheduleTitleInput.value = "";
   scheduleStartDate.value = "";
   scheduleStartTime.value = "";
   scheduleEndDate.value = "";
   scheduleEndTime.value = "";
-
-  toggleTypeFields();
 }
 
-function cancelEdit() {
-  resetForm();
-}
+function startEdit(id) {
+  const item = items.find((x) => x.id === id);
+  if (!item) return;
 
-function getTodayString() {
-  const nowDate = new Date();
-  const year = nowDate.getFullYear();
-  const month = String(nowDate.getMonth() + 1).padStart(2, "0");
-  const day = String(nowDate.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function makeDateTime(date, time) {
-  if (!date) return "";
-  if (!time) return `${date}T00:00`;
-  return `${date}T${time}`;
-}
-
-function getMonthKeyFromItem(item) {
   if (item.type === "todo") {
-    return item.dueDate.slice(0, 7);
+    todoEditingId = id;
+    todoFormTitle.textContent = "할일 수정";
+    saveTodoBtn.textContent = "수정 저장";
+    cancelTodoEditBtn.classList.remove("hidden");
+
+    todoTitleInput.value = item.title;
+    todoDueDate.value = item.dueDate || "";
+    todoDueTime.value = item.dueTime || "";
+
+    switchTab("todo");
+  } else {
+    scheduleEditingId = id;
+    scheduleFormTitle.textContent = "일정 수정";
+    saveScheduleBtn.textContent = "수정 저장";
+    cancelScheduleEditBtn.classList.remove("hidden");
+
+    scheduleTitleInput.value = item.title;
+    scheduleStartDate.value = item.startDate || "";
+    scheduleStartTime.value = item.startTime || "";
+    scheduleEndDate.value = item.endDate || "";
+    scheduleEndTime.value = item.endTime || "";
+
+    switchTab("schedule");
   }
-  return item.startDate.slice(0, 7);
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function getFilteredItems() {
-  let filtered = [...items];
+function switchTab(tabName) {
+  currentTab = tabName;
 
-  if (selectedTypeFilter) {
-    filtered = filtered.filter((item) => item.type === selectedTypeFilter);
-  }
-
-  if (selectedMonth) {
-    filtered = filtered.filter((item) => getMonthKeyFromItem(item) === selectedMonth);
-  }
-
-  return filtered;
-}
-
-function sortItems(itemArray) {
-  return itemArray.sort((a, b) => {
-    const aDate = getSortDate(a);
-    const bDate = getSortDate(b);
-    return new Date(aDate) - new Date(bDate);
+  tabButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tabName);
   });
-}
 
-function getSortDate(item) {
-  if (item.type === "todo") {
-    return makeDateTime(item.dueDate, item.dueTime || "00:00");
+  tabSections.forEach((section) => {
+    section.classList.add("hidden");
+  });
+
+  document.getElementById(`tab-${tabName}`).classList.remove("hidden");
+
+  if (tabName !== "schedule") {
+    selectedDate = "";
+    renderSelectedDateSchedules();
   }
-  return makeDateTime(item.startDate, item.startTime || "00:00");
+
+  if (tabName === "schedule") {
+    renderCalendar();
+    renderSelectedDateSchedules();
+  }
 }
 
-function renderItems() {
-  const filteredItems = sortItems(getFilteredItems());
+function deleteItem(id) {
+  const ok = confirm("정말 삭제할까요?");
+  if (!ok) return;
 
-  if (filteredItems.length === 0) {
-    itemList.innerHTML = `
+  items = items.filter((item) => item.id !== id);
+
+  if (todoEditingId === id) {
+    resetTodoForm();
+  }
+
+  if (scheduleEditingId === id) {
+    resetScheduleForm();
+  }
+
+  if (selectedDate) {
+    const remains = getSchedulesForDate(selectedDate).filter((item) => item.id !== id);
+    if (remains.length === 0) {
+      selectedDate = "";
+    }
+  }
+
+  saveItems();
+  renderAll();
+}
+
+function toggleStatus(id) {
+  const item = items.find((x) => x.id === id);
+  if (!item) return;
+
+  item.status = getNextStatus(item.status);
+  saveItems();
+  renderAll();
+}
+
+function renderSummary() {
+  const total = items.length;
+  const pending = items.filter((item) => item.status === "pending").length;
+  const fail = items.filter((item) => item.status === "fail").length;
+  const success = items.filter((item) => item.status === "success").length;
+
+  totalCount.textContent = total;
+  pendingCount.textContent = pending;
+  failCount.textContent = fail;
+  successCount.textContent = success;
+
+  const todos = items.filter((item) => item.type === "todo");
+  const schedules = items.filter((item) => item.type === "schedule");
+  const todayKey = formatDateKey(new Date());
+
+  homeTodoCount.textContent = todos.length;
+  homeScheduleCount.textContent = schedules.length;
+  homeTodayScheduleCount.textContent = schedules.filter((item) => isDateInScheduleRange(todayKey, item)).length;
+  homeUrgentTodoCount.textContent = todos.filter((item) => getTodoDiffMinutes(item) >= 0 && getTodoDiffMinutes(item) <= 1440).length;
+}
+
+function renderTodoList() {
+  const todos = sortItems(items.filter((item) => item.type === "todo"));
+
+  if (todos.length === 0) {
+    todoList.innerHTML = `
       <div class="empty-message">
-        현재 표시할 항목이 없습니다.
-        <div class="guide-box">
-          상태 버튼은 클릭할 때마다
-          <strong>빈칸 → 실패(-) → 성공(✓) → 빈칸</strong>
-          순서로 바뀝니다.
-        </div>
+        등록된 할일이 없습니다.
       </div>
     `;
     return;
   }
 
-  itemList.innerHTML = filteredItems.map((item) => renderCard(item)).join("");
+  todoList.innerHTML = todos.map((item) => renderCard(item)).join("");
+}
+
+function renderAllList() {
+  const filtered = sortItems(getFilteredAllItems());
+
+  if (filtered.length === 0) {
+    allItemList.innerHTML = `
+      <div class="empty-message">
+        현재 표시할 항목이 없습니다.
+      </div>
+    `;
+    return;
+  }
+
+  allItemList.innerHTML = filtered.map((item) => renderCard(item)).join("");
+}
+
+function getFilteredAllItems() {
+  let filtered = [...items];
+
+  if (selectedAllType) {
+    filtered = filtered.filter((item) => item.type === selectedAllType);
+  }
+
+  if (selectedAllMonth) {
+    filtered = filtered.filter((item) => getMonthKeyFromItem(item) === selectedAllMonth);
+  }
+
+  return filtered;
 }
 
 function renderCard(item) {
@@ -359,135 +475,6 @@ function renderCard(item) {
   `;
 }
 
-function getTodoRemainText(item) {
-  const target = new Date(makeDateTime(item.dueDate, item.dueTime || "23:59"));
-  const nowDate = new Date();
-
-  const diffMs = target - nowDate;
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-  if (diffMinutes > 0) {
-    const days = Math.floor(diffMinutes / (60 * 24));
-    const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
-    const minutes = diffMinutes % 60;
-
-    if (days > 0) return `${days}일 ${hours}시간 남음`;
-    if (hours > 0) return `${hours}시간 ${minutes}분 남음`;
-    return `${minutes}분 남음`;
-  }
-
-  if (diffMinutes === 0) {
-    return "지금 마감";
-  }
-
-  const pastMinutes = Math.abs(diffMinutes);
-  const pastDays = Math.floor(pastMinutes / (60 * 24));
-  const pastHours = Math.floor((pastMinutes % (60 * 24)) / 60);
-
-  if (pastDays > 0) return `${pastDays}일 지남`;
-  if (pastHours > 0) return `${pastHours}시간 지남`;
-  return `${pastMinutes}분 지남`;
-}
-
-function getScheduleProgressText(item) {
-  const nowDate = new Date();
-  const start = new Date(makeDateTime(item.startDate, item.startTime || "00:00"));
-  const end = new Date(makeDateTime(item.endDate, item.endTime || "23:59"));
-
-  if (nowDate < start) return "시작 전";
-  if (nowDate > end) return "종료됨";
-  return "진행 중";
-}
-
-function getNextStatus(currentStatus) {
-  if (currentStatus === "pending") return "fail";
-  if (currentStatus === "fail") return "success";
-  return "pending";
-}
-
-function getStatusSymbol(status) {
-  if (status === "fail") return "-";
-  if (status === "success") return "✓";
-  return "";
-}
-
-function getStatusText(status) {
-  if (status === "fail") return "실패";
-  if (status === "success") return "성공";
-  return "미선택";
-}
-
-function toggleStatus(id) {
-  const item = items.find((x) => x.id === id);
-  if (!item) return;
-
-  item.status = getNextStatus(item.status);
-  saveItems();
-  renderItems();
-  renderSummary();
-  renderCalendar();
-  renderSelectedDateSchedules();
-}
-
-function startEdit(id) {
-  const item = items.find((x) => x.id === id);
-  if (!item) return;
-
-  editingId = id;
-  formTitle.textContent = "항목 수정";
-  saveBtn.textContent = "수정 저장";
-  cancelEditBtn.classList.remove("hidden");
-
-  itemType.value = item.type;
-  titleInput.value = item.title;
-
-  if (item.type === "todo") {
-    todoDueDate.value = item.dueDate || "";
-    todoDueTime.value = item.dueTime || "";
-
-    scheduleStartDate.value = "";
-    scheduleStartTime.value = "";
-    scheduleEndDate.value = "";
-    scheduleEndTime.value = "";
-  } else {
-    scheduleStartDate.value = item.startDate || "";
-    scheduleStartTime.value = item.startTime || "";
-    scheduleEndDate.value = item.endDate || "";
-    scheduleEndTime.value = item.endTime || "";
-
-    todoDueDate.value = "";
-    todoDueTime.value = "";
-  }
-
-  toggleTypeFields();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function deleteItem(id) {
-  const ok = confirm("정말 삭제할까요?");
-  if (!ok) return;
-
-  items = items.filter((item) => item.id !== id);
-
-  if (editingId === id) {
-    resetForm();
-  }
-
-  if (selectedDate) {
-    const schedules = getSchedulesForDate(selectedDate).filter((item) => item.id !== id);
-    if (schedules.length === 0) {
-      selectedDate = "";
-    }
-  }
-
-  saveItems();
-  renderMonthOptions();
-  renderItems();
-  renderSummary();
-  renderCalendar();
-  renderSelectedDateSchedules();
-}
-
 function renderMonthOptions() {
   const months = [...new Set(items.map((item) => getMonthKeyFromItem(item)))].sort();
 
@@ -497,33 +484,16 @@ function renderMonthOptions() {
     const option = document.createElement("option");
     option.value = month;
     option.textContent = month;
-    if (month === selectedMonth) {
+    if (month === selectedAllMonth) {
       option.selected = true;
     }
     monthFilter.appendChild(option);
   });
 
-  if (selectedMonth && !months.includes(selectedMonth)) {
-    selectedMonth = "";
+  if (selectedAllMonth && !months.includes(selectedAllMonth)) {
+    selectedAllMonth = "";
     monthFilter.value = "";
   }
-}
-
-function renderSummary() {
-  const filtered = getFilteredItems();
-
-  totalCount.textContent = filtered.length;
-  pendingCount.textContent = filtered.filter((item) => item.status === "pending").length;
-  failCount.textContent = filtered.filter((item) => item.status === "fail").length;
-  successCount.textContent = filtered.filter((item) => item.status === "success").length;
-}
-
-function syncCalendarWithFilter() {
-  if (!selectedMonth) return;
-
-  const [year, month] = selectedMonth.split("-");
-  calendarYear = Number(year);
-  calendarMonth = Number(month) - 1;
 }
 
 function renderCalendar() {
@@ -534,7 +504,6 @@ function renderCalendar() {
 
   const startWeekday = firstDay.getDay();
   const daysInMonth = lastDay.getDate();
-
   const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
 
   const cells = [];
@@ -594,19 +563,8 @@ function selectCalendarDate(dateKey) {
   renderSelectedDateSchedules();
 }
 
-function getSchedulesForDate(dateKey) {
-  return items
-    .filter((item) => item.type === "schedule")
-    .filter((item) => isDateInScheduleRange(dateKey, item))
-    .sort((a, b) => {
-      const aTime = a.startTime || "00:00";
-      const bTime = b.startTime || "00:00";
-      return aTime.localeCompare(bTime);
-    });
-}
-
 function renderSelectedDateSchedules() {
-  if (!selectedDate) {
+  if (!selectedDate || currentTab !== "schedule") {
     calendarPopupOverlay.classList.add("hidden");
     selectedDateLabel.textContent = "날짜를 선택하세요.";
     selectedDateScheduleList.innerHTML = "";
@@ -662,12 +620,114 @@ function renderSelectedDateSchedules() {
     .join("");
 }
 
+function getSchedulesForDate(dateKey) {
+  return items
+    .filter((item) => item.type === "schedule")
+    .filter((item) => isDateInScheduleRange(dateKey, item))
+    .sort((a, b) => {
+      const aTime = a.startTime || "00:00";
+      const bTime = b.startTime || "00:00";
+      return aTime.localeCompare(bTime);
+    });
+}
+
 function isDateInScheduleRange(dateKey, schedule) {
   const current = new Date(`${dateKey}T00:00`);
   const start = new Date(`${schedule.startDate}T00:00`);
   const end = new Date(`${schedule.endDate}T00:00`);
-
   return current >= start && current <= end;
+}
+
+function sortItems(itemArray) {
+  return itemArray.sort((a, b) => new Date(getSortDate(a)) - new Date(getSortDate(b)));
+}
+
+function getSortDate(item) {
+  if (item.type === "todo") {
+    return makeDateTime(item.dueDate, item.dueTime || "00:00");
+  }
+  return makeDateTime(item.startDate, item.startTime || "00:00");
+}
+
+function getMonthKeyFromItem(item) {
+  if (item.type === "todo") {
+    return item.dueDate.slice(0, 7);
+  }
+  return item.startDate.slice(0, 7);
+}
+
+function getTodoDiffMinutes(item) {
+  const target = new Date(makeDateTime(item.dueDate, item.dueTime || "23:59"));
+  const nowDate = new Date();
+  return Math.floor((target - nowDate) / (1000 * 60));
+}
+
+function getTodoRemainText(item) {
+  const diffMinutes = getTodoDiffMinutes(item);
+
+  if (diffMinutes > 0) {
+    const days = Math.floor(diffMinutes / (60 * 24));
+    const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
+    const minutes = diffMinutes % 60;
+
+    if (days > 0) return `${days}일 ${hours}시간 남음`;
+    if (hours > 0) return `${hours}시간 ${minutes}분 남음`;
+    return `${minutes}분 남음`;
+  }
+
+  if (diffMinutes === 0) {
+    return "지금 마감";
+  }
+
+  const pastMinutes = Math.abs(diffMinutes);
+  const pastDays = Math.floor(pastMinutes / (60 * 24));
+  const pastHours = Math.floor((pastMinutes % (60 * 24)) / 60);
+
+  if (pastDays > 0) return `${pastDays}일 지남`;
+  if (pastHours > 0) return `${pastHours}시간 지남`;
+  return `${pastMinutes}분 지남`;
+}
+
+function getScheduleProgressText(item) {
+  const nowDate = new Date();
+  const start = new Date(makeDateTime(item.startDate, item.startTime || "00:00"));
+  const end = new Date(makeDateTime(item.endDate, item.endTime || "23:59"));
+
+  if (nowDate < start) return "시작 전";
+  if (nowDate > end) return "종료됨";
+  return "진행 중";
+}
+
+function getNextStatus(currentStatus) {
+  if (currentStatus === "pending") return "fail";
+  if (currentStatus === "fail") return "success";
+  return "pending";
+}
+
+function getStatusSymbol(status) {
+  if (status === "fail") return "-";
+  if (status === "success") return "✓";
+  return "";
+}
+
+function getStatusText(status) {
+  if (status === "fail") return "실패";
+  if (status === "success") return "성공";
+  return "미선택";
+}
+
+function getTodayString() {
+  const nowDate = new Date();
+  const year = nowDate.getFullYear();
+  const month = String(nowDate.getMonth() + 1).padStart(2, "0");
+  const day = String(nowDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function makeDateTime(date, time) {
+  if (!date) return "";
+  if (!time) return `${date}T00:00`;
+  return `${date}T${time}`;
 }
 
 function formatDateKey(dateObj) {
@@ -678,16 +738,17 @@ function formatDateKey(dateObj) {
 }
 
 function saveItems() {
-  localStorage.setItem("planner_items_overlay_v1", JSON.stringify(items));
+  localStorage.setItem("planner_items_tabs_v1", JSON.stringify(items));
 }
 
 function loadItems() {
+  const savedTabs = localStorage.getItem("planner_items_tabs_v1");
   const savedOverlay = localStorage.getItem("planner_items_overlay_v1");
   const savedV4 = localStorage.getItem("planner_items_v4");
   const savedV3 = localStorage.getItem("planner_items_v3");
   const savedV2 = localStorage.getItem("planner_items_v2");
 
-  const target = savedOverlay || savedV4 || savedV3 || savedV2;
+  const target = savedTabs || savedOverlay || savedV4 || savedV3 || savedV2;
 
   if (!target) return [];
 

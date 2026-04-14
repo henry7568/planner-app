@@ -29,6 +29,32 @@ body {
   color: #666;
 }
 
+.tab-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: none;
+  background: #e5e7eb;
+  color: #222;
+  padding: 12px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.tab-btn.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.tab-section.hidden {
+  display: none !important;
+}
+
 .card {
   background: #fff;
   border-radius: 14px;
@@ -135,6 +161,7 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
+  margin-bottom: 16px;
 }
 
 .summary-item {
@@ -154,6 +181,30 @@ body {
 
 .summary-item strong {
   font-size: 24px;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.home-card {
+  background: #f8fafc;
+  border: 1px solid #e5eaf3;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.home-card h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.home-number {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
 }
 
 .item-list {
@@ -271,7 +322,7 @@ body {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .guide-box {
@@ -415,7 +466,7 @@ body {
 }
 
 .calendar-popup-overlay.hidden {
-  display: none;
+  display: none !important;
 }
 
 .calendar-popup {
@@ -483,15 +534,8 @@ body {
   gap: 10px;
 }
 
-.selected-schedule-actions {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
 .selected-schedule-card .meta-badge {
   padding: 8px 12px;
-  border-radius: 999px;
   font-size: 14px;
 }
 
@@ -513,6 +557,10 @@ body {
 }
 
 @media (max-width: 900px) {
+  .home-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .calendar-grid {
     gap: 6px;
   }
@@ -524,7 +572,8 @@ body {
 }
 
 @media (max-width: 768px) {
-  .summary {
+  .summary,
+  .home-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 

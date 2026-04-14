@@ -13,27 +13,69 @@
       <p class="sub-text">할일은 기한, 일정은 기간으로 관리합니다.</p>
     </header>
 
-    <section class="card">
-      <h2 id="formTitle">항목 추가</h2>
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="home">홈</button>
+      <button class="tab-btn" data-tab="todo">할일</button>
+      <button class="tab-btn" data-tab="schedule">일정</button>
+      <button class="tab-btn" data-tab="all">전체 목록</button>
+    </nav>
 
-      <div class="form-group">
-        <label for="itemType">항목 종류</label>
-        <select id="itemType">
-          <option value="todo">할일</option>
-          <option value="schedule">일정</option>
-        </select>
-      </div>
+    <section id="tab-home" class="tab-section">
+      <section class="card">
+        <h2>요약</h2>
+        <div class="summary">
+          <div class="summary-item">
+            <span class="summary-label">전체</span>
+            <strong id="totalCount">0</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">대기</span>
+            <strong id="pendingCount">0</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">실패</span>
+            <strong id="failCount">0</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">성공</span>
+            <strong id="successCount">0</strong>
+          </div>
+        </div>
 
-      <div class="form-group">
-        <label for="titleInput">제목</label>
-        <input
-          type="text"
-          id="titleInput"
-          placeholder="예: 방 청소 / 병원 방문 / 친구 약속"
-        />
-      </div>
+        <div class="home-grid">
+          <div class="home-card">
+            <h3>할일</h3>
+            <p class="home-number" id="homeTodoCount">0</p>
+          </div>
+          <div class="home-card">
+            <h3>일정</h3>
+            <p class="home-number" id="homeScheduleCount">0</p>
+          </div>
+          <div class="home-card">
+            <h3>오늘 포함 일정</h3>
+            <p class="home-number" id="homeTodayScheduleCount">0</p>
+          </div>
+          <div class="home-card">
+            <h3>마감 임박 할일</h3>
+            <p class="home-number" id="homeUrgentTodoCount">0</p>
+          </div>
+        </div>
+      </section>
+    </section>
 
-      <div id="todoFields">
+    <section id="tab-todo" class="tab-section hidden">
+      <section class="card">
+        <h2 id="todoFormTitle">할일 추가</h2>
+
+        <div class="form-group">
+          <label for="todoTitleInput">제목</label>
+          <input
+            type="text"
+            id="todoTitleInput"
+            placeholder="예: 방 청소"
+          />
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="todoDueDate">기한 날짜</label>
@@ -44,9 +86,32 @@
             <input type="time" id="todoDueTime" />
           </div>
         </div>
-      </div>
 
-      <div id="scheduleFields" class="hidden">
+        <div class="button-row">
+          <button id="saveTodoBtn" class="primary-btn">추가하기</button>
+          <button id="cancelTodoEditBtn" class="secondary-btn hidden">수정 취소</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>할일 목록</h2>
+        <div id="todoList" class="item-list"></div>
+      </section>
+    </section>
+
+    <section id="tab-schedule" class="tab-section hidden">
+      <section class="card">
+        <h2 id="scheduleFormTitle">일정 추가</h2>
+
+        <div class="form-group">
+          <label for="scheduleTitleInput">제목</label>
+          <input
+            type="text"
+            id="scheduleTitleInput"
+            placeholder="예: 병원 방문 / 친구 약속"
+          />
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="scheduleStartDate">시작 날짜</label>
@@ -68,106 +133,87 @@
             <input type="time" id="scheduleEndTime" />
           </div>
         </div>
-      </div>
 
-      <div class="button-row">
-        <button id="saveBtn" class="primary-btn">추가하기</button>
-        <button id="cancelEditBtn" class="secondary-btn hidden">수정 취소</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="filter-row">
-        <div>
-          <h2>필터</h2>
-          <p class="small-text">종류별, 월별로 볼 수 있습니다.</p>
+        <div class="button-row">
+          <button id="saveScheduleBtn" class="primary-btn">추가하기</button>
+          <button id="cancelScheduleEditBtn" class="secondary-btn hidden">수정 취소</button>
         </div>
+      </section>
 
-        <div class="filter-controls">
-          <div class="filter-box">
-            <label for="typeFilter">종류</label>
-            <select id="typeFilter">
-              <option value="">전체</option>
-              <option value="todo">할일</option>
-              <option value="schedule">일정</option>
-            </select>
+      <section class="card calendar-card">
+        <div class="calendar-header">
+          <div>
+            <h2>일정 달력</h2>
+            <p class="small-text">날짜를 클릭하면 달력 위에 해당 날짜 일정이 표시됩니다.</p>
           </div>
 
-          <div class="filter-box">
-            <label for="monthFilter">월 선택</label>
-            <select id="monthFilter">
-              <option value="">전체</option>
-            </select>
+          <div class="calendar-nav">
+            <button id="prevMonthBtn" class="secondary-btn">이전 달</button>
+            <strong id="calendarTitle" class="calendar-title-text"></strong>
+            <button id="nextMonthBtn" class="secondary-btn">다음 달</button>
           </div>
         </div>
-      </div>
-    </section>
 
-    <section class="card">
-      <div class="summary">
-        <div class="summary-item">
-          <span class="summary-label">전체</span>
-          <strong id="totalCount">0</strong>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">대기</span>
-          <strong id="pendingCount">0</strong>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">실패</span>
-          <strong id="failCount">0</strong>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">성공</span>
-          <strong id="successCount">0</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="card calendar-card">
-      <div class="calendar-header">
-        <div>
-          <h2>일정 달력</h2>
-          <p class="small-text">날짜를 클릭하면 달력 위에 해당 날짜 일정이 표시됩니다.</p>
+        <div class="calendar-weekdays">
+          <div>일</div>
+          <div>월</div>
+          <div>화</div>
+          <div>수</div>
+          <div>목</div>
+          <div>금</div>
+          <div>토</div>
         </div>
 
-        <div class="calendar-nav">
-          <button id="prevMonthBtn" class="secondary-btn">이전 달</button>
-          <strong id="calendarTitle" class="calendar-title-text"></strong>
-          <button id="nextMonthBtn" class="secondary-btn">다음 달</button>
-        </div>
-      </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
 
-      <div class="calendar-weekdays">
-        <div>일</div>
-        <div>월</div>
-        <div>화</div>
-        <div>수</div>
-        <div>목</div>
-        <div>금</div>
-        <div>토</div>
-      </div>
-
-      <div id="calendarGrid" class="calendar-grid"></div>
-
-      <div id="calendarPopupOverlay" class="calendar-popup-overlay hidden">
-        <div class="calendar-popup">
-          <div class="calendar-popup-header">
-            <div>
-              <h3 class="calendar-popup-title">선택한 날짜 일정</h3>
-              <p id="selectedDateLabel" class="calendar-popup-subtext">날짜를 선택하세요.</p>
+        <div id="calendarPopupOverlay" class="calendar-popup-overlay hidden">
+          <div class="calendar-popup">
+            <div class="calendar-popup-header">
+              <div>
+                <h3 class="calendar-popup-title">선택한 날짜 일정</h3>
+                <p id="selectedDateLabel" class="calendar-popup-subtext">날짜를 선택하세요.</p>
+              </div>
+              <button id="clearSelectedDateBtn" class="secondary-btn">닫기</button>
             </div>
-            <button id="clearSelectedDateBtn" class="secondary-btn">닫기</button>
-          </div>
 
-          <div id="selectedDateScheduleList" class="calendar-popup-list"></div>
+            <div id="selectedDateScheduleList" class="calendar-popup-list"></div>
+          </div>
         </div>
-      </div>
+      </section>
     </section>
 
-    <section class="card">
-      <h2>목록</h2>
-      <div id="itemList" class="item-list"></div>
+    <section id="tab-all" class="tab-section hidden">
+      <section class="card">
+        <div class="filter-row">
+          <div>
+            <h2>필터</h2>
+            <p class="small-text">종류별, 월별로 볼 수 있습니다.</p>
+          </div>
+
+          <div class="filter-controls">
+            <div class="filter-box">
+              <label for="typeFilter">종류</label>
+              <select id="typeFilter">
+                <option value="">전체</option>
+                <option value="todo">할일</option>
+                <option value="schedule">일정</option>
+              </select>
+            </div>
+
+            <div class="filter-box">
+              <label for="monthFilter">월 선택</label>
+              <select id="monthFilter">
+                <option value="">전체</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>전체 목록</h2>
+        <div id="allItemList" class="item-list"></div>
+      </section>
     </section>
   </div>
 
