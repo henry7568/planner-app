@@ -7,10 +7,77 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="app-header">
+  <div id="authLoadingScreen" class="auth-loading-screen">
+    <div class="auth-loading-card">로그인 상태 확인 중...</div>
+  </div>
+
+  <section id="authScreen" class="auth-screen hidden">
+    <div class="auth-card">
       <h1>할일 / 일정 관리 앱</h1>
-      <p class="sub-text">할일은 기한, 일정은 기간으로 관리합니다.</p>
+      <p class="auth-subtext">로그인하면 다른 기기에서도 같은 데이터를 사용할 수 있습니다.</p>
+
+      <div class="auth-tab-row">
+        <button id="showLoginTabBtn" class="auth-tab-btn active" type="button">로그인</button>
+        <button id="showSignupTabBtn" class="auth-tab-btn" type="button">회원가입</button>
+      </div>
+
+      <div id="authMessage" class="auth-message hidden"></div>
+
+      <div id="loginFormWrap">
+        <div class="form-group">
+          <label for="loginEmail">이메일</label>
+          <input type="email" id="loginEmail" placeholder="example@email.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">비밀번호</label>
+          <input type="password" id="loginPassword" placeholder="비밀번호 입력" />
+        </div>
+
+        <div class="button-row">
+          <button id="loginBtn" class="primary-btn auth-action-btn" type="button">로그인</button>
+        </div>
+      </div>
+
+      <div id="signupFormWrap" class="hidden">
+        <div class="form-group">
+          <label for="signupEmail">이메일</label>
+          <input type="email" id="signupEmail" placeholder="example@email.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="signupPassword">비밀번호</label>
+          <input type="password" id="signupPassword" placeholder="비밀번호 입력" />
+        </div>
+
+        <div class="form-group">
+          <label for="signupPasswordConfirm">비밀번호 확인</label>
+          <input type="password" id="signupPasswordConfirm" placeholder="비밀번호 다시 입력" />
+        </div>
+
+        <div class="button-row">
+          <button id="signupBtn" class="primary-btn auth-action-btn" type="button">회원가입</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="appRoot" class="app hidden">
+    <header class="app-header">
+      <div class="app-header-top">
+        <div>
+          <h1>할일 / 일정 관리 앱</h1>
+          <p class="sub-text">할일은 기한, 일정은 기간으로 관리합니다.</p>
+        </div>
+
+        <div class="user-box">
+          <div class="user-email-wrap">
+            <span class="user-label">로그인 계정</span>
+            <strong id="userEmailText">-</strong>
+          </div>
+          <button id="logoutBtn" class="secondary-btn" type="button">로그아웃</button>
+        </div>
+      </div>
     </header>
 
     <main class="main-content">
@@ -511,6 +578,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

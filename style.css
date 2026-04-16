@@ -17,6 +17,91 @@ button {
   font: inherit;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.auth-loading-screen,
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-loading-screen {
+  background: #f5f7fb;
+}
+
+.auth-loading-card,
+.auth-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+  padding: 28px;
+}
+
+.auth-card h1 {
+  margin: 0 0 10px;
+  font-size: 30px;
+}
+
+.auth-subtext {
+  margin: 0 0 20px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.auth-tab-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.auth-tab-btn {
+  border: 1px solid #cfd6e4;
+  background: #fff;
+  color: #334155;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.auth-tab-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.auth-message {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.auth-message.error {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+.auth-message.success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.auth-action-btn {
+  width: 100%;
+}
+
 .app {
   max-width: 1100px;
   margin: 0 auto;
@@ -31,6 +116,14 @@ button {
   margin-bottom: 20px;
 }
 
+.app-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .app-header h1 {
   margin: 0 0 8px;
   font-size: 32px;
@@ -39,6 +132,28 @@ button {
 .sub-text {
   margin: 0;
   color: #666;
+}
+
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #e5eaf3;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.user-email-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-label {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .tab-section.hidden {
@@ -366,10 +481,6 @@ button {
 
 .delete-btn:hover {
   background: #dc2626;
-}
-
-.hidden {
-  display: none !important;
 }
 
 .calendar-header {
@@ -850,5 +961,14 @@ button {
   .popup-panel {
     padding: 18px;
     max-height: 85vh;
+  }
+
+  .app-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .user-box {
+    justify-content: space-between;
   }
 }
