@@ -41,10 +41,15 @@ let selectedDate = "";
 let isAppInitialized = false;
 let isRemoteLoading = false;
 let saveTimer = null;
+let timelineNowTimer = null;
+let isEditingInPopup = false;
 
 const now = new Date();
 let calendarYear = now.getFullYear();
 let calendarMonth = now.getMonth();
+
+let dashboardPage = 1;
+const DASHBOARD_PAGE_SIZE = 10;
 
 const authLoadingScreen = document.getElementById("authLoadingScreen");
 const authSection = document.getElementById("authScreen");
@@ -94,9 +99,20 @@ const achievementDesc = document.getElementById("achievementDesc");
 
 const itemType = document.getElementById("itemType");
 const titleInput = document.getElementById("titleInput");
+const itemColor = document.getElementById("itemColor");
+const itemTag = document.getElementById("itemTag");
+const plannerFormLauncher = document.getElementById("plannerFormLauncher");
+const openPlannerFormBtn = document.getElementById("openPlannerFormBtn");
+const plannerFormHome = document.getElementById("plannerFormHome");
+const plannerFormCard = document.getElementById("plannerFormCard");
 const plannerFormTitle = document.getElementById("plannerFormTitle");
 const saveItemBtn = document.getElementById("saveItemBtn");
+const closePlannerFormBtn = document.getElementById("closePlannerFormBtn");
 const cancelEditBtn = document.getElementById("cancelEditBtn");
+
+const editPopupOverlay = document.getElementById("editPopupOverlay");
+const editPopupMount = document.getElementById("editPopupMount");
+const closeEditPopupBtn = document.getElementById("closeEditPopupBtn");
 
 const todoFields = document.getElementById("todoFields");
 const scheduleFields = document.getElementById("scheduleFields");
@@ -174,6 +190,8 @@ const calendarGrid = document.getElementById("calendarGrid");
 
 const calendarPopupOverlay = document.getElementById("calendarPopupOverlay");
 const selectedDateLabel = document.getElementById("selectedDateLabel");
+const selectedDateAllDay = document.getElementById("selectedDateAllDay");
+const selectedDateTimeline = document.getElementById("selectedDateTimeline");
 const selectedDateItemList = document.getElementById("selectedDateItemList");
 const clearSelectedDateBtn = document.getElementById("clearSelectedDateBtn");
 
@@ -269,6 +287,8 @@ const popupScheduleRepeatInterval = document.getElementById(
 
 const popupAddItemBtn = document.getElementById("popupAddItemBtn");
 
+const deleteEditingItemBtn = document.getElementById("deleteEditingItemBtn");
+
 const timePickerRegistry = {};
 
 initAuth();
@@ -307,21 +327,63 @@ function initAppOnce() {
   setupPlannerForm();
 
   saveItemBtn?.addEventListener("click", saveCurrentItem);
-  cancelEditBtn?.addEventListener("click", resetPlannerForm);
+
+  openPlannerFormBtn?.addEventListener("click", () => {
+    openPlannerFormCard();
+  });
+
+  closePlannerFormBtn?.addEventListener("click", () => {
+    resetPlannerForm();
+
+    if (isEditingInPopup) {
+      closeEditPopup();
+    } else {
+      closePlannerFormCard();
+    }
+  });
+
+  cancelEditBtn?.addEventListener("click", () => {
+    resetPlannerForm();
+
+    if (isEditingInPopup) {
+      closeEditPopup();
+    } else {
+      closePlannerFormCard();
+    }
+  });
+
+  deleteEditingItemBtn?.addEventListener("click", () => {
+    deleteEditingItem();
+  });
+
+  closeEditPopupBtn?.addEventListener("click", () => {
+    resetPlannerForm();
+    closeEditPopup();
+  });
+
+  editPopupOverlay?.addEventListener("click", (e) => {
+    if (e.target === editPopupOverlay) {
+      resetPlannerForm();
+      closeEditPopup();
+    }
+  });
 
   typeFilter?.addEventListener("change", (e) => {
     selectedFilterType = e.target.value;
+    dashboardPage = 1;
     renderDashboard();
   });
 
   yearFilter?.addEventListener("change", (e) => {
     selectedFilterYear = e.target.value;
+    dashboardPage = 1;
     renderMonthOptions();
     renderDashboard();
   });
 
   monthFilter?.addEventListener("change", (e) => {
     selectedFilterMonth = e.target.value;
+    dashboardPage = 1;
     renderDashboard();
   });
 
@@ -383,6 +445,7 @@ function initAppOnce() {
   renderYearOptions();
   renderMonthOptions();
   renderAll();
+  closePlannerFormCard();
 }
 
 function showAuthUI() {
@@ -412,7 +475,6 @@ function showAppUI(user) {
 }
 
 function switchAuthTab(mode) {
-
   const isLogin = mode === "login";
 
   loginFormWrap?.classList.toggle("hidden", !isLogin);
@@ -425,33 +487,27 @@ function switchAuthTab(mode) {
 }
 
 async function handleLogin() {
-
   const email = loginEmail?.value.trim() || "";
   const password = loginPassword?.value || "";
 
   clearAuthError();
 
   if (!email || !password) {
-
     showAuthError("이메일과 비밀번호를 입력하세요.");
     return;
   }
 
   try {
-
     await signInWithEmailAndPassword(auth, email, password);
 
     loginEmail.value = "";
     loginPassword.value = "";
-
   } catch (error) {
-
     showAuthError(getFirebaseAuthErrorMessage(error));
   }
 }
 
 async function handleSignup() {
-
   const email = signupEmail?.value.trim() || "";
   const password = signupPassword?.value || "";
   const confirm = signupPasswordConfirm?.value || "";
@@ -459,33 +515,27 @@ async function handleSignup() {
   clearAuthError();
 
   if (!email || !password || !confirm) {
-
     showAuthError("모든 항목을 입력하세요.");
     return;
   }
 
   if (password.length < 6) {
-
     showAuthError("비밀번호는 6자 이상이어야 합니다.");
     return;
   }
 
   if (password !== confirm) {
-
     showAuthError("비밀번호 확인이 일치하지 않습니다.");
     return;
   }
 
   try {
-
     await createUserWithEmailAndPassword(auth, email, password);
 
     signupEmail.value = "";
     signupPassword.value = "";
     signupPasswordConfirm.value = "";
-
   } catch (error) {
-
     showAuthError(getFirebaseAuthErrorMessage(error));
   }
 }
@@ -616,10 +666,15 @@ function switchTab(tabName) {
 
   if (tabName !== "planner") {
     closeDatePopup();
+    closePlannerFormCard();
   }
 
   renderCalendar();
   renderTodayList();
+
+  if (tabName === "planner") {
+    closePlannerFormCard();
+  }
 }
 
 function createTimeOptions() {
@@ -1018,6 +1073,8 @@ function saveCurrentItem() {
 }
 
 function saveEditedSingleItem(type, title) {
+  const color = itemColor?.value || "blue";
+  const tag = itemTag?.value.trim() || "";
   if (type === "todo") {
     const dueDate = todoDueDate?.value;
     const dueTime = getTimeValue("todoDue");
@@ -1049,6 +1106,8 @@ function saveEditedSingleItem(type, title) {
             ...item,
             type: "todo",
             title,
+            color,
+            tag,
             dueDate,
             dueTime,
             repeat,
@@ -1104,6 +1163,8 @@ function saveEditedSingleItem(type, title) {
             ...item,
             type: "schedule",
             title,
+            color,
+            tag,
             startDate,
             startTime,
             endDate,
@@ -1120,9 +1181,17 @@ function saveEditedSingleItem(type, title) {
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+
+  if (isEditingInPopup) {
+    closeEditPopup();
+  } else {
+    closePlannerFormCard();
+  }
 }
 
 function saveTodoSeries(title) {
+  const color = itemColor?.value || "blue";
+  const tag = itemTag?.value.trim() || "";
   const dueDate = todoDueDate?.value;
   const dueTime = getTimeValue("todoDue");
   const repeat = todoRepeat?.value;
@@ -1159,6 +1228,8 @@ function saveTodoSeries(title) {
 
   const seriesItems = generateTodoSeries({
     title,
+    color,
+    tag,
     dueDate,
     dueTime,
     repeat,
@@ -1171,9 +1242,12 @@ function saveTodoSeries(title) {
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+  closePlannerFormCard();
 }
 
 function saveScheduleSeries(title) {
+  const color = itemColor?.value || "blue";
+  const tag = itemTag?.value.trim() || "";
   const startDate = scheduleStartDate?.value;
   const startTime = getTimeValue("scheduleStart");
   const endDate = scheduleEndDate?.value;
@@ -1219,6 +1293,8 @@ function saveScheduleSeries(title) {
 
   const seriesItems = generateScheduleSeries({
     title,
+    color,
+    tag,
     startDate,
     startTime,
     endDate,
@@ -1233,6 +1309,7 @@ function saveScheduleSeries(title) {
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+  closePlannerFormCard();
 }
 
 function generateTodoSeries(base) {
@@ -1253,6 +1330,8 @@ function generateTodoSeries(base) {
       groupId,
       type: "todo",
       title: base.title,
+      color: base.color || "blue",
+      tag: base.tag || "",
       dueDate: dateKey,
       dueTime: base.dueTime || "",
       repeat: base.repeat,
@@ -1293,6 +1372,8 @@ function generateScheduleSeries(base) {
       groupId,
       type: "schedule",
       title: base.title,
+      color: base.color || "blue",
+      tag: base.tag || "",
       startDate: startDateKey,
       startTime: base.startTime || "",
       endDate: formatDateKey(currentEnd),
@@ -1540,9 +1621,12 @@ function resetPlannerForm() {
   if (plannerFormTitle) plannerFormTitle.textContent = "항목 추가";
   if (saveItemBtn) saveItemBtn.textContent = "추가하기";
   cancelEditBtn?.classList.add("hidden");
+  closePlannerFormBtn?.classList.remove("hidden");
 
   if (itemType) itemType.value = "todo";
   if (titleInput) titleInput.value = "";
+  if (itemColor) itemColor.value = "blue";
+  if (itemTag) itemTag.value = "";
 
   if (todoDueDate) todoDueDate.value = "";
   applyTimeValue("todoDue", "");
@@ -1569,6 +1653,8 @@ function resetPlannerForm() {
 
 function startEdit(id) {
   const item = items.find((x) => x.id === id);
+  closePlannerFormBtn?.classList.add("hidden");
+  cancelEditBtn?.classList.remove("hidden");
   if (!item) return;
 
   editingId = id;
@@ -1577,10 +1663,14 @@ function startEdit(id) {
       item.type === "todo" ? "할일 수정" : "일정 수정";
   }
   if (saveItemBtn) saveItemBtn.textContent = "수정 저장";
-  cancelEditBtn?.classList.remove("hidden");
+  cancelEditBtn?.classList.add("hidden");
+  closePlannerFormBtn?.classList.remove("hidden");
+  openPlannerFormCard();
 
   if (itemType) itemType.value = item.type;
   if (titleInput) titleInput.value = item.title;
+  if (itemColor) itemColor.value = item.color || "blue";
+  if (itemTag) itemTag.value = item.tag || "";
 
   if (item.type === "todo") {
     if (todoDueDate) todoDueDate.value = item.dueDate || "";
@@ -1612,8 +1702,7 @@ function startEdit(id) {
   }
 
   updatePlannerFields();
-  switchTab("planner");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  openEditPopup();
 }
 
 function deleteItem(id) {
@@ -1679,7 +1768,7 @@ function handleDocumentClick(e) {
     return;
   }
 
-  if (action === "edit-item") {
+  if (action === "open-edit-item") {
     const id = actionTarget.dataset.id;
     if (!id) return;
     startEdit(id);
@@ -1758,13 +1847,91 @@ function renderDashboard() {
   if (!dashboardItemList) return;
 
   if (filtered.length === 0) {
-    dashboardItemList.innerHTML = `<div class="empty-message">현재 표시할 항목이 없습니다.</div>`;
+    dashboardItemList.innerHTML = `
+    <div class="empty-message">현재 표시할 항목이 없습니다.</div>
+  `;
     return;
   }
 
-  dashboardItemList.innerHTML = filtered
-    .map((item) => renderCard(item))
-    .join("");
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / DASHBOARD_PAGE_SIZE),
+  );
+
+  if (dashboardPage > totalPages) {
+    dashboardPage = totalPages;
+  }
+
+  const startIndex = (dashboardPage - 1) * DASHBOARD_PAGE_SIZE;
+
+  const visibleItems = filtered.slice(
+    startIndex,
+    startIndex + DASHBOARD_PAGE_SIZE,
+  );
+
+  dashboardItemList.innerHTML = `
+  ${visibleItems.map((item) => renderCard(item)).join("")}
+
+  <div class="pagination-wrap">
+
+    <button
+      class="secondary-btn"
+      type="button"
+      id="dashboardPrevPageBtn"
+      ${dashboardPage === 1 ? "disabled" : ""}
+    >
+      이전
+    </button>
+
+    <span class="pagination-text">
+      ${dashboardPage} / ${totalPages}
+    </span>
+
+    <button
+      class="secondary-btn"
+      type="button"
+      id="dashboardNextPageBtn"
+      ${dashboardPage === totalPages ? "disabled" : ""}
+    >
+      다음
+    </button>
+
+  </div>
+`;
+
+  document
+    .getElementById("dashboardPrevPageBtn")
+    ?.addEventListener("click", () => {
+      if (dashboardPage > 1) {
+        dashboardPage--;
+
+        renderDashboard();
+
+        requestAnimationFrame(() => {
+          dashboardItemList?.closest(".card")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      }
+    });
+
+  document
+    .getElementById("dashboardNextPageBtn")
+    ?.addEventListener("click", () => {
+      if (dashboardPage < totalPages) {
+        dashboardPage++;
+
+        renderDashboard();
+
+        requestAnimationFrame(() => {
+          dashboardItemList?.closest(".card")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      }
+    });
 }
 
 function renderTodayList() {
@@ -1879,87 +2046,103 @@ function getAchievementRate(filteredItems) {
 }
 
 function renderCard(item) {
-  const commonMeta = `
-    <span class="meta-badge">종류: ${item.type === "todo" ? "할일" : "일정"}</span>
-    <span class="meta-badge">상태: ${getStatusText(item.status)}</span>
-    <span class="meta-badge">연도: ${getYearFromItem(item).slice(2)}년</span>
-    <span class="meta-badge">월: ${Number(getMonthFromItem(item))}월</span>
-  `;
+  const repeatIcon =
+    item.repeat && item.repeat !== "none"
+      ? `<span class="meta-icon repeat" title="${escapeHtml(getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays))}">↻</span>`
+      : "";
 
   let detailMeta = "";
 
   if (item.type === "todo") {
     detailMeta = `
-      <span class="meta-badge">기한: ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
-      <span class="meta-badge">남은 기한: ${getTodoRemainText(item)}</span>
-      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</span>
+      <span class="meta-icon" title="할일">📝</span>
+      <span class="meta-badge compact">${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
+      ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
+      ${repeatIcon}
     `;
   } else {
     detailMeta = `
-      <span class="meta-badge">기간: ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
-      <span class="meta-badge">일정 상태: ${getScheduleProgressText(item)}</span>
-      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</span>
+      <span class="meta-icon" title="일정">🗓️</span>
+      <span class="meta-badge compact">${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</span>
+      <span class="meta-badge compact">~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
+      ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
+      ${repeatIcon}
     `;
   }
 
   return `
-    <div class="item-card">
-      <button class="status-btn ${item.status}" data-action="toggle-status" data-id="${item.id}" title="상태 변경" type="button">
+    <div
+      class="item-card item-color-${item.color || "blue"} clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
+      <button
+        class="status-btn ${item.status}"
+        data-action="toggle-status"
+        data-id="${item.id}"
+        title="상태 변경"
+        type="button"
+      >
         ${getStatusSymbol(item.status)}
       </button>
 
       <div class="item-content">
         <div class="item-title">${escapeHtml(item.title)}</div>
-        <div class="item-meta">
-          ${commonMeta}
+        <div class="item-meta compact-meta">
           ${detailMeta}
         </div>
-      </div>
-
-      <div class="item-actions">
-        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
       </div>
     </div>
   `;
 }
 
 function renderSelectedCard(item) {
+  const repeatLine =
+    item.repeat && item.repeat !== "none"
+      ? `<div><strong>↻ 반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>`
+      : "";
+
   const timeBlock =
     item.type === "todo"
       ? `
       <div class="selected-item-time-block">
-        <div><strong>기한</strong> : ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</div>
-        <div><strong>남은 기한</strong> : ${getTodoRemainText(item)}</div>
-        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>
+        <div><strong>📝 기한</strong> : ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</div>
+        ${repeatLine}
       </div>
     `
       : `
       <div class="selected-item-time-block">
-        <div><strong>시작</strong> : ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</div>
-        <div><strong>종료</strong> : ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</div>
-        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>
+        <div><strong>🗓️ 시작</strong> : ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</div>
+        <div><strong>🗓️ 종료</strong> : ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</div>
+        ${repeatLine}
       </div>
     `;
 
   return `
-    <div class="selected-item-card">
-      <button class="status-btn ${item.status}" data-action="toggle-status" data-id="${item.id}" title="상태 변경" type="button">
+    <div
+      class="selected-item-card clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
+      <button
+        class="status-btn ${item.status}"
+        data-action="toggle-status"
+        data-id="${item.id}"
+        title="상태 변경"
+        type="button"
+      >
         ${getStatusSymbol(item.status)}
       </button>
 
       <div class="selected-item-content">
         <div class="selected-item-title">${escapeHtml(item.title)}</div>
-        <div class="selected-item-meta">
-          <span class="meta-badge">종류: ${item.type === "todo" ? "할일" : "일정"}</span>
-          <span class="meta-badge">상태: ${getStatusText(item.status)}</span>
-        </div>
         ${timeBlock}
-      </div>
-
-      <div class="selected-item-actions">
-        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
       </div>
     </div>
   `;
@@ -2116,7 +2299,7 @@ function createCalendarCell(dateObj, isOtherMonth) {
         ${visibleItems
           .map(
             (item) => `
-          <div class="calendar-event ${item.type} ${item.status}" title="${escapeHtml(item.title)}">
+          <div class="calendar-event ${item.type} ${item.status} item-color-${item.color || "blue"}" title="${escapeHtml(item.title)}">
             <div class="calendar-event-top">
               <span class="calendar-type-badge ${item.type}">${item.type === "todo" ? "할일" : "일정"}</span>
               <span class="calendar-time">${getCalendarItemTime(item)}</span>
@@ -2146,27 +2329,531 @@ function selectCalendarDate(dateKey) {
 
 function openDatePopup(dateKey) {
   const dayItems = getItemsForDate(dateKey);
+
   if (selectedDateLabel) {
     selectedDateLabel.textContent = `${formatKoreanDate(dateKey)} 항목`;
   }
 
-  if (selectedDateItemList) {
-    if (dayItems.length === 0) {
-      selectedDateItemList.innerHTML = `<div class="empty-message">${formatKoreanDate(dateKey)}에는 등록된 항목이 없습니다.</div>`;
-    } else {
-      selectedDateItemList.innerHTML = dayItems
-        .map((item) => renderSelectedCard(item))
-        .join("");
-    }
-  }
+  renderSelectedDateAllDay(dateKey, dayItems);
+  renderSelectedDateTimeline(dateKey, dayItems);
+  renderSelectedDateExtraList(dateKey, dayItems);
 
   resetPopupQuickAddForm();
   if (popupScheduleEndDate) popupScheduleEndDate.value = dateKey;
   calendarPopupOverlay?.classList.remove("hidden");
 }
 
+function renderSelectedDateAllDay(dateKey, itemsForDate) {
+  if (!selectedDateAllDay) return;
+
+  const allDayItems = itemsForDate.filter((item) =>
+    isAllDayTimelineItem(dateKey, item),
+  );
+
+  if (allDayItems.length === 0) {
+    selectedDateAllDay.innerHTML = "";
+    return;
+  }
+
+  selectedDateAllDay.innerHTML = `
+    <div class="all-day-wrap">
+      <div class="all-day-title">종일 일정</div>
+      <div class="all-day-list">
+        ${allDayItems.map((item) => renderAllDayItem(item)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function isAllDayTimelineItem(dateKey, item) {
+  if (item.type !== "schedule") return false;
+
+  const noStartTime = !item.startTime;
+  const noEndTime = !item.endTime;
+
+  if (item.startDate < dateKey && item.endDate > dateKey) {
+    return true;
+  }
+
+  if (item.startDate === dateKey && item.endDate > dateKey && noStartTime) {
+    return true;
+  }
+
+  if (item.startDate < dateKey && item.endDate === dateKey && noEndTime) {
+    return true;
+  }
+
+  if (
+    item.startDate === dateKey &&
+    item.endDate === dateKey &&
+    noStartTime &&
+    noEndTime
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function renderAllDayItem(item) {
+  const colorClass = `item-color-${item.color || "blue"}`;
+  const repeatIcon =
+    item.repeat && item.repeat !== "none"
+      ? `<span class="all-day-repeat">↻</span>`
+      : "";
+
+  return `
+    <div class="all-day-item ${colorClass}">
+      <div class="all-day-main">
+        <span class="all-day-type">일정</span>
+        <span class="all-day-text">${escapeHtml(item.title)}</span>
+        ${repeatIcon}
+      </div>
+      <div class="all-day-actions">
+        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
+        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSelectedDateTimeline(dateKey, itemsForDate) {
+  if (!selectedDateTimeline) return;
+
+  const blocks = itemsForDate
+    .filter((item) => !isAllDayTimelineItem(dateKey, item))
+    .map((item) => buildTimelineBlock(dateKey, item))
+    .filter(Boolean);
+
+  if (blocks.length === 0) {
+    selectedDateTimeline.innerHTML = `
+      <div class="empty-message">이 날짜에는 시간 지정 항목이 없습니다.</div>
+    `;
+    return;
+  }
+
+  const laidOutBlocks = layoutTimelineBlocks(blocks);
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const nowLineHtml = buildCurrentTimeLine(dateKey);
+
+  selectedDateTimeline.innerHTML = `
+    <div id="timelineBoard" class="timeline-board">
+      <div class="timeline-scroll-area">
+        <div class="timeline-hour-column">
+          ${hours
+            .map(
+              (hour) => `
+            <div class="timeline-hour-label">${formatHourLabel(hour)}</div>
+          `,
+            )
+            .join("")}
+        </div>
+
+        <div id="timelineGridWrap" class="timeline-grid-wrap">
+          <div class="timeline-grid-lines">
+            ${hours.map(() => `<div class="timeline-grid-line"></div>`).join("")}
+          </div>
+
+          ${nowLineHtml}
+
+          <div class="timeline-block-layer">
+            ${laidOutBlocks.map((block) => renderPositionedTimelineBlock(block)).join("")}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  scrollTimelineToNow(dateKey);
+  startTimelineNowAutoRefresh(dateKey);
+}
+
+function buildCurrentTimeLine(dateKey) {
+  const todayKey = formatDateKey(new Date());
+
+  if (dateKey !== todayKey) return "";
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTimeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  return `
+    <div id="timelineNowLine" class="timeline-now-line" style="top: ${currentMinutes}px;">
+      <div class="timeline-now-dot"></div>
+      <div class="timeline-now-stroke"></div>
+      <div class="timeline-now-label">${currentTimeText}</div>
+    </div>
+  `;
+}
+
+function updateTimelineNowLine(dateKey) {
+  const todayKey = formatDateKey(new Date());
+  const nowLine = document.getElementById("timelineNowLine");
+
+  if (!nowLine) return;
+  if (dateKey !== todayKey) return;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTimeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  nowLine.style.top = `${currentMinutes}px`;
+
+  const label = nowLine.querySelector(".timeline-now-label");
+  if (label) {
+    label.textContent = currentTimeText;
+  }
+}
+
+function startTimelineNowAutoRefresh(dateKey) {
+  stopTimelineNowAutoRefresh();
+
+  const todayKey = formatDateKey(new Date());
+  if (dateKey !== todayKey) return;
+
+  timelineNowTimer = setInterval(
+    () => {
+      updateTimelineNowLine(dateKey);
+    },
+    5 * 60 * 1000,
+  );
+}
+
+function stopTimelineNowAutoRefresh() {
+  if (timelineNowTimer) {
+    clearInterval(timelineNowTimer);
+    timelineNowTimer = null;
+  }
+}
+
+function scrollTimelineToNow(dateKey) {
+  const todayKey = formatDateKey(new Date());
+  if (dateKey !== todayKey) return;
+
+  requestAnimationFrame(() => {
+    const scrollArea = document.querySelector(".timeline-scroll-area");
+    if (!scrollArea) return;
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const targetScrollTop = Math.max(currentMinutes - 180, 0);
+
+    scrollArea.scrollTo({
+      top: targetScrollTop,
+      behavior: "smooth",
+    });
+  });
+}
+
+function buildTimelineBlock(dateKey, item) {
+  if (item.type === "todo") {
+    if (!item.dueTime) return null;
+
+    const startMinutes = timeStringToMinutes(item.dueTime);
+    const endMinutes = Math.min(startMinutes + 12, 1440);
+
+    return {
+      id: item.id,
+      item,
+      startMinutes,
+      endMinutes,
+      isTodoPoint: true,
+    };
+  }
+
+  if (item.type === "schedule") {
+    if (!isScheduleTimedOnDate(dateKey, item)) return null;
+
+    let startMinutes = 0;
+    let endMinutes = 1440;
+
+    if (item.startDate === dateKey) {
+      startMinutes = item.startTime ? timeStringToMinutes(item.startTime) : 0;
+    }
+
+    if (item.endDate === dateKey) {
+      endMinutes = item.endTime ? timeStringToMinutes(item.endTime) : 1440;
+    }
+
+    if (item.startDate === dateKey && item.endDate === dateKey) {
+      startMinutes = item.startTime ? timeStringToMinutes(item.startTime) : 0;
+
+      endMinutes = item.endTime ? timeStringToMinutes(item.endTime) : 1440;
+    }
+
+    if (endMinutes <= startMinutes) {
+      endMinutes = Math.min(startMinutes + 30, 1440);
+    }
+
+    return {
+      id: item.id,
+      item,
+      startMinutes,
+      endMinutes,
+    };
+  }
+
+  return null;
+}
+
+function timeStringToMinutes(timeString) {
+  const [hour, minute] = String(timeString).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function layoutTimelineBlocks(blocks) {
+  const sorted = [...blocks].sort((a, b) => {
+    if (a.startMinutes !== b.startMinutes) {
+      return a.startMinutes - b.startMinutes;
+    }
+    return a.endMinutes - b.endMinutes;
+  });
+
+  const groups = [];
+  let currentGroup = [];
+
+  for (const block of sorted) {
+    if (currentGroup.length === 0) {
+      currentGroup.push(block);
+      continue;
+    }
+
+    const currentGroupEnd = Math.max(...currentGroup.map((x) => x.endMinutes));
+
+    if (block.startMinutes < currentGroupEnd) {
+      currentGroup.push(block);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [block];
+    }
+  }
+
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  const result = [];
+
+  groups.forEach((group) => {
+    const columns = [];
+    const laidOut = [];
+
+    group.forEach((block) => {
+      let assignedColumn = 0;
+
+      while (true) {
+        const lastEnd = columns[assignedColumn];
+
+        if (lastEnd == null || lastEnd <= block.startMinutes) {
+          columns[assignedColumn] = block.endMinutes;
+          break;
+        }
+
+        assignedColumn++;
+      }
+
+      laidOut.push({
+        ...block,
+        column: assignedColumn,
+      });
+    });
+
+    const totalColumns = Math.max(...laidOut.map((x) => x.column)) + 1;
+
+    laidOut.forEach((block) => {
+      result.push({
+        ...block,
+        totalColumns,
+      });
+    });
+  });
+
+  return result;
+}
+
+function renderPositionedTimelineBlock(block) {
+  const item = block.item;
+  const colorClass = `item-color-${item.color || "blue"}`;
+  const repeatIcon =
+    item.repeat && item.repeat !== "none"
+      ? `<span class="timeline-repeat">↻</span>`
+      : "";
+
+  const top = block.startMinutes;
+  const height = Math.max(block.endMinutes - block.startMinutes, 28);
+
+  const widthPercent = 100 / block.totalColumns;
+  const leftPercent = widthPercent * block.column;
+
+  let timeText = "";
+
+  if (item.type === "todo") {
+    timeText = item.dueTime || "시간 없음";
+  } else {
+    const startText = formatTimelineTime(block.startMinutes);
+    const endText = formatTimelineTime(block.endMinutes);
+    timeText = `${startText} ~ ${endText}`;
+  }
+
+  if (block.isTodoPoint) {
+    return `
+    <div
+      class="timeline-point ${colorClass}"
+      style="
+        top: ${top}px;
+        left: calc(${leftPercent}% + 4px);
+        width: calc(${widthPercent}% - 8px);
+      "
+    >
+      <div class="timeline-point-dot"></div>
+      <div class="timeline-point-content">
+        <div class="timeline-point-main">
+          <span class="timeline-type todo">할일</span>
+          <span class="timeline-title">${escapeHtml(item.title)}</span>
+          ${repeatIcon}
+        </div>
+        <div class="timeline-point-sub">
+          <span class="timeline-time">${timeText}</span>
+          ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+        </div>
+        <div class="timeline-point-actions">
+          <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
+          <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
+        </div>
+      </div>
+    </div>
+  `;
+  }
+
+  return `
+  <div
+    class="timeline-block ${colorClass}"
+    style="
+      top: ${top}px;
+      height: ${height}px;
+      left: calc(${leftPercent}% + 4px);
+      width: calc(${widthPercent}% - 8px);
+    "
+  >
+    <div class="timeline-block-main">
+      <span class="timeline-type schedule">일정</span>
+      <span class="timeline-title">${escapeHtml(item.title)}</span>
+      ${repeatIcon}
+    </div>
+
+    <div class="timeline-block-sub">
+      <span class="timeline-time">${timeText}</span>
+      ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+    </div>
+
+    <div class="timeline-block-actions">
+      <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
+      <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
+    </div>
+  </div>
+`;
+}
+
+function formatTimelineTime(totalMinutes) {
+  const safeMinutes = Math.max(0, Math.min(totalMinutes, 1440));
+  const hour = Math.floor(safeMinutes / 60);
+  const minute = safeMinutes % 60;
+
+  if (safeMinutes === 1440) return "24:00";
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function renderSelectedDateExtraList(dateKey, itemsForDate) {
+  if (!selectedDateItemList) return;
+
+  const extraItems = itemsForDate.filter((item) => {
+    if (item.type === "todo") {
+      return !item.dueTime;
+    }
+
+    if (item.type === "schedule") {
+      return !isScheduleTimedOnDate(dateKey, item);
+    }
+
+    return true;
+  });
+
+  if (extraItems.length === 0) {
+    selectedDateItemList.innerHTML = "";
+    return;
+  }
+
+  selectedDateItemList.innerHTML = `
+    <div class="cardless-section-title">시간 미지정 / 종일 항목</div>
+    ${extraItems.map((item) => renderSelectedCard(item)).join("")}
+  `;
+}
+
+function isScheduleTimedOnDate(dateKey, item) {
+  const isStartDate = item.startDate === dateKey;
+  const isEndDate = item.endDate === dateKey;
+
+  return (
+    (isStartDate && !!item.startTime) ||
+    (isEndDate && !!item.endTime) ||
+    (item.startDate < dateKey && item.endDate > dateKey)
+  );
+}
+
+function formatHourLabel(hour) {
+  if (hour === 0) return "오전 12시";
+  if (hour < 12) return `오전 ${hour}시`;
+  if (hour === 12) return "오후 12시";
+  return `오후 ${hour - 12}시`;
+}
+
+function renderTimelineItem(dateKey, item) {
+  const colorClass = `item-color-${item.color || "blue"}`;
+  const repeatIcon =
+    item.repeat && item.repeat !== "none"
+      ? `<span class="timeline-repeat">↻</span>`
+      : "";
+
+  let timeText = "";
+
+  if (item.type === "todo") {
+    timeText = item.dueTime || "시간 없음";
+  } else {
+    const startText =
+      item.startDate === dateKey ? item.startTime || "00:00" : "00:00";
+
+    const endText =
+      item.endDate === dateKey ? item.endTime || "23:59" : "24:00";
+
+    timeText = `${startText} ~ ${endText}`;
+  }
+
+  return `
+    <div class="timeline-item ${colorClass}">
+      <div class="timeline-item-main">
+        <span class="timeline-type">${item.type === "todo" ? "할일" : "일정"}</span>
+        <span class="timeline-title">${escapeHtml(item.title)}</span>
+        ${repeatIcon}
+      </div>
+      <div class="timeline-item-sub">
+        <span class="timeline-time">${timeText}</span>
+        ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+      </div>
+      <div class="timeline-item-actions">
+        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
+        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
+      </div>
+    </div>
+  `;
+}
+
 function closeDatePopup() {
   selectedDate = "";
+  stopTimelineNowAutoRefresh();
+  if (selectedDateAllDay) selectedDateAllDay.innerHTML = "";
+  if (selectedDateTimeline) selectedDateTimeline.innerHTML = "";
   if (selectedDateItemList) selectedDateItemList.innerHTML = "";
   resetPopupQuickAddForm();
   calendarPopupOverlay?.classList.add("hidden");
@@ -2292,4 +2979,53 @@ function escapeHtml(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function openPlannerFormCard() {
+  if (!plannerFormCard) return;
+
+  isEditingInPopup = false;
+
+  plannerFormLauncher?.classList.add("hidden");
+  plannerFormCard.classList.remove("hidden");
+
+  requestAnimationFrame(() => {
+    plannerFormCard.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  });
+}
+
+function closePlannerFormCard() {
+  if (!plannerFormCard) return;
+
+  isEditingInPopup = false;
+
+  plannerFormCard.classList.add("hidden");
+  plannerFormLauncher?.classList.remove("hidden");
+}
+
+function openEditPopup() {
+  if (!plannerFormCard || !editPopupMount) return;
+
+  isEditingInPopup = true;
+
+  plannerFormLauncher?.classList.add("hidden");
+  plannerFormCard.classList.remove("hidden");
+  editPopupMount.appendChild(plannerFormCard);
+
+  editPopupOverlay?.classList.remove("hidden");
+}
+
+function closeEditPopup() {
+  if (!plannerFormCard || !plannerFormHome) return;
+
+  isEditingInPopup = false;
+
+  plannerFormHome.appendChild(plannerFormCard);
+  plannerFormCard.classList.add("hidden");
+  editPopupOverlay?.classList.add("hidden");
+
+  plannerFormLauncher?.classList.remove("hidden");
 }
