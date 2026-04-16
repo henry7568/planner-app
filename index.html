@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>할일 / 일정 관리 앱</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>할일 / 일정 관리 앱</h1>
+      <p class="sub-text">할일은 기한, 일정은 기간으로 관리합니다.</p>
+    </header>
+
+    <main class="main-content">
+      <section id="tab-dashboard" class="tab-section">
+        <section class="card">
+          <div class="filter-row">
+            <div>
+              <h2>대시보드</h2>
+              <p class="small-text">연도와 월 필터 기준으로 통계, 달성률, 목록이 함께 바뀝니다.</p>
+            </div>
+
+            <div class="filter-controls">
+              <div class="filter-box">
+                <label for="typeFilter">종류</label>
+                <select id="typeFilter">
+                  <option value="">전체</option>
+                  <option value="todo">할일</option>
+                  <option value="schedule">일정</option>
+                </select>
+              </div>
+
+              <div class="filter-box">
+                <label for="yearFilter">연도</label>
+                <select id="yearFilter">
+                  <option value="">전체</option>
+                </select>
+              </div>
+
+              <div class="filter-box">
+                <label for="monthFilter">월</label>
+                <select id="monthFilter">
+                  <option value="">전체</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>요약</h2>
+
+          <div class="summary">
+            <button class="summary-item summary-btn" data-summary="all" type="button">
+              <span class="summary-label">전체</span>
+              <strong id="totalCount">0</strong>
+            </button>
+
+            <button class="summary-item summary-btn" data-summary="pending" type="button">
+              <span class="summary-label">대기</span>
+              <strong id="pendingCount">0</strong>
+            </button>
+
+            <button class="summary-item summary-btn" data-summary="fail" type="button">
+              <span class="summary-label">미완료</span>
+              <strong id="failCount">0</strong>
+            </button>
+
+            <button class="summary-item summary-btn" data-summary="success" type="button">
+              <span class="summary-label">완료</span>
+              <strong id="successCount">0</strong>
+            </button>
+          </div>
+
+          <div class="home-grid">
+            <button class="home-card home-card-btn" data-summary="todo" type="button">
+              <h3>할일</h3>
+              <p class="home-number" id="dashboardTodoCount">0</p>
+            </button>
+
+            <button class="home-card home-card-btn" data-summary="schedule" type="button">
+              <h3>일정</h3>
+              <p class="home-number" id="dashboardScheduleCount">0</p>
+            </button>
+
+            <button class="home-card home-card-btn" data-summary="today" type="button">
+              <h3>오늘 포함 항목</h3>
+              <p class="home-number" id="dashboardTodayCount">0</p>
+            </button>
+
+            <button class="home-card home-card-btn" data-summary="urgent" type="button">
+              <h3>마감 임박 할일</h3>
+              <p class="home-number" id="dashboardUrgentTodoCount">0</p>
+            </button>
+          </div>
+
+          <div class="achievement-card">
+            <div class="achievement-header">
+              <h3>달성률</h3>
+              <strong id="achievementRate">0%</strong>
+            </div>
+            <div class="achievement-bar">
+              <div id="achievementBarFill" class="achievement-bar-fill"></div>
+            </div>
+            <p id="achievementDesc" class="small-text">완료 / (완료 + 미완료) 기준</p>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>전체 목록</h2>
+          <div id="dashboardItemList" class="item-list"></div>
+        </section>
+      </section>
+
+      <section id="tab-planner" class="tab-section hidden">
+        <section class="card">
+          <h2 id="plannerFormTitle">항목 추가</h2>
+
+          <div class="form-group">
+            <label for="itemType">종류</label>
+            <select id="itemType">
+              <option value="todo">할일</option>
+              <option value="schedule">일정</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="titleInput">제목</label>
+            <input type="text" id="titleInput" placeholder="예: 방 청소 / 병원 방문 / 친구 약속" />
+          </div>
+
+          <div id="todoFields">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="todoDueDate">기한 날짜</label>
+                <input type="date" id="todoDueDate" />
+              </div>
+
+              <div class="form-group">
+                <label>기한 시간</label>
+                <div class="time-picker" data-time-picker="todoDue">
+                  <button type="button" class="time-picker-trigger" id="todoDueTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="todoDueTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="todoDueTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="todoDueTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="todoDueTimeValue" />
+                <input type="time" id="todoDueTimeCustom" class="hidden" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="todoRepeat">반복</label>
+                <select id="todoRepeat">
+                  <option value="none">반복 없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly_days">요일별 반복</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                  <option value="interval_days">N일마다</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="todoRepeatUntil">반복 종료일</label>
+                <input type="date" id="todoRepeatUntil" />
+              </div>
+            </div>
+
+            <div id="todoWeeklyDaysWrap" class="form-group hidden">
+              <label>반복 요일</label>
+              <div class="weekday-check-grid">
+                <label class="weekday-check"><input type="checkbox" value="1" class="todo-weekday" /> 월</label>
+                <label class="weekday-check"><input type="checkbox" value="2" class="todo-weekday" /> 화</label>
+                <label class="weekday-check"><input type="checkbox" value="3" class="todo-weekday" /> 수</label>
+                <label class="weekday-check"><input type="checkbox" value="4" class="todo-weekday" /> 목</label>
+                <label class="weekday-check"><input type="checkbox" value="5" class="todo-weekday" /> 금</label>
+                <label class="weekday-check"><input type="checkbox" value="6" class="todo-weekday" /> 토</label>
+                <label class="weekday-check"><input type="checkbox" value="0" class="todo-weekday" /> 일</label>
+              </div>
+            </div>
+
+            <div id="todoRepeatIntervalWrap" class="form-group hidden">
+              <label for="todoRepeatInterval">반복 일수</label>
+              <input type="number" id="todoRepeatInterval" min="1" value="2" placeholder="예: 3일마다" />
+            </div>
+          </div>
+
+          <div id="scheduleFields" class="hidden">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="scheduleStartDate">시작 날짜</label>
+                <input type="date" id="scheduleStartDate" />
+              </div>
+
+              <div class="form-group">
+                <label>시작 시간</label>
+                <div class="time-picker" data-time-picker="scheduleStart">
+                  <button type="button" class="time-picker-trigger" id="scheduleStartTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="scheduleStartTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="scheduleStartTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="scheduleStartTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="scheduleStartTimeValue" />
+                <input type="time" id="scheduleStartTimeCustom" class="hidden" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="scheduleEndDate">종료 날짜</label>
+                <input type="date" id="scheduleEndDate" />
+              </div>
+
+              <div class="form-group">
+                <label>종료 시간</label>
+                <div class="time-picker" data-time-picker="scheduleEnd">
+                  <button type="button" class="time-picker-trigger" id="scheduleEndTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="scheduleEndTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="scheduleEndTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="scheduleEndTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="scheduleEndTimeValue" />
+                <input type="time" id="scheduleEndTimeCustom" class="hidden" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="scheduleRepeat">반복</label>
+                <select id="scheduleRepeat">
+                  <option value="none">반복 없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly_days">요일별 반복</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                  <option value="interval_days">N일마다</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="scheduleRepeatUntil">반복 종료일</label>
+                <input type="date" id="scheduleRepeatUntil" />
+              </div>
+            </div>
+
+            <div id="scheduleWeeklyDaysWrap" class="form-group hidden">
+              <label>반복 요일</label>
+              <div class="weekday-check-grid">
+                <label class="weekday-check"><input type="checkbox" value="1" class="schedule-weekday" /> 월</label>
+                <label class="weekday-check"><input type="checkbox" value="2" class="schedule-weekday" /> 화</label>
+                <label class="weekday-check"><input type="checkbox" value="3" class="schedule-weekday" /> 수</label>
+                <label class="weekday-check"><input type="checkbox" value="4" class="schedule-weekday" /> 목</label>
+                <label class="weekday-check"><input type="checkbox" value="5" class="schedule-weekday" /> 금</label>
+                <label class="weekday-check"><input type="checkbox" value="6" class="schedule-weekday" /> 토</label>
+                <label class="weekday-check"><input type="checkbox" value="0" class="schedule-weekday" /> 일</label>
+              </div>
+            </div>
+
+            <div id="scheduleRepeatIntervalWrap" class="form-group hidden">
+              <label for="scheduleRepeatInterval">반복 일수</label>
+              <input type="number" id="scheduleRepeatInterval" min="1" value="2" placeholder="예: 3일마다" />
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="saveItemBtn" class="primary-btn" type="button">추가하기</button>
+            <button id="cancelEditBtn" class="secondary-btn hidden" type="button">수정 취소</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>오늘 일정</h2>
+          <div id="todayList" class="item-list"></div>
+        </section>
+
+        <section class="card calendar-card">
+          <div class="calendar-header">
+            <div>
+              <h2>달력</h2>
+              <p class="small-text">할일과 일정이 모두 표시됩니다.</p>
+            </div>
+
+            <div class="calendar-nav">
+              <button id="prevMonthBtn" class="secondary-btn" type="button">이전 달</button>
+              <strong id="calendarTitle" class="calendar-title-text"></strong>
+              <button id="nextMonthBtn" class="secondary-btn" type="button">다음 달</button>
+            </div>
+          </div>
+
+          <div class="calendar-weekdays">
+            <div>일</div>
+            <div>월</div>
+            <div>화</div>
+            <div>수</div>
+            <div>목</div>
+            <div>금</div>
+            <div>토</div>
+          </div>
+
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-tabbar">
+      <button class="bottom-tab-btn active" data-tab="dashboard" type="button">
+        <span class="tab-icon">⌂</span>
+        <span class="tab-text">전체</span>
+      </button>
+      <button class="bottom-tab-btn" data-tab="planner" type="button">
+        <span class="tab-icon">＋</span>
+        <span class="tab-text">일정/할일</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="summaryPopupOverlay" class="popup-overlay hidden">
+    <div class="popup-panel">
+      <div class="popup-header">
+        <div>
+          <h3 class="popup-title">요약 항목</h3>
+          <p id="summaryPopupLabel" class="popup-subtext">목록</p>
+        </div>
+        <button id="closeSummaryPopupBtn" class="secondary-btn" type="button">닫기</button>
+      </div>
+      <div id="summaryPopupList" class="calendar-popup-list"></div>
+    </div>
+  </div>
+
+  <div id="calendarPopupOverlay" class="popup-overlay hidden">
+    <div class="popup-panel">
+      <div class="popup-header">
+        <div>
+          <h3 class="popup-title">선택한 날짜 항목</h3>
+          <p id="selectedDateLabel" class="popup-subtext">날짜를 선택하세요.</p>
+        </div>
+        <button id="clearSelectedDateBtn" class="secondary-btn" type="button">닫기</button>
+      </div>
+
+      <section class="quick-add-box">
+        <div class="quick-add-header-row">
+          <h4 class="quick-add-title">선택한 날짜에 추가</h4>
+          <button id="openPopupQuickAddBtn" class="primary-btn" type="button">추가</button>
+        </div>
+
+        <div id="popupQuickAddForm" class="hidden">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="popupItemType">종류</label>
+              <select id="popupItemType">
+                <option value="todo">할일</option>
+                <option value="schedule">일정</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="popupTitleInput">제목</label>
+              <input type="text" id="popupTitleInput" placeholder="제목 입력" />
+            </div>
+          </div>
+
+          <div id="popupTodoFields">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>기한 시간</label>
+                <div class="time-picker" data-time-picker="popupTodo">
+                  <button type="button" class="time-picker-trigger" id="popupTodoTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="popupTodoTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="popupTodoTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="popupTodoTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="popupTodoTimeValue" />
+                <input type="time" id="popupTodoTimeCustom" class="hidden" />
+              </div>
+
+              <div class="form-group">
+                <label for="popupTodoRepeat">반복</label>
+                <select id="popupTodoRepeat">
+                  <option value="none">반복 없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly_days">요일별 반복</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                  <option value="interval_days">N일마다</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="popupTodoRepeatUntil">반복 종료일</label>
+              <input type="date" id="popupTodoRepeatUntil" />
+            </div>
+
+            <div id="popupTodoWeeklyDaysWrap" class="form-group hidden">
+              <label>반복 요일</label>
+              <div class="weekday-check-grid">
+                <label class="weekday-check"><input type="checkbox" value="1" class="popup-todo-weekday" /> 월</label>
+                <label class="weekday-check"><input type="checkbox" value="2" class="popup-todo-weekday" /> 화</label>
+                <label class="weekday-check"><input type="checkbox" value="3" class="popup-todo-weekday" /> 수</label>
+                <label class="weekday-check"><input type="checkbox" value="4" class="popup-todo-weekday" /> 목</label>
+                <label class="weekday-check"><input type="checkbox" value="5" class="popup-todo-weekday" /> 금</label>
+                <label class="weekday-check"><input type="checkbox" value="6" class="popup-todo-weekday" /> 토</label>
+                <label class="weekday-check"><input type="checkbox" value="0" class="popup-todo-weekday" /> 일</label>
+              </div>
+            </div>
+
+            <div id="popupTodoRepeatIntervalWrap" class="form-group hidden">
+              <label for="popupTodoRepeatInterval">반복 일수</label>
+              <input type="number" id="popupTodoRepeatInterval" min="1" value="2" placeholder="예: 3일마다" />
+            </div>
+          </div>
+
+          <div id="popupScheduleFields" class="hidden">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>시작 시간</label>
+                <div class="time-picker" data-time-picker="popupScheduleStart">
+                  <button type="button" class="time-picker-trigger" id="popupScheduleStartTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="popupScheduleStartTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="popupScheduleStartTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="popupScheduleStartTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="popupScheduleStartTimeValue" />
+                <input type="time" id="popupScheduleStartTimeCustom" class="hidden" />
+              </div>
+
+              <div class="form-group">
+                <label>종료 시간</label>
+                <div class="time-picker" data-time-picker="popupScheduleEnd">
+                  <button type="button" class="time-picker-trigger" id="popupScheduleEndTimeTrigger">시간 없음</button>
+                  <div class="time-picker-menu hidden" id="popupScheduleEndTimeMenu">
+                    <div class="time-picker-search-wrap">
+                      <input type="text" class="time-picker-search" id="popupScheduleEndTimeSearch" placeholder="시간 검색" />
+                    </div>
+                    <div class="time-picker-options" id="popupScheduleEndTimeOptions"></div>
+                  </div>
+                </div>
+                <input type="hidden" id="popupScheduleEndTimeValue" />
+                <input type="time" id="popupScheduleEndTimeCustom" class="hidden" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="popupScheduleEndDate">종료 날짜</label>
+                <input type="date" id="popupScheduleEndDate" />
+              </div>
+
+              <div class="form-group">
+                <label for="popupScheduleRepeat">반복</label>
+                <select id="popupScheduleRepeat">
+                  <option value="none">반복 없음</option>
+                  <option value="daily">매일</option>
+                  <option value="weekly_days">요일별 반복</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                  <option value="interval_days">N일마다</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="popupScheduleRepeatUntil">반복 종료일</label>
+              <input type="date" id="popupScheduleRepeatUntil" />
+            </div>
+
+            <div id="popupScheduleWeeklyDaysWrap" class="form-group hidden">
+              <label>반복 요일</label>
+              <div class="weekday-check-grid">
+                <label class="weekday-check"><input type="checkbox" value="1" class="popup-schedule-weekday" /> 월</label>
+                <label class="weekday-check"><input type="checkbox" value="2" class="popup-schedule-weekday" /> 화</label>
+                <label class="weekday-check"><input type="checkbox" value="3" class="popup-schedule-weekday" /> 수</label>
+                <label class="weekday-check"><input type="checkbox" value="4" class="popup-schedule-weekday" /> 목</label>
+                <label class="weekday-check"><input type="checkbox" value="5" class="popup-schedule-weekday" /> 금</label>
+                <label class="weekday-check"><input type="checkbox" value="6" class="popup-schedule-weekday" /> 토</label>
+                <label class="weekday-check"><input type="checkbox" value="0" class="popup-schedule-weekday" /> 일</label>
+              </div>
+            </div>
+
+            <div id="popupScheduleRepeatIntervalWrap" class="form-group hidden">
+              <label for="popupScheduleRepeatInterval">반복 일수</label>
+              <input type="number" id="popupScheduleRepeatInterval" min="1" value="2" placeholder="예: 3일마다" />
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="popupAddItemBtn" class="primary-btn" type="button">이 날짜에 추가</button>
+            <button id="closePopupQuickAddBtn" class="secondary-btn" type="button">닫기</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="selectedDateItemList" class="calendar-popup-list"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
