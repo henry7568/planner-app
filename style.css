@@ -589,9 +589,118 @@ button {
   margin-bottom: 18px;
 }
 
+.quick-add-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .quick-add-title {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 18px;
+}
+
+.weekday-check-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.weekday-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border: 1px solid #cfd6e4;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.weekday-check input {
+  margin: 0;
+}
+
+.time-picker {
+  position: relative;
+}
+
+.time-picker-trigger {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 12px;
+  border: 1px solid #cfd6e4;
+  border-radius: 10px;
+  font-size: 16px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.time-picker-trigger::after {
+  content: "▾";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.time-picker-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 120;
+  background: #fff;
+  border: 1px solid #cfd6e4;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.time-picker-search-wrap {
+  padding: 10px;
+  border-bottom: 1px solid #e5eaf3;
+}
+
+.time-picker-search {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cfd6e4;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.time-picker-options {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.time-picker-option {
+  width: 100%;
+  border: none;
+  background: #fff;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.time-picker-option:hover,
+.time-picker-option.active {
+  background: #eef4ff;
+}
+
+.time-picker-option.custom {
+  font-weight: 700;
+  border-top: 1px solid #e5eaf3;
 }
 
 .selected-item-card {
@@ -688,6 +797,10 @@ button {
   .calendar-cell {
     min-height: 110px;
     padding: 8px;
+  }
+
+  .weekday-check-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

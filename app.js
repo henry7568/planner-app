@@ -1,4 +1,4 @@
-const STORAGE_KEY = "planner_items_tabs_v8";
+const STORAGE_KEY = "planner_items_tabs_v12";
 
 const bottomTabButtons = document.querySelectorAll(".bottom-tab-btn");
 const tabSections = document.querySelectorAll(".tab-section");
@@ -27,16 +27,41 @@ const todoFields = document.getElementById("todoFields");
 const scheduleFields = document.getElementById("scheduleFields");
 
 const todoDueDate = document.getElementById("todoDueDate");
-const todoDueTime = document.getElementById("todoDueTime");
+const todoDueTimeTrigger = document.getElementById("todoDueTimeTrigger");
+const todoDueTimeMenu = document.getElementById("todoDueTimeMenu");
+const todoDueTimeSearch = document.getElementById("todoDueTimeSearch");
+const todoDueTimeOptions = document.getElementById("todoDueTimeOptions");
+const todoDueTimeValue = document.getElementById("todoDueTimeValue");
+const todoDueTimeCustom = document.getElementById("todoDueTimeCustom");
 const todoRepeat = document.getElementById("todoRepeat");
 const todoRepeatUntil = document.getElementById("todoRepeatUntil");
+const todoWeeklyDaysWrap = document.getElementById("todoWeeklyDaysWrap");
+const todoWeekdayInputs = document.querySelectorAll(".todo-weekday");
+const todoRepeatIntervalWrap = document.getElementById("todoRepeatIntervalWrap");
+const todoRepeatInterval = document.getElementById("todoRepeatInterval");
 
 const scheduleStartDate = document.getElementById("scheduleStartDate");
-const scheduleStartTime = document.getElementById("scheduleStartTime");
+const scheduleStartTimeTrigger = document.getElementById("scheduleStartTimeTrigger");
+const scheduleStartTimeMenu = document.getElementById("scheduleStartTimeMenu");
+const scheduleStartTimeSearch = document.getElementById("scheduleStartTimeSearch");
+const scheduleStartTimeOptions = document.getElementById("scheduleStartTimeOptions");
+const scheduleStartTimeValue = document.getElementById("scheduleStartTimeValue");
+const scheduleStartTimeCustom = document.getElementById("scheduleStartTimeCustom");
+
 const scheduleEndDate = document.getElementById("scheduleEndDate");
-const scheduleEndTime = document.getElementById("scheduleEndTime");
+const scheduleEndTimeTrigger = document.getElementById("scheduleEndTimeTrigger");
+const scheduleEndTimeMenu = document.getElementById("scheduleEndTimeMenu");
+const scheduleEndTimeSearch = document.getElementById("scheduleEndTimeSearch");
+const scheduleEndTimeOptions = document.getElementById("scheduleEndTimeOptions");
+const scheduleEndTimeValue = document.getElementById("scheduleEndTimeValue");
+const scheduleEndTimeCustom = document.getElementById("scheduleEndTimeCustom");
+
 const scheduleRepeat = document.getElementById("scheduleRepeat");
 const scheduleRepeatUntil = document.getElementById("scheduleRepeatUntil");
+const scheduleWeeklyDaysWrap = document.getElementById("scheduleWeeklyDaysWrap");
+const scheduleWeekdayInputs = document.querySelectorAll(".schedule-weekday");
+const scheduleRepeatIntervalWrap = document.getElementById("scheduleRepeatIntervalWrap");
+const scheduleRepeatInterval = document.getElementById("scheduleRepeatInterval");
 
 const typeFilter = document.getElementById("typeFilter");
 const yearFilter = document.getElementById("yearFilter");
@@ -64,17 +89,46 @@ const summaryButtons = document.querySelectorAll("[data-summary]");
 const popupItemType = document.getElementById("popupItemType");
 const popupTitleInput = document.getElementById("popupTitleInput");
 
+const popupQuickAddForm = document.getElementById("popupQuickAddForm");
+const openPopupQuickAddBtn = document.getElementById("openPopupQuickAddBtn");
+const closePopupQuickAddBtn = document.getElementById("closePopupQuickAddBtn");
+
 const popupTodoFields = document.getElementById("popupTodoFields");
-const popupTodoTime = document.getElementById("popupTodoTime");
+const popupTodoTimeTrigger = document.getElementById("popupTodoTimeTrigger");
+const popupTodoTimeMenu = document.getElementById("popupTodoTimeMenu");
+const popupTodoTimeSearch = document.getElementById("popupTodoTimeSearch");
+const popupTodoTimeOptions = document.getElementById("popupTodoTimeOptions");
+const popupTodoTimeValue = document.getElementById("popupTodoTimeValue");
+const popupTodoTimeCustom = document.getElementById("popupTodoTimeCustom");
 const popupTodoRepeat = document.getElementById("popupTodoRepeat");
 const popupTodoRepeatUntil = document.getElementById("popupTodoRepeatUntil");
+const popupTodoWeeklyDaysWrap = document.getElementById("popupTodoWeeklyDaysWrap");
+const popupTodoWeekdayInputs = document.querySelectorAll(".popup-todo-weekday");
+const popupTodoRepeatIntervalWrap = document.getElementById("popupTodoRepeatIntervalWrap");
+const popupTodoRepeatInterval = document.getElementById("popupTodoRepeatInterval");
 
 const popupScheduleFields = document.getElementById("popupScheduleFields");
-const popupScheduleStartTime = document.getElementById("popupScheduleStartTime");
-const popupScheduleEndTime = document.getElementById("popupScheduleEndTime");
+const popupScheduleStartTimeTrigger = document.getElementById("popupScheduleStartTimeTrigger");
+const popupScheduleStartTimeMenu = document.getElementById("popupScheduleStartTimeMenu");
+const popupScheduleStartTimeSearch = document.getElementById("popupScheduleStartTimeSearch");
+const popupScheduleStartTimeOptions = document.getElementById("popupScheduleStartTimeOptions");
+const popupScheduleStartTimeValue = document.getElementById("popupScheduleStartTimeValue");
+const popupScheduleStartTimeCustom = document.getElementById("popupScheduleStartTimeCustom");
+
+const popupScheduleEndTimeTrigger = document.getElementById("popupScheduleEndTimeTrigger");
+const popupScheduleEndTimeMenu = document.getElementById("popupScheduleEndTimeMenu");
+const popupScheduleEndTimeSearch = document.getElementById("popupScheduleEndTimeSearch");
+const popupScheduleEndTimeOptions = document.getElementById("popupScheduleEndTimeOptions");
+const popupScheduleEndTimeValue = document.getElementById("popupScheduleEndTimeValue");
+const popupScheduleEndTimeCustom = document.getElementById("popupScheduleEndTimeCustom");
+
 const popupScheduleEndDate = document.getElementById("popupScheduleEndDate");
 const popupScheduleRepeat = document.getElementById("popupScheduleRepeat");
 const popupScheduleRepeatUntil = document.getElementById("popupScheduleRepeatUntil");
+const popupScheduleWeeklyDaysWrap = document.getElementById("popupScheduleWeeklyDaysWrap");
+const popupScheduleWeekdayInputs = document.querySelectorAll(".popup-schedule-weekday");
+const popupScheduleRepeatIntervalWrap = document.getElementById("popupScheduleRepeatIntervalWrap");
+const popupScheduleRepeatInterval = document.getElementById("popupScheduleRepeatInterval");
 
 const popupAddItemBtn = document.getElementById("popupAddItemBtn");
 
@@ -90,10 +144,13 @@ const now = new Date();
 let calendarYear = now.getFullYear();
 let calendarMonth = now.getMonth();
 
+const timePickerRegistry = {};
+
 init();
 
 function init() {
   setupTabs();
+  setupTimePickers();
   setupPlannerForm();
 
   saveItemBtn.addEventListener("click", saveCurrentItem);
@@ -154,16 +211,21 @@ function init() {
   });
 
   popupItemType.addEventListener("change", updatePopupFields);
+  popupTodoRepeat.addEventListener("change", updatePopupTodoRepeatUI);
+  popupScheduleRepeat.addEventListener("change", updatePopupScheduleRepeatUI);
   popupAddItemBtn.addEventListener("click", addItemFromSelectedDate);
+  openPopupQuickAddBtn.addEventListener("click", openPopupQuickAddForm);
+  closePopupQuickAddBtn.addEventListener("click", closePopupQuickAddForm);
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      closeAllTimePickerMenus();
       closeDatePopup();
       closeSummaryPopup();
     }
   });
 
-  document.addEventListener("click", handleGlobalClick);
+  document.addEventListener("click", handleDocumentClick);
 
   renderYearOptions();
   renderMonthOptions();
@@ -196,9 +258,234 @@ function switchTab(tabName) {
   renderTodayList();
 }
 
+function createTimeOptions() {
+  const list = [{ value: "", label: "시간 없음" }];
+  for (let hour = 0; hour < 24; hour++) {
+    for (let minute = 0; minute < 60; minute += 5) {
+      const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      list.push({ value, label: value });
+    }
+  }
+  list.push({ value: "__custom__", label: "직접입력" });
+  return list;
+}
+
+function registerTimePicker(key, config) {
+  timePickerRegistry[key] = {
+    ...config,
+    options: createTimeOptions(),
+    filteredOptions: createTimeOptions()
+  };
+
+  config.trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleTimePickerMenu(key);
+  });
+
+  config.search.addEventListener("input", () => {
+    filterTimePickerOptions(key, config.search.value);
+  });
+
+  config.custom.addEventListener("input", () => {
+    setTimePickerValue(key, config.custom.value, true);
+  });
+
+  renderTimePickerOptions(key);
+  updateTimePickerTriggerText(key);
+}
+
+function setupTimePickers() {
+  registerTimePicker("todoDue", {
+    trigger: todoDueTimeTrigger,
+    menu: todoDueTimeMenu,
+    search: todoDueTimeSearch,
+    optionsWrap: todoDueTimeOptions,
+    valueInput: todoDueTimeValue,
+    custom: todoDueTimeCustom
+  });
+
+  registerTimePicker("scheduleStart", {
+    trigger: scheduleStartTimeTrigger,
+    menu: scheduleStartTimeMenu,
+    search: scheduleStartTimeSearch,
+    optionsWrap: scheduleStartTimeOptions,
+    valueInput: scheduleStartTimeValue,
+    custom: scheduleStartTimeCustom
+  });
+
+  registerTimePicker("scheduleEnd", {
+    trigger: scheduleEndTimeTrigger,
+    menu: scheduleEndTimeMenu,
+    search: scheduleEndTimeSearch,
+    optionsWrap: scheduleEndTimeOptions,
+    valueInput: scheduleEndTimeValue,
+    custom: scheduleEndTimeCustom
+  });
+
+  registerTimePicker("popupTodo", {
+    trigger: popupTodoTimeTrigger,
+    menu: popupTodoTimeMenu,
+    search: popupTodoTimeSearch,
+    optionsWrap: popupTodoTimeOptions,
+    valueInput: popupTodoTimeValue,
+    custom: popupTodoTimeCustom
+  });
+
+  registerTimePicker("popupScheduleStart", {
+    trigger: popupScheduleStartTimeTrigger,
+    menu: popupScheduleStartTimeMenu,
+    search: popupScheduleStartTimeSearch,
+    optionsWrap: popupScheduleStartTimeOptions,
+    valueInput: popupScheduleStartTimeValue,
+    custom: popupScheduleStartTimeCustom
+  });
+
+  registerTimePicker("popupScheduleEnd", {
+    trigger: popupScheduleEndTimeTrigger,
+    menu: popupScheduleEndTimeMenu,
+    search: popupScheduleEndTimeSearch,
+    optionsWrap: popupScheduleEndTimeOptions,
+    valueInput: popupScheduleEndTimeValue,
+    custom: popupScheduleEndTimeCustom
+  });
+}
+
+function toggleTimePickerMenu(key) {
+  const picker = timePickerRegistry[key];
+  const isOpen = !picker.menu.classList.contains("hidden");
+  closeAllTimePickerMenus();
+  if (!isOpen) {
+    picker.menu.classList.remove("hidden");
+    picker.search.value = "";
+    filterTimePickerOptions(key, "");
+    picker.search.focus();
+  }
+}
+
+function closeAllTimePickerMenus() {
+  Object.values(timePickerRegistry).forEach((picker) => {
+    picker.menu.classList.add("hidden");
+  });
+}
+
+function filterTimePickerOptions(key, keyword) {
+  const picker = timePickerRegistry[key];
+  const query = keyword.trim().toLowerCase();
+
+  picker.filteredOptions = picker.options.filter((option) => {
+    if (!query) return true;
+    return option.label.toLowerCase().includes(query);
+  });
+
+  renderTimePickerOptions(key);
+}
+
+function renderTimePickerOptions(key) {
+  const picker = timePickerRegistry[key];
+  const currentValue = picker.valueInput.value;
+
+  picker.optionsWrap.innerHTML = picker.filteredOptions.map((option) => {
+    const active = currentValue === option.value ? "active" : "";
+    const customClass = option.value === "__custom__" ? "custom" : "";
+    return `
+      <button
+        type="button"
+        class="time-picker-option ${active} ${customClass}"
+        data-time-picker-option="${key}"
+        data-value="${option.value}"
+      >
+        ${option.label}
+      </button>
+    `;
+  }).join("");
+}
+
+function updateTimePickerTriggerText(key) {
+  const picker = timePickerRegistry[key];
+  const value = picker.valueInput.value;
+  const customValue = picker.custom.value;
+
+  if (value === "__custom__") {
+    picker.custom.classList.remove("hidden");
+    picker.trigger.textContent = customValue || "직접입력";
+    return;
+  }
+
+  picker.custom.classList.add("hidden");
+
+  if (!value) {
+    picker.trigger.textContent = "시간 없음";
+    return;
+  }
+
+  picker.trigger.textContent = value;
+}
+
+function setTimePickerValue(key, value, fromCustom = false) {
+  const picker = timePickerRegistry[key];
+
+  if (fromCustom) {
+    picker.valueInput.value = "__custom__";
+    updateTimePickerTriggerText(key);
+    renderTimePickerOptions(key);
+    return;
+  }
+
+  picker.valueInput.value = value;
+
+  if (value === "__custom__") {
+    picker.custom.classList.remove("hidden");
+    picker.custom.focus();
+  } else {
+    picker.custom.value = "";
+  }
+
+  updateTimePickerTriggerText(key);
+  renderTimePickerOptions(key);
+}
+
+function getTimeValue(key) {
+  const picker = timePickerRegistry[key];
+  if (picker.valueInput.value === "__custom__") {
+    return picker.custom.value || "";
+  }
+  return picker.valueInput.value || "";
+}
+
+function applyTimeValue(key, value) {
+  const picker = timePickerRegistry[key];
+  const hasExactOption = picker.options.some((option) => option.value === value);
+
+  if (!value) {
+    picker.valueInput.value = "";
+    picker.custom.value = "";
+    updateTimePickerTriggerText(key);
+    renderTimePickerOptions(key);
+    return;
+  }
+
+  if (hasExactOption) {
+    picker.valueInput.value = value;
+    picker.custom.value = "";
+  } else {
+    picker.valueInput.value = "__custom__";
+    picker.custom.value = value;
+  }
+
+  updateTimePickerTriggerText(key);
+  renderTimePickerOptions(key);
+}
+
 function setupPlannerForm() {
   itemType.addEventListener("change", updatePlannerFields);
+  todoRepeat.addEventListener("change", updateTodoRepeatUI);
+  scheduleRepeat.addEventListener("change", updateScheduleRepeatUI);
+
   updatePlannerFields();
+  updateTodoRepeatUI();
+  updateScheduleRepeatUI();
+  updatePopupTodoRepeatUI();
+  updatePopupScheduleRepeatUI();
 }
 
 function updatePlannerFields() {
@@ -209,6 +496,31 @@ function updatePlannerFields() {
     todoFields.classList.add("hidden");
     scheduleFields.classList.remove("hidden");
   }
+
+  updateTodoRepeatUI();
+  updateScheduleRepeatUI();
+}
+
+function updateTodoRepeatUI() {
+  const repeatValue = todoRepeat.value;
+  todoWeeklyDaysWrap.classList.toggle("hidden", !(itemType.value === "todo" && repeatValue === "weekly_days"));
+  todoRepeatIntervalWrap.classList.toggle("hidden", !(itemType.value === "todo" && repeatValue === "interval_days"));
+}
+
+function updateScheduleRepeatUI() {
+  const repeatValue = scheduleRepeat.value;
+  scheduleWeeklyDaysWrap.classList.toggle("hidden", !(itemType.value === "schedule" && repeatValue === "weekly_days"));
+  scheduleRepeatIntervalWrap.classList.toggle("hidden", !(itemType.value === "schedule" && repeatValue === "interval_days"));
+}
+
+function updatePopupTodoRepeatUI() {
+  popupTodoWeeklyDaysWrap.classList.toggle("hidden", !(popupItemType.value === "todo" && popupTodoRepeat.value === "weekly_days"));
+  popupTodoRepeatIntervalWrap.classList.toggle("hidden", !(popupItemType.value === "todo" && popupTodoRepeat.value === "interval_days"));
+}
+
+function updatePopupScheduleRepeatUI() {
+  popupScheduleWeeklyDaysWrap.classList.toggle("hidden", !(popupItemType.value === "schedule" && popupScheduleRepeat.value === "weekly_days"));
+  popupScheduleRepeatIntervalWrap.classList.toggle("hidden", !(popupItemType.value === "schedule" && popupScheduleRepeat.value === "interval_days"));
 }
 
 function updatePopupFields() {
@@ -219,23 +531,44 @@ function updatePopupFields() {
     popupTodoFields.classList.add("hidden");
     popupScheduleFields.classList.remove("hidden");
   }
+
+  updatePopupTodoRepeatUI();
+  updatePopupScheduleRepeatUI();
 }
 
 function resetPopupQuickAddForm() {
   popupItemType.value = "todo";
   popupTitleInput.value = "";
 
-  popupTodoTime.value = "";
+  applyTimeValue("popupTodo", "");
   popupTodoRepeat.value = "none";
   popupTodoRepeatUntil.value = "";
+  popupTodoRepeatInterval.value = "2";
+  popupTodoWeekdayInputs.forEach((input) => {
+    input.checked = false;
+  });
 
-  popupScheduleStartTime.value = "";
-  popupScheduleEndTime.value = "";
+  applyTimeValue("popupScheduleStart", "");
+  applyTimeValue("popupScheduleEnd", "");
   popupScheduleEndDate.value = selectedDate || "";
   popupScheduleRepeat.value = "none";
   popupScheduleRepeatUntil.value = "";
+  popupScheduleRepeatInterval.value = "2";
+  popupScheduleWeekdayInputs.forEach((input) => {
+    input.checked = false;
+  });
 
+  popupQuickAddForm.classList.add("hidden");
   updatePopupFields();
+}
+
+function openPopupQuickAddForm() {
+  popupQuickAddForm.classList.remove("hidden");
+  popupTitleInput.focus();
+}
+
+function closePopupQuickAddForm() {
+  popupQuickAddForm.classList.add("hidden");
 }
 
 function renderAll() {
@@ -271,10 +604,24 @@ function saveCurrentItem() {
 function saveEditedSingleItem(type, title) {
   if (type === "todo") {
     const dueDate = todoDueDate.value;
-    const dueTime = todoDueTime.value;
+    const dueTime = getTimeValue("todoDue");
+    const repeat = todoRepeat.value;
+    const repeatUntil = todoRepeatUntil.value;
+    const weeklyDays = [...todoWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+    const intervalDays = Math.max(1, Number(todoRepeatInterval.value) || 1);
 
     if (!dueDate) {
       alert("기한 날짜를 입력하세요.");
+      return;
+    }
+
+    if (repeat !== "none" && !repeatUntil) {
+      alert("반복 종료일을 입력하세요.");
+      return;
+    }
+
+    if (repeat === "weekly_days" && weeklyDays.length === 0) {
+      alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
       return;
     }
 
@@ -285,15 +632,23 @@ function saveEditedSingleItem(type, title) {
             type: "todo",
             title,
             dueDate,
-            dueTime
+            dueTime,
+            repeat,
+            repeatUntil,
+            weeklyDays,
+            intervalDays
           }
         : item
     );
   } else {
     const startDate = scheduleStartDate.value;
-    const startTime = scheduleStartTime.value;
+    const startTime = getTimeValue("scheduleStart");
     const endDate = scheduleEndDate.value;
-    const endTime = scheduleEndTime.value;
+    const endTime = getTimeValue("scheduleEnd");
+    const repeat = scheduleRepeat.value;
+    const repeatUntil = scheduleRepeatUntil.value;
+    const weeklyDays = [...scheduleWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+    const intervalDays = Math.max(1, Number(scheduleRepeatInterval.value) || 1);
 
     if (!startDate || !endDate) {
       alert("시작 날짜와 종료 날짜를 입력하세요.");
@@ -308,6 +663,16 @@ function saveEditedSingleItem(type, title) {
       return;
     }
 
+    if (repeat !== "none" && !repeatUntil) {
+      alert("반복 종료일을 입력하세요.");
+      return;
+    }
+
+    if (repeat === "weekly_days" && weeklyDays.length === 0) {
+      alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+      return;
+    }
+
     items = items.map((item) =>
       item.id === editingId
         ? {
@@ -317,7 +682,11 @@ function saveEditedSingleItem(type, title) {
             startDate,
             startTime,
             endDate,
-            endTime
+            endTime,
+            repeat,
+            repeatUntil,
+            weeklyDays,
+            intervalDays
           }
         : item
     );
@@ -330,9 +699,11 @@ function saveEditedSingleItem(type, title) {
 
 function saveTodoSeries(title) {
   const dueDate = todoDueDate.value;
-  const dueTime = todoDueTime.value;
+  const dueTime = getTimeValue("todoDue");
   const repeat = todoRepeat.value;
   const repeatUntil = todoRepeatUntil.value;
+  const weeklyDays = [...todoWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+  const intervalDays = Math.max(1, Number(todoRepeatInterval.value) || 1);
 
   if (!dueDate) {
     alert("기한 날짜를 입력하세요.");
@@ -351,12 +722,19 @@ function saveTodoSeries(title) {
     return;
   }
 
+  if (repeat === "weekly_days" && weeklyDays.length === 0) {
+    alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+    return;
+  }
+
   const seriesItems = generateTodoSeries({
     title,
     dueDate,
     dueTime,
     repeat,
-    repeatUntil
+    repeatUntil,
+    weeklyDays,
+    intervalDays
   });
 
   items.push(...seriesItems);
@@ -367,11 +745,13 @@ function saveTodoSeries(title) {
 
 function saveScheduleSeries(title) {
   const startDate = scheduleStartDate.value;
-  const startTime = scheduleStartTime.value;
+  const startTime = getTimeValue("scheduleStart");
   const endDate = scheduleEndDate.value;
-  const endTime = scheduleEndTime.value;
+  const endTime = getTimeValue("scheduleEnd");
   const repeat = scheduleRepeat.value;
   const repeatUntil = scheduleRepeatUntil.value;
+  const weeklyDays = [...scheduleWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+  const intervalDays = Math.max(1, Number(scheduleRepeatInterval.value) || 1);
 
   if (!startDate || !endDate) {
     alert("시작 날짜와 종료 날짜를 입력하세요.");
@@ -397,6 +777,11 @@ function saveScheduleSeries(title) {
     return;
   }
 
+  if (repeat === "weekly_days" && weeklyDays.length === 0) {
+    alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+    return;
+  }
+
   const seriesItems = generateScheduleSeries({
     title,
     startDate,
@@ -404,7 +789,9 @@ function saveScheduleSeries(title) {
     endDate,
     endTime,
     repeat,
-    repeatUntil
+    repeatUntil,
+    weeklyDays,
+    intervalDays
   });
 
   items.push(...seriesItems);
@@ -416,30 +803,31 @@ function saveScheduleSeries(title) {
 function generateTodoSeries(base) {
   const list = [];
   const groupId = makeId();
-  const start = new Date(`${base.dueDate}T00:00`);
-  const end = base.repeat === "none"
-    ? new Date(`${base.dueDate}T00:00`)
-    : new Date(`${base.repeatUntil}T00:00`);
 
-  let cursor = new Date(start);
+  const occurrenceDates = getOccurrenceDateKeys(
+    base.dueDate,
+    base.repeat,
+    base.repeatUntil,
+    base.weeklyDays || [],
+    base.intervalDays || 1
+  );
 
-  while (cursor <= end) {
+  occurrenceDates.forEach((dateKey) => {
     list.push({
       id: makeId(),
       groupId,
       type: "todo",
       title: base.title,
-      dueDate: formatDateKey(cursor),
+      dueDate: dateKey,
       dueTime: base.dueTime || "",
       repeat: base.repeat,
       repeatUntil: base.repeat === "none" ? "" : base.repeatUntil,
+      weeklyDays: base.repeat === "weekly_days" ? [...(base.weeklyDays || [])] : [],
+      intervalDays: base.repeat === "interval_days" ? (base.intervalDays || 1) : null,
       status: "pending",
       createdAt: getTodayString()
     });
-
-    if (base.repeat === "none") break;
-    cursor = moveCursor(cursor, base.repeat);
-  }
+  });
 
   return list;
 }
@@ -451,35 +839,99 @@ function generateScheduleSeries(base) {
   const baseEnd = new Date(`${base.endDate}T00:00`);
   const durationDays = dateDiffDays(baseStart, baseEnd);
 
-  const limit = base.repeat === "none"
-    ? new Date(`${base.startDate}T00:00`)
-    : new Date(`${base.repeatUntil}T00:00`);
+  const occurrenceDates = getOccurrenceDateKeys(
+    base.startDate,
+    base.repeat,
+    base.repeatUntil,
+    base.weeklyDays || [],
+    base.intervalDays || 1
+  );
 
-  let cursor = new Date(baseStart);
-
-  while (cursor <= limit) {
-    const currentEnd = addDays(cursor, durationDays);
+  occurrenceDates.forEach((startDateKey) => {
+    const startDateObj = new Date(`${startDateKey}T00:00`);
+    const currentEnd = addDays(startDateObj, durationDays);
 
     list.push({
       id: makeId(),
       groupId,
       type: "schedule",
       title: base.title,
-      startDate: formatDateKey(cursor),
+      startDate: startDateKey,
       startTime: base.startTime || "",
       endDate: formatDateKey(currentEnd),
       endTime: base.endTime || "",
       repeat: base.repeat,
       repeatUntil: base.repeat === "none" ? "" : base.repeatUntil,
+      weeklyDays: base.repeat === "weekly_days" ? [...(base.weeklyDays || [])] : [],
+      intervalDays: base.repeat === "interval_days" ? (base.intervalDays || 1) : null,
       status: "pending",
       createdAt: getTodayString()
     });
-
-    if (base.repeat === "none") break;
-    cursor = moveCursor(cursor, base.repeat);
-  }
+  });
 
   return list;
+}
+
+function getOccurrenceDateKeys(startDateKey, repeat, repeatUntil, weeklyDays = [], intervalDays = 1) {
+  const results = [];
+  const start = new Date(`${startDateKey}T00:00`);
+  const end = repeat === "none"
+    ? new Date(`${startDateKey}T00:00`)
+    : new Date(`${repeatUntil}T00:00`);
+
+  if (repeat === "none") {
+    return [startDateKey];
+  }
+
+  if (repeat === "daily") {
+    let cursor = new Date(start);
+    while (cursor <= end) {
+      results.push(formatDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return results;
+  }
+
+  if (repeat === "weekly") {
+    let cursor = new Date(start);
+    while (cursor <= end) {
+      results.push(formatDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return results;
+  }
+
+  if (repeat === "weekly_days") {
+    let cursor = new Date(start);
+    while (cursor <= end) {
+      if (weeklyDays.includes(cursor.getDay())) {
+        results.push(formatDateKey(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return results;
+  }
+
+  if (repeat === "monthly") {
+    let cursor = new Date(start);
+    while (cursor <= end) {
+      results.push(formatDateKey(cursor));
+      cursor = moveCursor(cursor, "monthly");
+    }
+    return results;
+  }
+
+  if (repeat === "interval_days") {
+    let cursor = new Date(start);
+    const step = Math.max(1, Number(intervalDays) || 1);
+    while (cursor <= end) {
+      results.push(formatDateKey(cursor));
+      cursor.setDate(cursor.getDate() + step);
+    }
+    return results;
+  }
+
+  return [startDateKey];
 }
 
 function moveCursor(dateObj, repeat) {
@@ -518,6 +970,9 @@ function addItemFromSelectedDate() {
   if (type === "todo") {
     const repeat = popupTodoRepeat.value;
     const repeatUntil = popupTodoRepeatUntil.value;
+    const weeklyDays = [...popupTodoWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+    const intervalDays = Math.max(1, Number(popupTodoRepeatInterval.value) || 1);
+    const dueTime = getTimeValue("popupTodo");
 
     if (repeat !== "none" && !repeatUntil) {
       alert("반복 종료일을 입력하세요.");
@@ -530,21 +985,30 @@ function addItemFromSelectedDate() {
       return;
     }
 
+    if (repeat === "weekly_days" && weeklyDays.length === 0) {
+      alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+      return;
+    }
+
     const seriesItems = generateTodoSeries({
       title,
       dueDate: selectedDate,
-      dueTime: popupTodoTime.value,
+      dueTime,
       repeat,
-      repeatUntil
+      repeatUntil,
+      weeklyDays,
+      intervalDays
     });
 
     items.push(...seriesItems);
   } else {
     const endDate = popupScheduleEndDate.value || selectedDate;
-    const startTime = popupScheduleStartTime.value || "";
-    const endTime = popupScheduleEndTime.value || "";
+    const startTime = getTimeValue("popupScheduleStart");
+    const endTime = getTimeValue("popupScheduleEnd");
     const repeat = popupScheduleRepeat.value;
     const repeatUntil = popupScheduleRepeatUntil.value;
+    const weeklyDays = [...popupScheduleWeekdayInputs].filter((input) => input.checked).map((input) => Number(input.value));
+    const intervalDays = Math.max(1, Number(popupScheduleRepeatInterval.value) || 1);
 
     const startDateTime = new Date(makeDateTime(selectedDate, startTime || "00:00"));
     const endDateTime = new Date(makeDateTime(endDate, endTime || "23:59"));
@@ -565,6 +1029,11 @@ function addItemFromSelectedDate() {
       return;
     }
 
+    if (repeat === "weekly_days" && weeklyDays.length === 0) {
+      alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+      return;
+    }
+
     const seriesItems = generateScheduleSeries({
       title,
       startDate: selectedDate,
@@ -572,7 +1041,9 @@ function addItemFromSelectedDate() {
       endDate,
       endTime,
       repeat,
-      repeatUntil
+      repeatUntil,
+      weeklyDays,
+      intervalDays
     });
 
     items.push(...seriesItems);
@@ -580,6 +1051,7 @@ function addItemFromSelectedDate() {
 
   saveItems();
   renderAll();
+  resetPopupQuickAddForm();
   openDatePopup(selectedDate);
 }
 
@@ -593,16 +1065,24 @@ function resetPlannerForm() {
   titleInput.value = "";
 
   todoDueDate.value = "";
-  todoDueTime.value = "";
+  applyTimeValue("todoDue", "");
   todoRepeat.value = "none";
   todoRepeatUntil.value = "";
+  todoRepeatInterval.value = "2";
+  todoWeekdayInputs.forEach((input) => {
+    input.checked = false;
+  });
 
   scheduleStartDate.value = "";
-  scheduleStartTime.value = "";
+  applyTimeValue("scheduleStart", "");
   scheduleEndDate.value = "";
-  scheduleEndTime.value = "";
+  applyTimeValue("scheduleEnd", "");
   scheduleRepeat.value = "none";
   scheduleRepeatUntil.value = "";
+  scheduleRepeatInterval.value = "2";
+  scheduleWeekdayInputs.forEach((input) => {
+    input.checked = false;
+  });
 
   updatePlannerFields();
 }
@@ -621,16 +1101,30 @@ function startEdit(id) {
 
   if (item.type === "todo") {
     todoDueDate.value = item.dueDate || "";
-    todoDueTime.value = item.dueTime || "";
-    todoRepeat.value = "none";
-    todoRepeatUntil.value = "";
+    applyTimeValue("todoDue", item.dueTime || "");
+    todoRepeat.value = item.repeat || "none";
+    todoRepeatUntil.value = item.repeatUntil || "";
+    todoRepeatInterval.value = item.intervalDays || 2;
+
+    todoWeekdayInputs.forEach((input) => {
+      input.checked = Array.isArray(item.weeklyDays)
+        ? item.weeklyDays.includes(Number(input.value))
+        : false;
+    });
   } else {
     scheduleStartDate.value = item.startDate || "";
-    scheduleStartTime.value = item.startTime || "";
+    applyTimeValue("scheduleStart", item.startTime || "");
     scheduleEndDate.value = item.endDate || "";
-    scheduleEndTime.value = item.endTime || "";
-    scheduleRepeat.value = "none";
-    scheduleRepeatUntil.value = "";
+    applyTimeValue("scheduleEnd", item.endTime || "");
+    scheduleRepeat.value = item.repeat || "none";
+    scheduleRepeatUntil.value = item.repeatUntil || "";
+    scheduleRepeatInterval.value = item.intervalDays || 2;
+
+    scheduleWeekdayInputs.forEach((input) => {
+      input.checked = Array.isArray(item.weeklyDays)
+        ? item.weeklyDays.includes(Number(input.value))
+        : false;
+    });
   }
 
   updatePlannerFields();
@@ -670,8 +1164,26 @@ function toggleStatus(id) {
   }
 }
 
-function handleGlobalClick(e) {
+function handleDocumentClick(e) {
   const actionTarget = e.target.closest("[data-action]");
+  const optionTarget = e.target.closest("[data-time-picker-option]");
+  const pickerRoot = e.target.closest(".time-picker");
+
+  if (optionTarget) {
+    const key = optionTarget.dataset.timePickerOption;
+    const value = optionTarget.dataset.value;
+    setTimePickerValue(key, value, false);
+    const picker = timePickerRegistry[key];
+    if (value !== "__custom__") {
+      picker.menu.classList.add("hidden");
+    }
+    return;
+  }
+
+  if (!pickerRoot) {
+    closeAllTimePickerMenus();
+  }
+
   if (!actionTarget) return;
 
   const action = actionTarget.dataset.action;
@@ -725,15 +1237,10 @@ function getFilteredItems() {
 function renderDashboard() {
   const filtered = sortItems(getFilteredItems());
 
-  const total = filtered.length;
-  const pending = filtered.filter((item) => item.status === "pending").length;
-  const fail = filtered.filter((item) => item.status === "fail").length;
-  const success = filtered.filter((item) => item.status === "success").length;
-
-  totalCount.textContent = total;
-  pendingCount.textContent = pending;
-  failCount.textContent = fail;
-  successCount.textContent = success;
+  totalCount.textContent = filtered.length;
+  pendingCount.textContent = filtered.filter((item) => item.status === "pending").length;
+  failCount.textContent = filtered.filter((item) => item.status === "fail").length;
+  successCount.textContent = filtered.filter((item) => item.status === "success").length;
 
   dashboardTodoCount.textContent = filtered.filter((item) => item.type === "todo").length;
   dashboardScheduleCount.textContent = filtered.filter((item) => item.type === "schedule").length;
@@ -757,11 +1264,7 @@ function renderDashboard() {
     : `완료 / (완료 + 미완료) 기준 · ${completedBase}개 반영`;
 
   if (filtered.length === 0) {
-    dashboardItemList.innerHTML = `
-      <div class="empty-message">
-        현재 표시할 항목이 없습니다.
-      </div>
-    `;
+    dashboardItemList.innerHTML = `<div class="empty-message">현재 표시할 항목이 없습니다.</div>`;
     return;
   }
 
@@ -773,11 +1276,7 @@ function renderTodayList() {
   const todayItems = getItemsForDate(todayKey);
 
   if (todayItems.length === 0) {
-    todayList.innerHTML = `
-      <div class="empty-message">
-        오늘 항목이 없습니다.
-      </div>
-    `;
+    todayList.innerHTML = `<div class="empty-message">오늘 항목이 없습니다.</div>`;
     return;
   }
 
@@ -787,6 +1286,7 @@ function renderTodayList() {
 function openSummaryPopup(type) {
   const filtered = getFilteredItems();
   const list = getSummaryList(type, filtered);
+
   const labelMap = {
     all: "전체 목록",
     pending: "대기 목록",
@@ -801,11 +1301,7 @@ function openSummaryPopup(type) {
   summaryPopupLabel.textContent = labelMap[type] || "목록";
 
   if (list.length === 0) {
-    summaryPopupList.innerHTML = `
-      <div class="empty-message">
-        표시할 항목이 없습니다.
-      </div>
-    `;
+    summaryPopupList.innerHTML = `<div class="empty-message">표시할 항목이 없습니다.</div>`;
   } else {
     summaryPopupList.innerHTML = list.map((item) => renderSelectedCard(item)).join("");
   }
@@ -861,25 +1357,19 @@ function renderCard(item) {
     detailMeta = `
       <span class="meta-badge">기한: ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
       <span class="meta-badge">남은 기한: ${getTodoRemainText(item)}</span>
-      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil)}</span>
+      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</span>
     `;
   } else {
     detailMeta = `
       <span class="meta-badge">기간: ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
       <span class="meta-badge">일정 상태: ${getScheduleProgressText(item)}</span>
-      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil)}</span>
+      <span class="meta-badge">반복: ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</span>
     `;
   }
 
   return `
     <div class="item-card">
-      <button
-        class="status-btn ${item.status}"
-        data-action="toggle-status"
-        data-id="${item.id}"
-        title="상태 변경"
-        type="button"
-      >
+      <button class="status-btn ${item.status}" data-action="toggle-status" data-id="${item.id}" title="상태 변경" type="button">
         ${getStatusSymbol(item.status)}
       </button>
 
@@ -905,26 +1395,20 @@ function renderSelectedCard(item) {
       <div class="selected-item-time-block">
         <div><strong>기한</strong> : ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</div>
         <div><strong>남은 기한</strong> : ${getTodoRemainText(item)}</div>
-        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil)}</div>
+        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>
       </div>
     `
     : `
       <div class="selected-item-time-block">
         <div><strong>시작</strong> : ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</div>
         <div><strong>종료</strong> : ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</div>
-        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil)}</div>
+        <div><strong>반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>
       </div>
     `;
 
   return `
     <div class="selected-item-card">
-      <button
-        class="status-btn ${item.status}"
-        data-action="toggle-status"
-        data-id="${item.id}"
-        title="상태 변경"
-        type="button"
-      >
+      <button class="status-btn ${item.status}" data-action="toggle-status" data-id="${item.id}" title="상태 변경" type="button">
         ${getStatusSymbol(item.status)}
       </button>
 
@@ -947,9 +1431,29 @@ function renderSelectedCard(item) {
   `;
 }
 
-function getRepeatText(repeat, repeatUntil) {
+function getRepeatText(repeat, repeatUntil, weeklyDays = [], intervalDays = null) {
   if (!repeat || repeat === "none") return "없음";
-  const map = { daily: "매일", weekly: "매주", monthly: "매월" };
+
+  if (repeat === "weekly_days") {
+    const dayMap = ["일", "월", "화", "수", "목", "금", "토"];
+    const dayText = Array.isArray(weeklyDays) && weeklyDays.length > 0
+      ? weeklyDays.map((day) => dayMap[day]).join(", ")
+      : "요일 미선택";
+
+    return repeatUntil ? `${dayText} 반복 · ${formatKoreanDate(repeatUntil)}까지` : `${dayText} 반복`;
+  }
+
+  if (repeat === "interval_days") {
+    const text = `${intervalDays || 1}일마다`;
+    return repeatUntil ? `${text} · ${formatKoreanDate(repeatUntil)}까지` : text;
+  }
+
+  const map = {
+    daily: "매일",
+    weekly: "매주",
+    monthly: "매월"
+  };
+
   return repeatUntil ? `${map[repeat]} · ${formatKoreanDate(repeatUntil)}까지` : map[repeat];
 }
 
@@ -1000,13 +1504,11 @@ function getAvailableMonthsForYear(year) {
 }
 
 function getYearFromItem(item) {
-  if (item.type === "todo") return item.dueDate.slice(0, 4);
-  return item.startDate.slice(0, 4);
+  return item.type === "todo" ? item.dueDate.slice(0, 4) : item.startDate.slice(0, 4);
 }
 
 function getMonthFromItem(item) {
-  if (item.type === "todo") return item.dueDate.slice(5, 7);
-  return item.startDate.slice(5, 7);
+  return item.type === "todo" ? item.dueDate.slice(5, 7) : item.startDate.slice(5, 7);
 }
 
 function renderCalendar() {
@@ -1014,7 +1516,6 @@ function renderCalendar() {
 
   const firstDay = new Date(calendarYear, calendarMonth, 1);
   const lastDay = new Date(calendarYear, calendarMonth + 1, 0);
-
   const startWeekday = firstDay.getDay();
   const daysInMonth = lastDay.getDate();
   const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
@@ -1052,11 +1553,9 @@ function createCalendarCell(dateObj, isOtherMonth) {
   const moreCount = dayItems.length - visibleItems.length;
 
   return `
-    <div
-      class="calendar-cell ${isOtherMonth ? "other-month" : ""} ${isToday ? "today" : ""} ${isSelected ? "selected-date" : ""}"
+    <div class="calendar-cell ${isOtherMonth ? "other-month" : ""} ${isToday ? "today" : ""} ${isSelected ? "selected-date" : ""}"
       data-action="select-date"
-      data-date="${dateKey}"
-    >
+      data-date="${dateKey}">
       <div class="calendar-date">${dateObj.getDate()}</div>
       <div class="calendar-items">
         ${visibleItems.map((item) => `
@@ -1075,10 +1574,7 @@ function createCalendarCell(dateObj, isOtherMonth) {
 }
 
 function getCalendarItemTime(item) {
-  if (item.type === "todo") {
-    return item.dueTime || "시간없음";
-  }
-  return item.startTime || "시간없음";
+  return item.type === "todo" ? (item.dueTime || "시간없음") : (item.startTime || "시간없음");
 }
 
 function selectCalendarDate(dateKey) {
@@ -1092,11 +1588,7 @@ function openDatePopup(dateKey) {
   selectedDateLabel.textContent = `${formatKoreanDate(dateKey)} 항목`;
 
   if (dayItems.length === 0) {
-    selectedDateItemList.innerHTML = `
-      <div class="empty-message">
-        ${formatKoreanDate(dateKey)}에는 등록된 항목이 없습니다.
-      </div>
-    `;
+    selectedDateItemList.innerHTML = `<div class="empty-message">${formatKoreanDate(dateKey)}에는 등록된 항목이 없습니다.</div>`;
   } else {
     selectedDateItemList.innerHTML = dayItems.map((item) => renderSelectedCard(item)).join("");
   }
@@ -1119,9 +1611,7 @@ function getItemsForDate(dateKey) {
 }
 
 function isItemOnDate(dateKey, item) {
-  if (item.type === "todo") {
-    return item.dueDate === dateKey;
-  }
+  if (item.type === "todo") return item.dueDate === dateKey;
 
   const target = new Date(`${dateKey}T00:00`);
   const start = new Date(`${item.startDate}T00:00`);
@@ -1220,8 +1710,7 @@ function getTodayString() {
 
 function makeDateTime(date, time) {
   if (!date) return "";
-  if (!time) return `${date}T00:00`;
-  return `${date}T${time}`;
+  return `${date}T${time || "00:00"}`;
 }
 
 function formatDateKey(dateObj) {
@@ -1246,21 +1735,30 @@ function saveItems() {
 }
 
 function loadItems() {
-  const current = localStorage.getItem(STORAGE_KEY);
-  const older1 = localStorage.getItem("planner_items_tabs_v7");
-  const older2 = localStorage.getItem("planner_items_tabs_v6");
-  const older3 = localStorage.getItem("planner_items_tabs_v5");
-  const target = current || older1 || older2 || older3;
+  const keys = [
+    STORAGE_KEY,
+    "planner_items_tabs_v11",
+    "planner_items_tabs_v10",
+    "planner_items_tabs_v9",
+    "planner_items_tabs_v8",
+    "planner_items_tabs_v7",
+    "planner_items_tabs_v6",
+    "planner_items_tabs_v5"
+  ];
 
-  if (!target) return [];
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
 
-  try {
-    const parsed = JSON.parse(target);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("데이터 불러오기 오류:", error);
-    return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (error) {
+      console.error("데이터 불러오기 오류:", error);
+    }
   }
+
+  return [];
 }
 
 function escapeHtml(text) {
