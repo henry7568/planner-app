@@ -1618,10 +1618,13 @@ function addItemFromSelectedDate() {
 
 function resetPlannerForm() {
   editingId = null;
+
   if (plannerFormTitle) plannerFormTitle.textContent = "항목 추가";
   if (saveItemBtn) saveItemBtn.textContent = "추가하기";
+
   cancelEditBtn?.classList.add("hidden");
   closePlannerFormBtn?.classList.remove("hidden");
+  deleteEditingItemBtn?.classList.add("hidden");
 
   if (itemType) itemType.value = "todo";
   if (titleInput) titleInput.value = "";
@@ -1653,19 +1656,20 @@ function resetPlannerForm() {
 
 function startEdit(id) {
   const item = items.find((x) => x.id === id);
-  closePlannerFormBtn?.classList.add("hidden");
-  cancelEditBtn?.classList.remove("hidden");
   if (!item) return;
 
   editingId = id;
+
   if (plannerFormTitle) {
     plannerFormTitle.textContent =
       item.type === "todo" ? "할일 수정" : "일정 수정";
   }
+
   if (saveItemBtn) saveItemBtn.textContent = "수정 저장";
-  cancelEditBtn?.classList.add("hidden");
-  closePlannerFormBtn?.classList.remove("hidden");
-  openPlannerFormCard();
+
+  cancelEditBtn?.classList.remove("hidden");
+  closePlannerFormBtn?.classList.add("hidden");
+  deleteEditingItemBtn?.classList.remove("hidden");
 
   if (itemType) itemType.value = item.type;
   if (titleInput) titleInput.value = item.title;
@@ -1691,8 +1695,9 @@ function startEdit(id) {
     applyTimeValue("scheduleEnd", item.endTime || "");
     if (scheduleRepeat) scheduleRepeat.value = item.repeat || "none";
     if (scheduleRepeatUntil) scheduleRepeatUntil.value = item.repeatUntil || "";
-    if (scheduleRepeatInterval)
+    if (scheduleRepeatInterval) {
       scheduleRepeatInterval.value = item.intervalDays || 2;
+    }
 
     scheduleWeekdayInputs.forEach((input) => {
       input.checked = Array.isArray(item.weeklyDays)
@@ -1703,6 +1708,36 @@ function startEdit(id) {
 
   updatePlannerFields();
   openEditPopup();
+}
+
+function deleteEditingItem() {
+  if (!editingId) return;
+
+  const ok = confirm("정말 삭제할까요?");
+  if (!ok) return;
+
+  const deletingId = editingId;
+
+  items = items.filter((item) => item.id !== deletingId);
+
+  queueSavePlannerData();
+  resetPlannerForm();
+  renderAll();
+
+  if (isEditingInPopup) {
+    closeEditPopup();
+  } else {
+    closePlannerFormCard();
+  }
+
+  if (selectedDate) {
+    const dayItems = getItemsForDate(selectedDate);
+    if (dayItems.length === 0) {
+      closeDatePopup();
+    } else {
+      openDatePopup(selectedDate);
+    }
+  }
 }
 
 function deleteItem(id) {
@@ -1768,7 +1803,7 @@ function handleDocumentClick(e) {
     return;
   }
 
-  if (action === "open-edit-item") {
+  if (action === "open-edit-item" || action === "edit-item") {
     const id = actionTarget.dataset.id;
     if (!id) return;
     startEdit(id);
@@ -2403,15 +2438,18 @@ function renderAllDayItem(item) {
       : "";
 
   return `
-    <div class="all-day-item ${colorClass}">
+    <div
+      class="all-day-item ${colorClass} clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
       <div class="all-day-main">
         <span class="all-day-type">일정</span>
         <span class="all-day-text">${escapeHtml(item.title)}</span>
         ${repeatIcon}
-      </div>
-      <div class="all-day-actions">
-        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
       </div>
     </div>
   `;
@@ -2698,61 +2736,62 @@ function renderPositionedTimelineBlock(block) {
 
   if (block.isTodoPoint) {
     return `
+      <div
+        class="timeline-point ${colorClass} clickable-item-card"
+        data-action="open-edit-item"
+        data-id="${item.id}"
+        role="button"
+        tabindex="0"
+        title="클릭해서 수정"
+        style="
+          top: ${top}px;
+          left: calc(${leftPercent}% + 4px);
+          width: calc(${widthPercent}% - 8px);
+        "
+      >
+        <div class="timeline-point-dot"></div>
+        <div class="timeline-point-content">
+          <div class="timeline-point-main">
+            <span class="timeline-type todo">할일</span>
+            <span class="timeline-title">${escapeHtml(item.title)}</span>
+            ${repeatIcon}
+          </div>
+          <div class="timeline-point-sub">
+            <span class="timeline-time">${timeText}</span>
+            ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
     <div
-      class="timeline-point ${colorClass}"
+      class="timeline-block ${colorClass} clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
       style="
         top: ${top}px;
+        height: ${height}px;
         left: calc(${leftPercent}% + 4px);
         width: calc(${widthPercent}% - 8px);
       "
     >
-      <div class="timeline-point-dot"></div>
-      <div class="timeline-point-content">
-        <div class="timeline-point-main">
-          <span class="timeline-type todo">할일</span>
-          <span class="timeline-title">${escapeHtml(item.title)}</span>
-          ${repeatIcon}
-        </div>
-        <div class="timeline-point-sub">
-          <span class="timeline-time">${timeText}</span>
-          ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
-        </div>
-        <div class="timeline-point-actions">
-          <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-          <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
-        </div>
+      <div class="timeline-block-main">
+        <span class="timeline-type schedule">일정</span>
+        <span class="timeline-title">${escapeHtml(item.title)}</span>
+        ${repeatIcon}
+      </div>
+
+      <div class="timeline-block-sub">
+        <span class="timeline-time">${timeText}</span>
+        ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
       </div>
     </div>
   `;
-  }
-
-  return `
-  <div
-    class="timeline-block ${colorClass}"
-    style="
-      top: ${top}px;
-      height: ${height}px;
-      left: calc(${leftPercent}% + 4px);
-      width: calc(${widthPercent}% - 8px);
-    "
-  >
-    <div class="timeline-block-main">
-      <span class="timeline-type schedule">일정</span>
-      <span class="timeline-title">${escapeHtml(item.title)}</span>
-      ${repeatIcon}
-    </div>
-
-    <div class="timeline-block-sub">
-      <span class="timeline-time">${timeText}</span>
-      ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
-    </div>
-
-    <div class="timeline-block-actions">
-      <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-      <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
-    </div>
-  </div>
-`;
 }
 
 function formatTimelineTime(totalMinutes) {
@@ -2831,7 +2870,14 @@ function renderTimelineItem(dateKey, item) {
   }
 
   return `
-    <div class="timeline-item ${colorClass}">
+    <div
+      class="timeline-item ${colorClass} clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
       <div class="timeline-item-main">
         <span class="timeline-type">${item.type === "todo" ? "할일" : "일정"}</span>
         <span class="timeline-title">${escapeHtml(item.title)}</span>
@@ -2840,10 +2886,6 @@ function renderTimelineItem(dateKey, item) {
       <div class="timeline-item-sub">
         <span class="timeline-time">${timeText}</span>
         ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
-      </div>
-      <div class="timeline-item-actions">
-        <button class="edit-btn" data-action="edit-item" data-id="${item.id}" type="button">수정</button>
-        <button class="delete-btn" data-action="delete-item" data-id="${item.id}" type="button">삭제</button>
       </div>
     </div>
   `;
