@@ -19,10 +19,12 @@ function getRefs() {
 }
 
 function getFinanceData() {
-  return deps.getFinanceData?.() || {
-    monthlyBudgets: {},
-    expenses: [],
-  };
+  return (
+    deps.getFinanceData?.() || {
+      monthlyBudgets: {},
+      expenses: [],
+    }
+  );
 }
 
 function setFinanceData(value) {
@@ -51,9 +53,22 @@ function getFinancePageSize() {
 
 function cloneFinanceData() {
   const current = getFinanceData();
+
   return {
     monthlyBudgets: { ...(current.monthlyBudgets || {}) },
-    expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
+
+    expenses: Array.isArray(current.expenses)
+      ? current.expenses.map((item) => ({
+          ...item,
+          flowType: item.flowType || "expense",
+        }))
+      : [],
+
+    assets: Array.isArray(current.assets)
+      ? current.assets.map((item) => ({
+          ...item,
+        }))
+      : [],
   };
 }
 
@@ -61,7 +76,23 @@ export function initFinance() {
   const refs = getRefs();
   const loaded = loadFinanceLocal();
 
-  setFinanceData(loaded);
+  const normalized = {
+    monthlyBudgets:
+      loaded && typeof loaded.monthlyBudgets === "object"
+        ? loaded.monthlyBudgets
+        : {},
+
+    expenses: Array.isArray(loaded?.expenses)
+      ? loaded.expenses.map((item) => ({
+          ...item,
+          flowType: item.flowType || "expense",
+        }))
+      : [],
+
+    assets: Array.isArray(loaded?.assets) ? loaded.assets : [],
+  };
+
+  setFinanceData(normalized);
 
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -84,7 +115,16 @@ export function initFinance() {
     refs.financeExpenseDate.value = formatDateKey(new Date());
   }
 
+  if (refs.financeTransactionType && !refs.financeTransactionType.value) {
+    refs.financeTransactionType.value = "expense";
+  }
+
+  if (refs.financeAssetCategory && !refs.financeAssetCategory.value) {
+    refs.financeAssetCategory.value = "stock";
+  }
+
   syncFinanceSubCategoryOptions(refs.financeExpenseCategory?.value || "");
+  syncFinanceExpenseFormButtons();
   renderFinance();
 }
 
@@ -158,29 +198,38 @@ export function renderFinance() {
   }
 
   const period = getFinancePeriodRange(monthKey, startDay);
-  const monthlyExpenses = getFinanceExpensesForPeriod(
+  const monthlyTransactions = getFinanceExpensesForPeriod(
     period.startKey,
     period.endKey,
   );
 
-  const monthlySpent = monthlyExpenses.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0,
-  );
+  const monthlyExpenseTotal = monthlyTransactions
+    .filter((item) => (item.flowType || "expense") === "expense")
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+  const monthlyIncomeTotal = monthlyTransactions
+    .filter((item) => item.flowType === "income")
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+  const monthlyNet = monthlyIncomeTotal - monthlyExpenseTotal;
 
   const todayKey = formatDateKey(new Date());
 
-  const todaySpent = monthlyExpenses
-    .filter((item) => item.date === todayKey)
+  const todaySpent = monthlyTransactions
+    .filter(
+      (item) =>
+        item.date === todayKey && (item.flowType || "expense") === "expense",
+    )
     .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-  const remaining = budget - monthlySpent;
+  const remaining = budget - monthlyExpenseTotal;
   const progress =
-    budget > 0 ? Math.min(999, Math.round((monthlySpent / budget) * 100)) : 0;
+    budget > 0
+      ? Math.min(999, Math.round((monthlyExpenseTotal / budget) * 100))
+      : 0;
 
   if (refs.financeCurrentPeriodLabel) {
-    refs.financeCurrentPeriodLabel.textContent =
-      `${formatKoreanDate(period.startKey)} ~ ${formatKoreanDate(period.endKey)}`;
+    refs.financeCurrentPeriodLabel.textContent = `${formatKoreanDate(period.startKey)} ~ ${formatKoreanDate(period.endKey)}`;
   }
 
   if (refs.financeMonthlyBudgetText) {
@@ -200,7 +249,15 @@ export function renderFinance() {
   }
 
   if (refs.financeMonthlySpentText) {
-    refs.financeMonthlySpentText.textContent = formatMoney(monthlySpent);
+    refs.financeMonthlySpentText.textContent = formatMoney(monthlyExpenseTotal);
+  }
+
+  if (refs.financeMonthlyIncomeText) {
+    refs.financeMonthlyIncomeText.textContent = formatMoney(monthlyIncomeTotal);
+  }
+
+  if (refs.financeMonthlyNetText) {
+    refs.financeMonthlyNetText.textContent = formatMoney(monthlyNet);
   }
 
   if (refs.financeBudgetProgressText) {
@@ -216,6 +273,31 @@ export function renderFinance() {
   const filteredExpenses = getFinanceFilteredExpenses();
   renderFinanceExpenseList(filteredExpenses);
   renderFinanceCategorySummary(filteredExpenses);
+  renderFinanceAssetSummary();
+
+  if (refs.financeSummaryTopCategoryText) {
+    if (!filteredExpenses.length) {
+      refs.financeSummaryTopCategoryText.textContent = "-";
+    } else {
+      const grouped = filteredExpenses
+        .filter((item) => (item.flowType || "expense") === "expense")
+        .reduce((acc, item) => {
+          const key = item.category || "미분류";
+          acc[key] = (acc[key] || 0) + (Number(item.amount) || 0);
+          return acc;
+        }, {});
+
+      const topCategory = Object.entries(grouped).sort(
+        (a, b) => b[1] - a[1],
+      )[0];
+
+      refs.financeSummaryTopCategoryText.textContent = topCategory?.[0] || "-";
+    }
+  }
+
+  if (refs.financeSummaryExpenseCountText) {
+    refs.financeSummaryExpenseCountText.textContent = `${filteredExpenses.length}건`;
+  }
 }
 
 export function getFinancePeriodRange(monthKey, startDay) {
@@ -233,9 +315,11 @@ export function getFinancePeriodRange(monthKey, startDay) {
 }
 
 export function getFinanceExpensesForPeriod(startKey, endKey) {
-  return getFinanceData().expenses.filter((item) => {
-    return item.date >= startKey && item.date <= endKey;
-  });
+  return expandRecurringFinanceExpensesInRange(
+    getFinanceData().expenses,
+    startKey,
+    endKey,
+  ).filter((item) => item.date >= startKey && item.date <= endKey);
 }
 
 export function saveFinanceExpense() {
@@ -246,42 +330,109 @@ export function saveFinanceExpense() {
   const amount = Math.max(0, Number(refs.financeExpenseAmount?.value) || 0);
   const category = refs.financeExpenseCategory?.value || "";
 
+  const flowType = refs.financeTransactionType?.value || "expense";
   const time = refs.financeExpenseTime?.value || "";
   const color = refs.financeExpenseColor?.value || "blue";
   const paymentMethod = refs.financeExpensePaymentMethod?.value || "";
   const merchant = refs.financeExpenseMerchant?.value.trim() || "";
   const tag = refs.financeExpenseTag?.value.trim() || "";
-  const memo = refs.financeExpenseMemo?.value.trim() || "";
   const subCategory = refs.financeExpenseSubCategory?.value || "";
 
+  const repeat = refs.financeExpenseRepeat?.value || "none";
+  const repeatUntil = refs.financeExpenseRepeatUntil?.value || "";
+
   if (!date) {
-    alert("지출 날짜를 입력하세요.");
+    alert("날짜를 입력하세요.");
     refs.financeExpenseDate?.focus();
-    return;
+    return { ok: false };
   }
 
   if (!title) {
     alert("항목명을 입력하세요.");
     refs.financeExpenseTitle?.focus();
-    return;
+    return { ok: false };
   }
 
   if (!amount) {
     alert("금액을 입력하세요.");
     refs.financeExpenseAmount?.focus();
-    return;
+    return { ok: false };
   }
 
   if (!category) {
-    alert("카테고리를 선택하세요.");
+    alert(
+      flowType === "income"
+        ? "수익 카테고리를 선택하세요."
+        : "지출 카테고리를 선택하세요.",
+    );
     refs.financeExpenseCategory?.focus();
-    return;
+    return { ok: false };
   }
 
-  const editingId = getFinanceEditingExpenseId();
+  const subCategoryOptions = getFinanceSubCategoryMap()[category] || [];
+  if (subCategoryOptions.length > 0 && !subCategory) {
+    alert("서브카테고리를 선택하세요.");
+    refs.financeExpenseSubCategory?.focus();
+    return { ok: false };
+  }
 
-  const payload = {
-    id: editingId || makeId(),
+  if (
+    repeat === "monthly" &&
+    repeatUntil &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${date}T00:00`)
+  ) {
+    alert("반복 종료일은 날짜보다 같거나 뒤여야 합니다.");
+    refs.financeExpenseRepeatUntil?.focus();
+    return { ok: false };
+  }
+
+  const editingId = String(getFinanceEditingExpenseId() || "").split("__")[0];
+  const nextData = cloneFinanceData();
+
+  if (editingId) {
+    nextData.expenses = nextData.expenses.map((item) =>
+      item.id === editingId
+        ? {
+            ...item,
+            date,
+            time,
+            title,
+            amount,
+            category,
+            subCategory,
+            paymentMethod,
+            merchant,
+            tag,
+            color,
+            flowType,
+            repeat,
+            repeatUntil,
+            isRecurring: repeat !== "none",
+            updatedAt: Date.now(),
+          }
+        : item,
+    );
+
+    setFinanceData(nextData);
+    saveFinanceLocal(nextData);
+    setFinancePage(1);
+    resetFinanceExpenseForm();
+    renderFinance();
+
+    alert(
+      flowType === "income"
+        ? "수익이 수정되었습니다."
+        : "지출이 수정되었습니다.",
+    );
+    return {
+      ok: true,
+      mode: "edit",
+      flowType,
+    };
+  }
+
+  nextData.expenses.push({
+    id: makeId(),
     date,
     time,
     title,
@@ -291,41 +442,42 @@ export function saveFinanceExpense() {
     paymentMethod,
     merchant,
     tag,
-    memo,
     color,
+    flowType,
+    repeat,
+    repeatUntil,
+    isRecurring: repeat !== "none",
+    createdAt: Date.now(),
     updatedAt: Date.now(),
-  };
-
-  const nextData = cloneFinanceData();
-
-  if (editingId) {
-    nextData.expenses = nextData.expenses.map((item) =>
-      item.id === editingId
-        ? {
-            ...item,
-            ...payload,
-          }
-        : item,
-    );
-  } else {
-    nextData.expenses.push({
-      ...payload,
-      createdAt: Date.now(),
-    });
-  }
+  });
 
   setFinanceData(nextData);
   saveFinanceLocal(nextData);
+  setFinancePage(1);
   resetFinanceExpenseForm();
   renderFinance();
 
-  alert(editingId ? "지출이 수정되었습니다." : "지출이 저장되었습니다.");
+  alert(
+    flowType === "income" ? "수익이 저장되었습니다." : "지출이 저장되었습니다.",
+  );
+
+  return {
+    ok: true,
+    mode: "create",
+    flowType,
+    repeat,
+    count: 1,
+  };
 }
 
 export function resetFinanceExpenseForm() {
   const refs = getRefs();
 
   setFinanceEditingExpenseId(null);
+
+  if (refs.financeTransactionType) {
+    refs.financeTransactionType.value = "expense";
+  }
 
   if (refs.financeExpenseDate) {
     refs.financeExpenseDate.value = formatDateKey(new Date());
@@ -349,6 +501,10 @@ export function resetFinanceExpenseForm() {
 
   syncFinanceSubCategoryOptions("");
 
+  if (refs.financeExpenseSubCategory) {
+    refs.financeExpenseSubCategory.value = "";
+  }
+
   if (refs.financeExpensePaymentMethod) {
     refs.financeExpensePaymentMethod.value = "";
   }
@@ -361,38 +517,41 @@ export function resetFinanceExpenseForm() {
     refs.financeExpenseTag.value = "";
   }
 
-  if (refs.financeExpenseMemo) {
-    refs.financeExpenseMemo.value = "";
-  }
-
   if (refs.financeExpenseColor) {
     refs.financeExpenseColor.value = "blue";
   }
 
+  if (refs.financeExpenseRepeat) {
+    refs.financeExpenseRepeat.value = "none";
+    refs.financeExpenseRepeat.disabled = false;
+  }
+
+  if (refs.financeExpenseRepeatUntil) {
+    refs.financeExpenseRepeatUntil.value = "";
+    refs.financeExpenseRepeatUntil.disabled = false;
+  }
+
+  deps.syncRepeatUntilToggleState?.("finance");
   syncFinanceExpenseFormButtons();
+  closeFinanceEditPopup();
 }
 
 export function renderFinanceExpenseList(expenseList) {
   const refs = getRefs();
   if (!refs.financeExpenseList) return;
 
-  const sorted = [...expenseList].sort((a, b) => {
-    const aTime = new Date(`${a.date}T${a.time || "00:00"}`).getTime();
-    const bTime = new Date(`${b.date}T${b.time || "00:00"}`).getTime();
-    return bTime - aTime;
-  });
+  const list = Array.isArray(expenseList) ? [...expenseList] : [];
 
-  if (sorted.length === 0) {
-    refs.financeExpenseList.innerHTML =
-      `<div class="empty-message">아직 저장된 지출이 없습니다.</div>`;
+  if (list.length === 0) {
+    refs.financeExpenseList.innerHTML = `<div class="empty-message">조건에 맞는 내역이 없습니다.</div>`;
 
     if (refs.financePageText) refs.financePageText.textContent = "1 / 1";
-    refs.financePrevPageBtn?.setAttribute("disabled", "true");
-    refs.financeNextPageBtn?.setAttribute("disabled", "true");
+    if (refs.financePrevPageBtn) refs.financePrevPageBtn.disabled = true;
+    if (refs.financeNextPageBtn) refs.financeNextPageBtn.disabled = true;
     return;
   }
 
-  const { pageItems, totalPages, currentPage } = getFinancePagedExpenses(sorted);
+  const { pageItems, totalPages, currentPage } = getFinancePagedExpenses(list);
 
   if (refs.financePageText) {
     refs.financePageText.textContent = `${currentPage} / ${totalPages}`;
@@ -412,86 +571,126 @@ export function renderFinanceExpenseList(expenseList) {
 }
 
 export function renderFinanceExpenseCard(item) {
+  const dateTimeText = `${formatKoreanDate(item.date)}${item.time ? ` ${item.time}` : ""}`;
+
+  const paymentText = item.paymentMethod
+    ? getFinancePaymentMethodText(item.paymentMethod)
+    : "";
+
+  const repeatText =
+    item.repeat === "monthly" ? `<span class="tag-badge">매월반복</span>` : "";
+
+  const flowType = item.flowType || "expense";
+  const flowText = flowType === "income" ? "수익" : "지출";
+  const signedAmount =
+    flowType === "income"
+      ? `+ ${formatMoney(item.amount)}`
+      : `- ${formatMoney(item.amount)}`;
+
+  const targetId = item.sourceId || item.id;
+
   return `
     <div
       class="item-card item-color-${item.color || "blue"} clickable-item-card"
       data-action="open-edit-finance-expense"
-      data-id="${item.id}"
+      data-id="${targetId}"
       role="button"
       tabindex="0"
       title="클릭해서 수정"
     >
       <div class="item-content">
-        <div class="item-title">${escapeHtml(item.title || "")}</div>
+        <div class="item-title-row">
+          <div class="item-title">
+            ${escapeHtml(item.title || "")}
+          </div>
+
+          <div class="finance-amount-strong">
+            ${escapeHtml(signedAmount)}
+          </div>
+        </div>
+
         <div class="item-meta compact-meta">
-          <span class="meta-badge compact">${formatKoreanDate(item.date)}${item.time ? ` ${item.time}` : ""}</span>
-          <span class="meta-badge compact">${formatMoney(item.amount)}</span>
+          <span class="meta-badge compact">
+            ${escapeHtml(dateTimeText)}
+          </span>
+
+          <span class="tag-badge">${flowText}</span>
+
           ${
             item.category
               ? `<span class="tag-badge">${escapeHtml(item.category)}</span>`
               : ""
           }
+
           ${
             item.subCategory
               ? `<span class="tag-badge">${escapeHtml(item.subCategory)}</span>`
               : ""
           }
+
           ${
-            item.paymentMethod
-              ? `<span class="tag-badge">${escapeHtml(getFinancePaymentMethodText(item.paymentMethod))}</span>`
+            paymentText
+              ? `<span class="tag-badge">${escapeHtml(paymentText)}</span>`
               : ""
           }
+
           ${
             item.merchant
               ? `<span class="tag-badge">${escapeHtml(item.merchant)}</span>`
               : ""
           }
+
           ${
             item.tag
               ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>`
               : ""
           }
-        </div>
-      </div>
 
-      <div class="item-actions">
-        <button
-          class="delete-btn"
-          type="button"
-          data-action="delete-finance-expense"
-          data-id="${item.id}"
-        >
-          삭제
-        </button>
+          ${repeatText}
+        </div>
       </div>
     </div>
   `;
 }
 
 export function deleteFinanceExpense(id) {
-  const ok = confirm("이 지출을 삭제할까요?");
+  const targetId = String(id || "").split("__")[0];
+  const targetItem = getFinanceData().expenses.find(
+    (item) => item.id === targetId,
+  );
+  if (!targetItem) return;
+
+  const ok = confirm("이 내역을 삭제할까요?");
   if (!ok) return;
 
   const nextData = cloneFinanceData();
-  nextData.expenses = nextData.expenses.filter((item) => item.id !== id);
 
-  if (getFinanceEditingExpenseId() === id) {
+  nextData.expenses = nextData.expenses.filter((item) => item.id !== targetId);
+
+  if (
+    getFinanceEditingExpenseId() === id ||
+    getFinanceEditingExpenseId() === targetId
+  ) {
     resetFinanceExpenseForm();
   }
 
   setFinanceData(nextData);
   saveFinanceLocal(nextData);
+  setFinancePage(1);
   renderFinance();
 }
 
 export function renderFinanceFilterOptions() {
   const refs = getRefs();
+  const expanded = expandRecurringFinanceExpensesInRange(
+    getFinanceData().expenses,
+    "1900-01-01",
+    "9999-12-31",
+  );
 
   if (refs.financeListMonthFilter) {
     const monthKeys = [
-      ...new Set(
-        getFinanceData().expenses.map((item) => String(item.date || "").slice(0, 7)),
-      ),
+      ...new Set(expanded.map((item) => String(item.date || "").slice(0, 7))),
     ]
       .filter(Boolean)
       .sort()
@@ -519,10 +718,18 @@ export function renderFinanceFilterOptions() {
     }
   }
 
+  if (refs.financeListFlowFilter) {
+    const currentValue = refs.financeListFlowFilter.value || "";
+    refs.financeListFlowFilter.innerHTML = `
+      <option value="">전체</option>
+      <option value="expense">지출</option>
+      <option value="income">수익</option>
+    `;
+    refs.financeListFlowFilter.value = currentValue;
+  }
+
   if (refs.financeListCategoryFilter) {
-    const categories = [
-      ...new Set(getFinanceData().expenses.map((item) => item.category || "")),
-    ]
+    const categories = [...new Set(expanded.map((item) => item.category || ""))]
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, "ko"));
 
@@ -545,34 +752,86 @@ export function renderFinanceFilterOptions() {
       refs.financeListCategoryFilter.value = "";
     }
   }
+
+  if (refs.financeListPaymentFilter) {
+    const paymentMethods = [
+      ...new Set(expanded.map((item) => item.paymentMethod || "")),
+    ].filter(Boolean);
+
+    const paymentOrder = ["card", "cash", "transfer", "simple_pay"];
+    const sortedPaymentMethods = paymentMethods.sort((a, b) => {
+      return paymentOrder.indexOf(a) - paymentOrder.indexOf(b);
+    });
+
+    const currentValue = refs.financeListPaymentFilter.value || "";
+    refs.financeListPaymentFilter.innerHTML = `<option value="">전체</option>`;
+
+    sortedPaymentMethods.forEach((method) => {
+      const option = document.createElement("option");
+      option.value = method;
+      option.textContent = getFinancePaymentMethodText(method);
+
+      if (currentValue === method) {
+        option.selected = true;
+      }
+
+      refs.financeListPaymentFilter.appendChild(option);
+    });
+
+    if (currentValue && !sortedPaymentMethods.includes(currentValue)) {
+      refs.financeListPaymentFilter.value = "";
+    }
+  }
+
+  if (refs.financeListSortFilter) {
+    const currentValue = refs.financeListSortFilter.value || "latest";
+
+    refs.financeListSortFilter.innerHTML = `
+      <option value="latest">최신순</option>
+      <option value="oldest">오래된순</option>
+      <option value="amount_high">금액 높은순</option>
+      <option value="amount_low">금액 낮은순</option>
+      <option value="title_asc">이름순</option>
+    `;
+
+    refs.financeListSortFilter.value = currentValue;
+  }
 }
 
 export function getFinanceFilteredExpenses() {
   const refs = getRefs();
 
-  const monthFilterValue = refs.financeListMonthFilter?.value || "";
-  const categoryFilterValue = refs.financeListCategoryFilter?.value || "";
-  const paymentFilterValue = refs.financeListPaymentFilter?.value || "";
+  let list = expandRecurringFinanceExpensesInRange(
+    getFinanceData().expenses,
+    "1900-01-01",
+    "9999-12-31",
+  );
+
+  const monthValue = refs.financeListMonthFilter?.value || "";
+  const flowValue = refs.financeListFlowFilter?.value || "";
+  const categoryValue = refs.financeListCategoryFilter?.value || "";
+  const paymentValue = refs.financeListPaymentFilter?.value || "";
+  const sortValue = refs.financeListSortFilter?.value || "latest";
   const searchValue = (refs.financeListSearchInput?.value || "")
     .trim()
     .toLowerCase();
 
-  let list = [...getFinanceData().expenses];
-
-  if (monthFilterValue) {
-    list = list.filter((item) =>
-      String(item.date || "").startsWith(monthFilterValue),
-    );
-  }
-
-  if (categoryFilterValue) {
-    list = list.filter((item) => (item.category || "") === categoryFilterValue);
-  }
-
-  if (paymentFilterValue) {
+  if (monthValue) {
     list = list.filter(
-      (item) => (item.paymentMethod || "") === paymentFilterValue,
+      (item) => String(item.date || "").slice(0, 7) === monthValue,
     );
+  }
+
+  if (flowValue) {
+    list = list.filter((item) => (item.flowType || "expense") === flowValue);
+  }
+
+  if (categoryValue) {
+    list = list.filter((item) => (item.category || "") === categoryValue);
+  }
+
+  if (paymentValue) {
+    list = list.filter((item) => (item.paymentMethod || "") === paymentValue);
   }
 
   if (searchValue) {
@@ -583,7 +842,6 @@ export function getFinanceFilteredExpenses() {
         item.subCategory,
         item.merchant,
         item.tag,
-        item.memo,
       ]
         .filter(Boolean)
         .join(" ")
@@ -592,6 +850,38 @@ export function getFinanceFilteredExpenses() {
       return target.includes(searchValue);
     });
   }
+
+  if (sortValue === "oldest") {
+    list.sort((a, b) => {
+      const aKey = `${a.date || ""} ${a.time || ""}`;
+      const bKey = `${b.date || ""} ${b.time || ""}`;
+      return aKey.localeCompare(bKey, "ko");
+    });
+    return list;
+  }
+
+  if (sortValue === "amount_high") {
+    list.sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
+    return list;
+  }
+
+  if (sortValue === "amount_low") {
+    list.sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
+    return list;
+  }
+
+  if (sortValue === "title_asc") {
+    list.sort((a, b) =>
+      String(a.title || "").localeCompare(String(b.title || ""), "ko"),
+    );
+    return list;
+  }
+
+  list.sort((a, b) => {
+    const aKey = `${a.date || ""} ${a.time || ""}`;
+    const bKey = `${b.date || ""} ${b.time || ""}`;
+    return bKey.localeCompare(aKey, "ko");
+  });
 
   return list;
 }
@@ -617,11 +907,22 @@ export function getFinanceSubCategoryMap() {
     "주거/통신": ["월세", "관리비", "전기/가스", "통신비", "인터넷", "기타"],
     교육: ["학원", "수강료", "교재", "시험응시료", "기타"],
     저축: ["적금", "예금", "투자", "비상금", "기타"],
+
+    급여: ["월급", "상여", "보너스", "기타"],
+    용돈: ["가족", "지인", "기타"],
+    환급: ["카드환급", "세금환급", "취소환불", "기타"],
+    이자: ["예금이자", "적금이자", "기타"],
+    투자수익: ["주식매도", "배당금", "기타"],
+    기타수익: ["중고판매", "부수입", "기타"],
+
     기타: ["기타"],
   };
 }
 
-export function syncFinanceSubCategoryOptions(categoryValue, selectedValue = "") {
+export function syncFinanceSubCategoryOptions(
+  categoryValue,
+  selectedValue = "",
+) {
   const refs = getRefs();
   const subCategoryInput = refs.financeExpenseSubCategory;
   if (!subCategoryInput) return;
@@ -651,50 +952,85 @@ export function renderFinanceCategorySummary(expenseList) {
   if (!refs.financeCategorySummaryList) return;
 
   if (!expenseList.length) {
-    refs.financeCategorySummaryList.innerHTML =
-      `<div class="empty-message">표시할 카테고리 합계가 없습니다.</div>`;
+    refs.financeCategorySummaryList.innerHTML = `<div class="empty-message">표시할 카테고리 합계가 없습니다.</div>`;
     return;
   }
 
-  const totalAmount = expenseList.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0,
-  );
+  const netTotal = expenseList.reduce((sum, item) => {
+    const signed =
+      (item.flowType || "expense") === "income"
+        ? Number(item.amount) || 0
+        : -(Number(item.amount) || 0);
+    return sum + signed;
+  }, 0);
 
   const grouped = expenseList.reduce((acc, item) => {
-    const key = item.category || "미분류";
-    acc[key] = (acc[key] || 0) + (Number(item.amount) || 0);
+    const flowLabel =
+      (item.flowType || "expense") === "income" ? "수익" : "지출";
+    const category = item.category || "미분류";
+    const key = `${flowLabel} · ${category}`;
+    const signed =
+      (item.flowType || "expense") === "income"
+        ? Number(item.amount) || 0
+        : -(Number(item.amount) || 0);
+
+    acc[key] = (acc[key] || 0) + signed;
     return acc;
   }, {});
 
-  const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+  const sorted = Object.entries(grouped).sort(
+    (a, b) => Math.abs(b[1]) - Math.abs(a[1]),
+  );
 
-  refs.financeCategorySummaryList.innerHTML = sorted
-    .map(([category, amount]) => {
-      const ratio =
-        totalAmount > 0 ? Math.round((amount / totalAmount) * 100) : 0;
+  refs.financeCategorySummaryList.innerHTML = `
+    <div class="item-card">
+      <div class="item-content">
+        <div class="item-title">카테고리 요약</div>
+        <div class="item-meta compact-meta">
+          <span class="meta-badge compact">
+            순합계 ${
+              netTotal >= 0
+                ? `+ ${formatMoney(Math.abs(netTotal))}`
+                : `- ${formatMoney(Math.abs(netTotal))}`
+            }
+          </span>
+        </div>
+      </div>
+    </div>
 
-      return `
-        <div class="item-card">
-          <div class="item-content">
-            <div class="item-title">${escapeHtml(category)}</div>
-            <div class="item-meta compact-meta">
-              <span class="meta-badge compact">${formatMoney(amount)}</span>
-              <span class="tag-badge">${ratio}%</span>
+    ${sorted
+      .map(([category, amount]) => {
+        const amountText =
+          amount >= 0
+            ? `+ ${formatMoney(Math.abs(amount))}`
+            : `- ${formatMoney(Math.abs(amount))}`;
+
+        return `
+          <div class="item-card">
+            <div class="item-content">
+              <div class="item-title">${escapeHtml(category)}</div>
+              <div class="item-meta compact-meta">
+                <span class="meta-badge compact">${escapeHtml(amountText)}</span>
+              </div>
             </div>
           </div>
-        </div>
-      `;
-    })
-    .join("");
+        `;
+      })
+      .join("")}
+  `;
 }
 
 export function startEditFinanceExpense(id) {
   const refs = getRefs();
-  const item = getFinanceData().expenses.find((x) => x.id === id);
+  const targetId = String(id || "").split("__")[0];
+  const item = getFinanceData().expenses.find((x) => x.id === targetId);
   if (!item) return;
 
-  setFinanceEditingExpenseId(id);
+  setFinanceEditingExpenseId(targetId);
+
+  if (refs.financeTransactionType) {
+    refs.financeTransactionType.value = item.flowType || "expense";
+  }
 
   if (refs.financeExpenseDate) {
     refs.financeExpenseDate.value = item.date || formatDateKey(new Date());
@@ -718,6 +1054,10 @@ export function startEditFinanceExpense(id) {
 
   syncFinanceSubCategoryOptions(item.category || "", item.subCategory || "");
 
+  if (refs.financeExpenseSubCategory) {
+    refs.financeExpenseSubCategory.value = item.subCategory || "";
+  }
+
   if (refs.financeExpensePaymentMethod) {
     refs.financeExpensePaymentMethod.value = item.paymentMethod || "";
   }
@@ -730,58 +1070,64 @@ export function startEditFinanceExpense(id) {
     refs.financeExpenseTag.value = item.tag || "";
   }
 
-  if (refs.financeExpenseMemo) {
-    refs.financeExpenseMemo.value = item.memo || "";
-  }
-
   if (refs.financeExpenseColor) {
     refs.financeExpenseColor.value = item.color || "blue";
   }
 
-  syncFinanceExpenseFormButtons();
+  if (refs.financeExpenseRepeat) {
+    refs.financeExpenseRepeat.value = item.repeat || "none";
+    refs.financeExpenseRepeat.disabled = false;
+  }
 
-  refs.financeExpenseFormCard?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
+  if (refs.financeExpenseRepeatUntil) {
+    refs.financeExpenseRepeatUntil.value = item.repeatUntil || "";
+    refs.financeExpenseRepeatUntil.disabled = false;
+  }
+
+  syncFinanceExpenseFormButtons();
+  openFinanceEditPopup();
+
+  setTimeout(() => {
+    refs.financeExpenseTitle?.focus();
+  }, 100);
+
+  deps.syncRepeatUntilToggleState?.("finance");
 }
 
 export function deleteEditingFinanceExpense() {
   const editingId = getFinanceEditingExpenseId();
   if (!editingId) return;
 
-  const ok = confirm("현재 수정 중인 지출을 삭제할까요?");
-  if (!ok) return;
+  deleteFinanceExpense(editingId);
 
-  const nextData = cloneFinanceData();
-  nextData.expenses = nextData.expenses.filter(
-    (item) => item.id !== editingId,
+  const stillExists = getFinanceData().expenses.some(
+    (item) => item.id === editingId,
   );
 
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  resetFinanceExpenseForm();
-  renderFinance();
+  if (!stillExists) {
+    resetFinanceExpenseForm();
+  }
 }
 
 export function syncFinanceExpenseFormButtons() {
   const refs = getRefs();
+  const isEditing = !!getFinanceEditingExpenseId();
+  const flowType = refs.financeTransactionType?.value || "expense";
+  const noun = flowType === "income" ? "수익" : "지출";
 
   if (refs.financeSaveExpenseBtn) {
-    refs.financeSaveExpenseBtn.textContent = getFinanceEditingExpenseId()
-      ? "지출 수정"
-      : "지출 저장";
+    refs.financeSaveExpenseBtn.textContent = isEditing
+      ? `${noun} 수정`
+      : `${noun} 저장`;
   }
 
-  refs.financeCancelExpenseEditBtn?.classList.toggle(
-    "hidden",
-    !getFinanceEditingExpenseId(),
-  );
+  const formTitle = refs.financeExpenseFormCard?.querySelector("h2");
+  if (formTitle) {
+    formTitle.textContent = isEditing ? `${noun} 수정` : `${noun} 추가`;
+  }
 
-  refs.financeDeleteExpenseBtn?.classList.toggle(
-    "hidden",
-    !getFinanceEditingExpenseId(),
-  );
+  refs.financeCancelExpenseEditBtn?.classList.toggle("hidden", !isEditing);
+  refs.financeDeleteExpenseBtn?.classList.toggle("hidden", !isEditing);
 }
 
 export function getFinancePagedExpenses(sortedExpenses) {
@@ -824,4 +1170,315 @@ export function handleFinancePageChange(direction) {
     behavior: "smooth",
     block: "start",
   });
+}
+
+export function generateFinanceExpenseSeries({
+  date,
+  time,
+  title,
+  amount,
+  category,
+  subCategory,
+  paymentMethod,
+  merchant,
+  tag,
+  color,
+  repeat,
+  repeatUntil,
+  flowType,
+}) {
+  return [
+    {
+      id: makeId(),
+      date,
+      time,
+      title,
+      amount,
+      category,
+      subCategory,
+      paymentMethod,
+      merchant,
+      tag,
+      color,
+      flowType: flowType || "expense",
+      repeat: repeat || "none",
+      repeatUntil: repeatUntil || "",
+      isRecurring: repeat !== "none",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+  ];
+}
+
+export function toggleFinanceExpenseForm(forceOpen = null) {
+  const refs = getRefs();
+  if (!refs.financeExpenseFormCard) return;
+
+  const isOpen = !refs.financeExpenseFormCard.classList.contains("hidden");
+  const shouldOpen = forceOpen === null ? !isOpen : forceOpen;
+
+  refs.financeExpenseFormCard.classList.toggle("hidden", !shouldOpen);
+
+  if (refs.financeOpenExpenseFormBtn) {
+    refs.financeOpenExpenseFormBtn.textContent = shouldOpen
+      ? "닫기"
+      : "내역 추가";
+  }
+
+  if (shouldOpen) {
+    requestAnimationFrame(() => {
+      refs.financeExpenseTitle?.focus();
+    });
+  }
+}
+
+export function openFinanceExpenseForm() {
+  const refs = getRefs();
+
+  setFinanceEditingExpenseId(null);
+  syncFinanceExpenseFormButtons();
+  closeFinanceEditPopup();
+
+  if (refs.financeExpenseFormCard) {
+    const financeSummaryCard = document.getElementById("financeSummaryCard");
+
+    if (financeSummaryCard?.parentNode) {
+      financeSummaryCard.parentNode.insertBefore(
+        refs.financeExpenseFormCard,
+        financeSummaryCard.nextSibling,
+      );
+    }
+
+    refs.financeExpenseFormCard.classList.remove("hidden");
+
+    refs.financeExpenseFormCard.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  setTimeout(() => {
+    refs.financeExpenseTitle?.focus();
+  }, 100);
+}
+
+export function saveFinanceAsset() {
+  const refs = getRefs();
+
+  const category = refs.financeAssetCategory?.value || "";
+  const title = refs.financeAssetTitle?.value.trim() || "";
+  const amount = Math.max(0, Number(refs.financeAssetAmount?.value) || 0);
+
+  if (!category) {
+    alert("자산 종류를 선택하세요.");
+    refs.financeAssetCategory?.focus();
+    return;
+  }
+
+  if (!title) {
+    alert("자산명을 입력하세요.");
+    refs.financeAssetTitle?.focus();
+    return;
+  }
+
+  if (!amount) {
+    alert("자산 금액을 입력하세요.");
+    refs.financeAssetAmount?.focus();
+    return;
+  }
+
+  const nextData = cloneFinanceData();
+
+  nextData.assets.push({
+    id: makeId(),
+    category,
+    title,
+    amount,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+
+  setFinanceData(nextData);
+  saveFinanceLocal(nextData);
+
+  if (refs.financeAssetCategory) {
+    refs.financeAssetCategory.value = "stock";
+  }
+
+  if (refs.financeAssetTitle) {
+    refs.financeAssetTitle.value = "";
+  }
+
+  if (refs.financeAssetAmount) {
+    refs.financeAssetAmount.value = "";
+  }
+
+  renderFinance();
+  alert("자산이 저장되었습니다.");
+}
+
+export function renderFinanceAssetSummary() {
+  const refs = getRefs();
+  const assets = Array.isArray(getFinanceData().assets)
+    ? [...getFinanceData().assets]
+    : [];
+
+  const totalAssetAmount = assets.reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
+
+  if (refs.financeTotalAssetText) {
+    refs.financeTotalAssetText.textContent = formatMoney(totalAssetAmount);
+  }
+
+  if (!refs.financeAssetList) return;
+
+  if (!assets.length) {
+    refs.financeAssetList.innerHTML = `<div class="empty-message">등록된 자산이 없습니다.</div>`;
+    return;
+  }
+
+  const categoryTextMap = {
+    stock: "주식",
+    savings: "적금",
+    deposit: "예금",
+  };
+
+  refs.financeAssetList.innerHTML = assets
+    .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))
+    .map((item) => {
+      const categoryText =
+        categoryTextMap[item.category] || item.category || "기타";
+
+      return `
+        <div class="item-card">
+          <div class="item-content">
+            <div class="item-title-row">
+              <div class="item-title">${escapeHtml(item.title || "")}</div>
+              <div class="finance-amount-strong">${formatMoney(item.amount)}</div>
+            </div>
+            <div class="item-meta compact-meta">
+              <span class="tag-badge">${escapeHtml(categoryText)}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+export function openFinanceEditPopup() {
+  const refs = getRefs();
+
+  if (
+    !refs.financeExpenseFormCard ||
+    !refs.financeEditPopupMount ||
+    !refs.financeEditPopupOverlay
+  ) {
+    return;
+  }
+
+  refs.financeEditPopupMount.appendChild(refs.financeExpenseFormCard);
+
+  refs.financeExpenseFormCard.classList.remove("hidden");
+  refs.financeEditPopupOverlay.classList.remove("hidden");
+
+  document.body.classList.add("modal-open");
+}
+
+export function closeFinanceEditPopup() {
+  const refs = getRefs();
+
+  if (!refs.financeExpenseFormCard || !refs.financeEditPopupOverlay) return;
+
+  const financeTab = document.getElementById("tab-finance");
+  const financeSummaryCard = document.getElementById("financeSummaryCard");
+
+  if (financeSummaryCard?.parentNode) {
+    financeSummaryCard.parentNode.insertBefore(
+      refs.financeExpenseFormCard,
+      financeSummaryCard.nextSibling,
+    );
+  } else if (financeTab) {
+    financeTab.appendChild(refs.financeExpenseFormCard);
+  }
+
+  refs.financeExpenseFormCard.classList.add("hidden");
+  refs.financeEditPopupOverlay.classList.add("hidden");
+
+  document.body.classList.remove("modal-open");
+}
+
+function isRecurringFinanceMaster(item) {
+  return !!item && item.repeat === "monthly" && !item.groupId;
+}
+
+function moveFinanceMonth(dateKey, diffMonths = 1) {
+  const source = new Date(`${dateKey}T00:00`);
+  const originalDay = source.getDate();
+
+  source.setDate(1);
+  source.setMonth(source.getMonth() + diffMonths);
+
+  const lastDay = new Date(
+    source.getFullYear(),
+    source.getMonth() + 1,
+    0,
+  ).getDate();
+
+  source.setDate(Math.min(originalDay, lastDay));
+
+  return formatDateKey(source);
+}
+
+function buildRecurringFinanceOccurrence(item, occurrenceDate) {
+  return {
+    ...item,
+    id: `${item.id}__${occurrenceDate}`,
+    sourceId: item.id,
+    date: occurrenceDate,
+    isVirtualOccurrence: true,
+  };
+}
+
+function expandRecurringFinanceExpensesInRange(
+  sourceItems,
+  rangeStartKey,
+  rangeEndKey,
+) {
+  const items = Array.isArray(sourceItems) ? sourceItems : [];
+  const expanded = [];
+
+  items.forEach((item) => {
+    if (!item) return;
+
+    if (!isRecurringFinanceMaster(item)) {
+      expanded.push(item);
+      return;
+    }
+
+    let cursor = item.date || "";
+
+    if (!cursor) return;
+
+    while (cursor < rangeStartKey) {
+      cursor = moveFinanceMonth(cursor, 1);
+      if (item.repeatUntil && cursor > item.repeatUntil) {
+        break;
+      }
+    }
+
+    while (cursor && cursor <= rangeEndKey) {
+      if (!item.repeatUntil || cursor <= item.repeatUntil) {
+        expanded.push(buildRecurringFinanceOccurrence(item, cursor));
+      } else {
+        break;
+      }
+
+      cursor = moveFinanceMonth(cursor, 1);
+    }
+  });
+
+  return expanded;
 }

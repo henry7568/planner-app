@@ -3,6 +3,8 @@ import { makeId } from "./utils.js";
 import { saveFinanceLocal } from "./storage.js";
 
 let deps = {};
+let financeOcrReviewQueue = [];
+let financeOcrReviewRawText = "";
 
 export function configureFinanceOcrModule(config) {
   deps = config;
@@ -13,10 +15,13 @@ function getRefs() {
 }
 
 function getFinanceData() {
-  return deps.getFinanceData?.() || {
-    monthlyBudgets: {},
-    expenses: [],
-  };
+  return (
+    deps.getFinanceData?.() || {
+      monthlyBudgets: {},
+      expenses: [],
+      assets: [],
+    }
+  );
 }
 
 function setFinanceData(value) {
@@ -70,21 +75,22 @@ export async function analyzeFinanceReceiptImage() {
     }
 
     const parsedTransactions = parseFinanceTransactionListText(rawText);
+    const reviewTargets = parsedTransactions.filter((item) => {
+      return (
+        item &&
+        item.sign === "-" &&
+        item.date &&
+        item.title &&
+        item.amount
+      );
+    });
 
-    if (!parsedTransactions.length) {
-      alert("자동 추가할 지출 항목을 찾지 못했습니다.");
+    if (!reviewTargets.length) {
+      alert("검토할 지출(-금액) 항목을 찾지 못했습니다.");
       return;
     }
 
-    const addedCount = bulkAddFinanceTransactions(parsedTransactions, rawText);
-
-    if (!addedCount) {
-      alert("지출(-금액) 항목이 없어 자동 추가하지 않았습니다.");
-      return;
-    }
-
-    renderFinance();
-    alert(`${addedCount}개 항목을 자동 추가했습니다.`);
+    startFinanceOcrReview(reviewTargets, rawText);
   } catch (error) {
     console.error("거래내역 OCR 분석 오류:", error);
     alert("이미지 분석 중 오류가 발생했습니다.");
@@ -480,11 +486,12 @@ export function bulkAddFinanceTransactions(parsedTransactions, rawText = "") {
     return 0;
   }
 
+  const current = getFinanceData();
+
   const nextData = {
-    monthlyBudgets: { ...(getFinanceData().monthlyBudgets || {}) },
-    expenses: Array.isArray(getFinanceData().expenses)
-      ? [...getFinanceData().expenses]
-      : [],
+    monthlyBudgets: { ...(current.monthlyBudgets || {}) },
+    expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
+    assets: Array.isArray(current.assets) ? [...current.assets] : [],
   };
 
   let addedCount = 0;
@@ -513,9 +520,10 @@ export function bulkAddFinanceTransactions(parsedTransactions, rawText = "") {
       paymentMethod: item.paymentMethod || "",
       merchant: item.title,
       tag: "OCR자동추가",
-      memo: rawText.trim(),
       color: "blue",
+      flowType: "expense",
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     });
 
     addedCount++;
@@ -636,4 +644,113 @@ export function shouldSkipFinanceListTitleLine(line) {
   ];
 
   return blockedPatterns.some((pattern) => pattern.test(text));
+}
+
+function applyFinanceTransactionToForm(item, index, total) {
+  const refs = getRefs();
+  if (!item) return;
+
+  const transactionTypeEl = document.getElementById("financeTransactionType");
+  const formCardEl = document.getElementById("financeExpenseFormCard");
+
+  if (transactionTypeEl) {
+    transactionTypeEl.value = "expense";
+  }
+
+  formCardEl?.classList.remove("hidden");
+
+  if (refs.financeExpenseDate) {
+    refs.financeExpenseDate.value = item.date || "";
+  }
+
+  if (refs.financeExpenseTime) {
+    refs.financeExpenseTime.value = item.time || "";
+  }
+
+  if (refs.financeExpenseTitle) {
+    refs.financeExpenseTitle.value = item.title || "";
+  }
+
+  if (refs.financeExpenseAmount) {
+    refs.financeExpenseAmount.value = String(item.amount || "");
+  }
+
+  const categoryResult = guessFinanceCategoryFromText(item.title || "");
+
+  if (refs.financeExpenseCategory) {
+    refs.financeExpenseCategory.value = categoryResult.category || "기타";
+    syncFinanceSubCategoryOptions(
+      categoryResult.category || "기타",
+      categoryResult.subCategory || "기타",
+    );
+  }
+
+  if (refs.financeExpenseSubCategory) {
+    refs.financeExpenseSubCategory.value = categoryResult.subCategory || "기타";
+  }
+
+  if (refs.financeExpensePaymentMethod) {
+    refs.financeExpensePaymentMethod.value = item.paymentMethod || "";
+  }
+
+  if (refs.financeExpenseMerchant) {
+    refs.financeExpenseMerchant.value = item.title || "";
+  }
+
+  if (refs.financeExpenseMemo) {
+    refs.financeExpenseMemo.value = financeOcrReviewRawText || "";
+  }
+
+  setTimeout(() => {
+    refs.financeExpenseTitle?.focus();
+  }, 120);
+
+  alert(
+    `OCR 검토 ${index + 1}/${total}\n내용을 확인하거나 수정한 뒤 저장하세요.`,
+  );
+}
+
+function startFinanceOcrReview(parsedTransactions, rawText = "") {
+  financeOcrReviewQueue = Array.isArray(parsedTransactions)
+    ? [...parsedTransactions]
+    : [];
+  financeOcrReviewRawText = String(rawText || "").trim();
+
+  if (!financeOcrReviewQueue.length) {
+    alert("검토할 항목이 없습니다.");
+    return;
+  }
+
+  applyFinanceTransactionToForm(
+    financeOcrReviewQueue[0],
+    0,
+    financeOcrReviewQueue.length,
+  );
+}
+
+export function advanceFinanceOcrReviewQueue() {
+  if (!financeOcrReviewQueue.length) {
+    financeOcrReviewRawText = "";
+    return;
+  }
+
+  financeOcrReviewQueue.shift();
+
+  if (!financeOcrReviewQueue.length) {
+    financeOcrReviewRawText = "";
+
+    const refs = getRefs();
+    if (refs.financeReceiptImageInput) {
+      refs.financeReceiptImageInput.value = "";
+    }
+
+    alert("OCR 검토 항목 저장이 모두 끝났습니다.");
+    return;
+  }
+
+  applyFinanceTransactionToForm(
+    financeOcrReviewQueue[0],
+    0,
+    financeOcrReviewQueue.length,
+  );
 }

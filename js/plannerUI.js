@@ -3,6 +3,10 @@ export let plannerUiApi = {};
 
 let deps = {};
 
+function syncPlaceUi(mode) {
+  deps.syncPlaceUi?.(mode);
+}
+
 export function configurePlannerUiModule(config) {
   deps = config;
   plannerUiApi = {
@@ -103,10 +107,7 @@ export function setupTabs() {
 }
 
 export function switchTab(tabName) {
-  const {
-    bottomTabButtons,
-    tabSections,
-  } = getRefs();
+  const { bottomTabButtons, tabSections } = getRefs();
 
   deps.setCurrentTab?.(tabName);
 
@@ -131,11 +132,7 @@ export function switchTab(tabName) {
 }
 
 export function setupPlannerForm() {
-  const {
-    itemType,
-    todoRepeat,
-    scheduleRepeat,
-  } = getRefs();
+  const { itemType, todoRepeat, scheduleRepeat } = getRefs();
 
   itemType?.addEventListener("change", updatePlannerFields);
   todoRepeat?.addEventListener("change", updateTodoRepeatUI);
@@ -149,11 +146,7 @@ export function setupPlannerForm() {
 }
 
 export function updatePlannerFields() {
-  const {
-    itemType,
-    todoFields,
-    scheduleFields,
-  } = getRefs();
+  const { itemType, todoFields, scheduleFields } = getRefs();
 
   if (itemType?.value === "todo") {
     todoFields?.classList.remove("hidden");
@@ -165,106 +158,150 @@ export function updatePlannerFields() {
 
   updateTodoRepeatUI();
   updateScheduleRepeatUI();
+
+  if (itemType?.value === "schedule") {
+    deps.syncScheduleLocationMode?.("main");
+  }
 }
 
 export function updateTodoRepeatUI() {
   const {
     itemType,
     todoRepeat,
+    todoRepeatUntil,
     todoWeeklyDaysWrap,
     todoRepeatIntervalWrap,
   } = getRefs();
 
-  const repeatValue = todoRepeat?.value;
+  const repeatValue = todoRepeat?.value || "none";
+  const isTodo = itemType?.value === "todo";
+  const showRepeatExtras = isTodo && repeatValue !== "none";
 
   todoWeeklyDaysWrap?.classList.toggle(
     "hidden",
-    !(itemType?.value === "todo" && repeatValue === "weekly_days"),
+    !(isTodo && repeatValue === "weekly_days"),
   );
 
   todoRepeatIntervalWrap?.classList.toggle(
     "hidden",
-    !(itemType?.value === "todo" && repeatValue === "interval_days"),
+    !(isTodo && repeatValue === "interval_days"),
   );
+
+  if (todoRepeatUntil) {
+    todoRepeatUntil.disabled = !showRepeatExtras;
+  }
+
+  if (!showRepeatExtras && todoRepeatUntil) {
+    todoRepeatUntil.value = "";
+  }
+
+  deps.syncRepeatUntilToggleState?.("todo");
 }
 
 export function updateScheduleRepeatUI() {
   const {
     itemType,
     scheduleRepeat,
+    scheduleRepeatUntil,
     scheduleWeeklyDaysWrap,
     scheduleRepeatIntervalWrap,
   } = getRefs();
 
-  const repeatValue = scheduleRepeat?.value;
+  const repeatValue = scheduleRepeat?.value || "none";
+  const isSchedule = itemType?.value === "schedule";
+  const showRepeatExtras = isSchedule && repeatValue !== "none";
 
   scheduleWeeklyDaysWrap?.classList.toggle(
     "hidden",
-    !(itemType?.value === "schedule" && repeatValue === "weekly_days"),
+    !(isSchedule && repeatValue === "weekly_days"),
   );
 
   scheduleRepeatIntervalWrap?.classList.toggle(
     "hidden",
-    !(itemType?.value === "schedule" && repeatValue === "interval_days"),
+    !(isSchedule && repeatValue === "interval_days"),
   );
+
+  if (scheduleRepeatUntil) {
+    scheduleRepeatUntil.disabled = !showRepeatExtras;
+  }
+
+  if (!showRepeatExtras && scheduleRepeatUntil) {
+    scheduleRepeatUntil.value = "";
+  }
+
+  deps.syncRepeatUntilToggleState?.("schedule");
 }
 
 export function updatePopupTodoRepeatUI() {
   const {
     popupItemType,
     popupTodoRepeat,
+    popupTodoRepeatUntil,
     popupTodoWeeklyDaysWrap,
     popupTodoRepeatIntervalWrap,
   } = getRefs();
 
+  const repeatValue = popupTodoRepeat?.value || "none";
+  const isTodo = popupItemType?.value === "todo";
+  const showRepeatExtras = isTodo && repeatValue !== "none";
+
   popupTodoWeeklyDaysWrap?.classList.toggle(
     "hidden",
-    !(
-      popupItemType?.value === "todo" &&
-      popupTodoRepeat?.value === "weekly_days"
-    ),
+    !(isTodo && repeatValue === "weekly_days"),
   );
 
   popupTodoRepeatIntervalWrap?.classList.toggle(
     "hidden",
-    !(
-      popupItemType?.value === "todo" &&
-      popupTodoRepeat?.value === "interval_days"
-    ),
+    !(isTodo && repeatValue === "interval_days"),
   );
+
+  if (popupTodoRepeatUntil) {
+    popupTodoRepeatUntil.disabled = !showRepeatExtras;
+  }
+
+  if (!showRepeatExtras && popupTodoRepeatUntil) {
+    popupTodoRepeatUntil.value = "";
+  }
+
+  deps.syncRepeatUntilToggleState?.("popupTodo");
 }
 
 export function updatePopupScheduleRepeatUI() {
   const {
     popupItemType,
     popupScheduleRepeat,
+    popupScheduleRepeatUntil,
     popupScheduleWeeklyDaysWrap,
     popupScheduleRepeatIntervalWrap,
   } = getRefs();
 
+  const repeatValue = popupScheduleRepeat?.value || "none";
+  const isSchedule = popupItemType?.value === "schedule";
+  const showRepeatExtras = isSchedule && repeatValue !== "none";
+
   popupScheduleWeeklyDaysWrap?.classList.toggle(
     "hidden",
-    !(
-      popupItemType?.value === "schedule" &&
-      popupScheduleRepeat?.value === "weekly_days"
-    ),
+    !(isSchedule && repeatValue === "weekly_days"),
   );
 
   popupScheduleRepeatIntervalWrap?.classList.toggle(
     "hidden",
-    !(
-      popupItemType?.value === "schedule" &&
-      popupScheduleRepeat?.value === "interval_days"
-    ),
+    !(isSchedule && repeatValue === "interval_days"),
   );
+
+  if (popupScheduleRepeatUntil) {
+    popupScheduleRepeatUntil.disabled = !showRepeatExtras;
+  }
+
+  if (!showRepeatExtras && popupScheduleRepeatUntil) {
+    popupScheduleRepeatUntil.value = "";
+  }
+
+  deps.syncRepeatUntilToggleState?.("popupSchedule");
 }
 
 export function updatePopupFields() {
-  const {
-    popupItemType,
-    popupTodoFields,
-    popupScheduleFields,
-  } = getRefs();
+  const { popupItemType, popupTodoFields, popupScheduleFields } = getRefs();
 
   if (popupItemType?.value === "todo") {
     popupTodoFields?.classList.remove("hidden");
@@ -276,6 +313,10 @@ export function updatePopupFields() {
 
   updatePopupTodoRepeatUI();
   updatePopupScheduleRepeatUI();
+
+  if (popupItemType?.value === "schedule") {
+    deps.syncScheduleLocationMode?.("popup");
+  }
 }
 
 export function resetPopupQuickAddForm() {
@@ -284,6 +325,9 @@ export function resetPopupQuickAddForm() {
     popupTitleInput,
     popupItemColor,
     popupItemTag,
+    popupItemLocation,
+    popupItemLocationAddress,
+    popupItemLocationPlaceId,
     popupTodoDate,
     popupTodoRepeat,
     popupTodoRepeatUntil,
@@ -305,6 +349,13 @@ export function resetPopupQuickAddForm() {
   if (popupTitleInput) popupTitleInput.value = "";
   if (popupItemColor) popupItemColor.value = "blue";
   if (popupItemTag) popupItemTag.value = "";
+  if (popupItemLocation) popupItemLocation.value = "";
+  if (popupItemLocationAddress) popupItemLocationAddress.value = "";
+  if (popupItemLocationPlaceId) popupItemLocationPlaceId.value = "";
+
+  if (typeof window.setPopupScheduleDailyLocations === "function") {
+    window.setPopupScheduleDailyLocations([]);
+  }
 
   if (popupTodoDate) popupTodoDate.value = selectedDate;
   applyTimeValue("popupTodo", "");
@@ -332,14 +383,15 @@ export function resetPopupQuickAddForm() {
   popupQuickAddForm?.classList.add("hidden");
   openPopupQuickAddBtn?.classList.remove("hidden");
   updatePopupFields();
+  deps.syncRepeatUntilToggleState?.("popupTodo");
+  deps.syncRepeatUntilToggleState?.("popupSchedule");
+  syncPlaceUi("popup");
+  deps.syncScheduleLocationMode?.("popup");
 }
 
 export function openPopupQuickAddForm() {
-  const {
-    popupQuickAddForm,
-    popupTitleInput,
-    openPopupQuickAddBtn,
-  } = getRefs();
+  const { popupQuickAddForm, popupTitleInput, openPopupQuickAddBtn } =
+    getRefs();
 
   popupQuickAddForm?.classList.remove("hidden");
   openPopupQuickAddBtn?.classList.add("hidden");
@@ -347,10 +399,7 @@ export function openPopupQuickAddForm() {
 }
 
 export function closePopupQuickAddForm() {
-  const {
-    popupQuickAddForm,
-    openPopupQuickAddBtn,
-  } = getRefs();
+  const { popupQuickAddForm, openPopupQuickAddBtn } = getRefs();
 
   popupQuickAddForm?.classList.add("hidden");
   openPopupQuickAddBtn?.classList.remove("hidden");
@@ -369,6 +418,9 @@ export function resetPlannerForm() {
     titleInput,
     itemColor,
     itemTag,
+    itemLocation,
+    itemLocationAddress,
+    itemLocationPlaceId,
 
     todoDueDate,
     todoRepeat,
@@ -400,6 +452,13 @@ export function resetPlannerForm() {
   if (titleInput) titleInput.value = "";
   if (itemColor) itemColor.value = "blue";
   if (itemTag) itemTag.value = "";
+  if (itemLocation) itemLocation.value = "";
+  if (itemLocationAddress) itemLocationAddress.value = "";
+  if (itemLocationPlaceId) itemLocationPlaceId.value = "";
+
+  if (typeof window.setScheduleDailyLocations === "function") {
+    window.setScheduleDailyLocations([]);
+  }
 
   if (todoDueDate) todoDueDate.value = "";
   applyTimeValue("todoDue", "");
@@ -424,13 +483,14 @@ export function resetPlannerForm() {
   });
 
   updatePlannerFields();
+  deps.syncRepeatUntilToggleState?.("todo");
+  deps.syncRepeatUntilToggleState?.("schedule");
+  syncPlaceUi("main");
+  deps.syncScheduleLocationMode?.("main");
 }
 
 export function openPlannerFormCard() {
-  const {
-    plannerFormCard,
-    plannerFormLauncher,
-  } = getRefs();
+  const { plannerFormCard, plannerFormLauncher } = getRefs();
 
   if (!plannerFormCard) return;
 
@@ -448,10 +508,7 @@ export function openPlannerFormCard() {
 }
 
 export function closePlannerFormCard() {
-  const {
-    plannerFormCard,
-    plannerFormLauncher,
-  } = getRefs();
+  const { plannerFormCard, plannerFormLauncher } = getRefs();
 
   if (!plannerFormCard) return;
 
@@ -512,6 +569,9 @@ export function startEdit(id) {
     titleInput,
     itemColor,
     itemTag,
+    itemLocation,
+    itemLocationAddress,
+    itemLocationPlaceId,
 
     todoDueDate,
     todoRepeat,
@@ -527,10 +587,11 @@ export function startEdit(id) {
     scheduleWeekdayInputs,
   } = getRefs();
 
-  const item = getItems().find((x) => x.id === id);
+  const targetId = String(id || "").split("__")[0];
+  const item = getItems().find((x) => x.id === targetId);
   if (!item) return;
 
-  setEditingId(id);
+  setEditingId(targetId);
 
   if (plannerFormTitle) {
     plannerFormTitle.textContent =
@@ -544,11 +605,18 @@ export function startEdit(id) {
   deleteEditingItemBtn?.classList.remove("hidden");
 
   if (itemType) itemType.value = item.type;
-  if (titleInput) titleInput.value = item.title;
+  if (titleInput) titleInput.value = item.title || "";
   if (itemColor) itemColor.value = item.color || "blue";
   if (itemTag) itemTag.value = item.tag || "";
+  if (itemLocation) itemLocation.value = item.location || "";
+  if (itemLocationAddress) itemLocationAddress.value = item.locationAddress || "";
+  if (itemLocationPlaceId) itemLocationPlaceId.value = item.locationPlaceId || "";
 
   if (item.type === "todo") {
+    if (typeof window.setScheduleDailyLocations === "function") {
+      window.setScheduleDailyLocations([]);
+    }
+
     if (todoDueDate) todoDueDate.value = item.dueDate || "";
     applyTimeValue("todoDue", item.dueTime || "");
     if (todoRepeat) todoRepeat.value = item.repeat || "none";
@@ -561,9 +629,17 @@ export function startEdit(id) {
         : false;
     });
   } else {
+    if (typeof window.setScheduleDailyLocations === "function") {
+      window.setScheduleDailyLocations(
+        Array.isArray(item.dailyLocations)
+          ? item.dailyLocations.map((x) => ({ ...x }))
+          : [],
+      );
+    }
+
     if (scheduleStartDate) scheduleStartDate.value = item.startDate || "";
-    applyTimeValue("scheduleStart", item.startTime || "");
     if (scheduleEndDate) scheduleEndDate.value = item.endDate || "";
+    applyTimeValue("scheduleStart", item.startTime || "");
     applyTimeValue("scheduleEnd", item.endTime || "");
     if (scheduleRepeat) scheduleRepeat.value = item.repeat || "none";
     if (scheduleRepeatUntil) scheduleRepeatUntil.value = item.repeatUntil || "";
@@ -579,7 +655,10 @@ export function startEdit(id) {
   }
 
   updatePlannerFields();
-  openEditPopup();
+  deps.syncRepeatUntilToggleState?.("todo");
+  deps.syncRepeatUntilToggleState?.("schedule");
+  syncPlaceUi("main");
+  deps.syncScheduleLocationMode?.("main");
 }
 
 export function deleteEditingItem() {
@@ -612,3 +691,166 @@ export function deleteEditingItem() {
     }
   }
 }
+
+export function addItemFromSelectedDateData({
+  items,
+  selectedDate,
+  popupItemType,
+  popupTitleInput,
+  popupItemColor,
+  popupItemTag,
+  popupItemLocation,
+  popupItemLocationAddress,
+  popupItemLocationPlaceId,
+  popupDailyLocations = [],
+  popupTodoDate,
+  popupTodoRepeat,
+  popupTodoRepeatUntil,
+  popupTodoWeekdayInputs,
+  popupTodoRepeatInterval,
+  popupScheduleStartDate,
+  popupScheduleEndDate,
+  popupScheduleRepeat,
+  popupScheduleRepeatUntil,
+  popupScheduleWeekdayInputs,
+  popupScheduleRepeatInterval,
+  getTimeValue,
+}) {
+  if (!selectedDate) {
+    alert("먼저 날짜를 선택하세요.");
+    return items;
+  }
+
+  const type = popupItemType?.value;
+  const title = popupTitleInput?.value.trim();
+  const color = popupItemColor?.value || "blue";
+  const tag = popupItemTag?.value.trim() || "";
+  const location = popupItemLocation?.value || "";
+  const locationAddress = popupItemLocationAddress?.value || "";
+  const locationPlaceId = popupItemLocationPlaceId?.value || "";
+
+  if (!title) {
+    alert("제목을 입력하세요.");
+    popupTitleInput?.focus();
+    return items;
+  }
+
+  if (type === "todo") {
+    const dueDate = popupTodoDate?.value || selectedDate;
+    const repeat = popupTodoRepeat?.value;
+    const repeatUntil = popupTodoRepeatUntil?.value;
+    const weeklyDays = [...popupTodoWeekdayInputs]
+      .filter((input) => input.checked)
+      .map((input) => Number(input.value));
+    const intervalDays = Math.max(1, Number(popupTodoRepeatInterval?.value) || 1);
+    const dueTime = getTimeValue("popupTodo");
+
+    if (!dueDate) {
+      alert("기한 날짜를 입력하세요.");
+      popupTodoDate?.focus();
+      return items;
+    }
+
+    if (repeat !== "none" && !repeatUntil) {
+      alert("반복 종료일을 입력하세요.");
+      popupTodoRepeatUntil?.focus();
+      return items;
+    }
+
+    if (
+      repeat !== "none" &&
+      new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
+    ) {
+      alert("반복 종료일은 기한 날짜보다 뒤여야 합니다.");
+      return items;
+    }
+
+    if (repeat === "weekly_days" && weeklyDays.length === 0) {
+      alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+      return items;
+    }
+
+    const seriesItems = generateTodoSeries({
+      title,
+      color,
+      tag,
+      location,
+      locationAddress,
+      locationPlaceId,
+      dueDate,
+      dueTime,
+      repeat,
+      repeatUntil,
+      weeklyDays,
+      intervalDays,
+    });
+
+    return [...items, ...seriesItems];
+  }
+
+  const startDate = popupScheduleStartDate?.value || selectedDate;
+  const endDate = popupScheduleEndDate?.value || startDate;
+  const startTime = getTimeValue("popupScheduleStart");
+  const endTime = getTimeValue("popupScheduleEnd");
+  const repeat = popupScheduleRepeat?.value;
+  const repeatUntil = popupScheduleRepeatUntil?.value;
+  const weeklyDays = [...popupScheduleWeekdayInputs]
+    .filter((input) => input.checked)
+    .map((input) => Number(input.value));
+  const intervalDays = Math.max(1, Number(popupScheduleRepeatInterval?.value) || 1);
+
+  if (!startDate || !endDate) {
+    alert("시작 날짜와 종료 날짜를 입력하세요.");
+    return items;
+  }
+
+  const startDateTime = new Date(makeDateTime(startDate, startTime || "00:00"));
+  const endDateTime = new Date(makeDateTime(endDate, endTime || "23:59"));
+
+  if (startDateTime > endDateTime) {
+    alert("종료 시점은 시작 시점보다 뒤여야 합니다.");
+    return items;
+  }
+
+  if (repeat !== "none" && !repeatUntil) {
+    alert("반복 종료일을 입력하세요.");
+    popupScheduleRepeatUntil?.focus();
+    return items;
+  }
+
+  if (
+    repeat !== "none" &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
+  ) {
+    alert("반복 종료일은 시작 날짜보다 뒤여야 합니다.");
+    return items;
+  }
+
+  if (repeat === "weekly_days" && weeklyDays.length === 0) {
+    alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
+    return items;
+  }
+
+  const seriesItems = generateScheduleSeries({
+    title,
+    color,
+    tag,
+    location,
+    locationAddress,
+    locationPlaceId,
+    dailyLocations: Array.isArray(popupDailyLocations)
+      ? popupDailyLocations.map((x) => ({ ...x }))
+      : [],
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    repeat,
+    repeatUntil,
+    weeklyDays,
+    intervalDays,
+  });
+
+  return [...items, ...seriesItems];
+}
+

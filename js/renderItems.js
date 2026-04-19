@@ -6,9 +6,25 @@ export function renderCard(item, getStatusSymbol) {
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="meta-icon repeat" title="${escapeHtml(
-          getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays),
+          getRepeatText(
+            item.repeat,
+            item.repeatUntil,
+            item.weeklyDays,
+            item.intervalDays,
+          ),
         )}">↻</span>`
       : "";
+
+  const locationText =
+    Array.isArray(item.dailyLocations) && item.dailyLocations.length > 0
+      ? item.dailyLocations.length > 1
+        ? `${item.dailyLocations[0].label} 외 ${item.dailyLocations.length - 1}곳`
+        : item.dailyLocations[0].label || ""
+      : item.location || "";
+
+  const locationBadge = locationText
+    ? `<span class="tag-badge">📍 ${escapeHtml(locationText)}</span>`
+    : "";
 
   let detailMeta = "";
 
@@ -17,6 +33,7 @@ export function renderCard(item, getStatusSymbol) {
       <span class="meta-icon" title="할일">📝</span>
       <span class="meta-badge compact">${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
+      ${locationBadge}
       ${repeatIcon}
     `;
   } else {
@@ -25,15 +42,19 @@ export function renderCard(item, getStatusSymbol) {
       <span class="meta-badge compact">${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</span>
       <span class="meta-badge compact">~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
+      ${locationBadge}
       ${repeatIcon}
     `;
   }
+
+  const editTargetId = item.id;
+  const statusTargetId = item.sourceId || item.id;
 
   return `
     <div
       class="item-card item-color-${item.color || "blue"} clickable-item-card"
       data-action="open-edit-item"
-      data-id="${item.id}"
+      data-id="${editTargetId}"
       role="button"
       tabindex="0"
       title="클릭해서 수정"
@@ -41,7 +62,7 @@ export function renderCard(item, getStatusSymbol) {
       <button
         class="status-btn ${item.status}"
         data-action="toggle-status"
-        data-id="${item.id}"
+        data-id="${statusTargetId}"
         title="상태 변경"
         type="button"
       >
@@ -64,11 +85,23 @@ export function renderSelectedCard(item, getStatusSymbol) {
       ? `<div><strong>↻ 반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>`
       : "";
 
+  const locationText =
+    Array.isArray(item.dailyLocations) && item.dailyLocations.length > 0
+      ? item.dailyLocations
+          .map((x) => `${formatKoreanDate(x.date)} · ${x.label}`)
+          .join(" / ")
+      : item.location || "";
+
+  const locationLine = locationText
+    ? `<div><strong>📍 장소</strong> : ${escapeHtml(locationText)}</div>`
+    : "";
+
   const timeBlock =
     item.type === "todo"
       ? `
       <div class="selected-item-time-block">
         <div><strong>📝 기한</strong> : ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</div>
+        ${locationLine}
         ${repeatLine}
       </div>
     `
@@ -76,15 +109,19 @@ export function renderSelectedCard(item, getStatusSymbol) {
       <div class="selected-item-time-block">
         <div><strong>🗓️ 시작</strong> : ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</div>
         <div><strong>🗓️ 종료</strong> : ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</div>
+        ${locationLine}
         ${repeatLine}
       </div>
     `;
+
+  const editTargetId = item.id;
+  const statusTargetId = item.sourceId || item.id;
 
   return `
     <div
       class="selected-item-card clickable-item-card"
       data-action="open-edit-item"
-      data-id="${item.id}"
+      data-id="${editTargetId}"
       role="button"
       tabindex="0"
       title="클릭해서 수정"
@@ -92,7 +129,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
       <button
         class="status-btn ${item.status}"
         data-action="toggle-status"
-        data-id="${item.id}"
+        data-id="${statusTargetId}"
         title="상태 변경"
         type="button"
       >

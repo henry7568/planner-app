@@ -109,6 +109,7 @@ export function loadFinanceLocal() {
       return {
         monthlyBudgets: {},
         expenses: [],
+        assets: [],
       };
     }
 
@@ -120,12 +121,14 @@ export function loadFinanceLocal() {
           ? parsed.monthlyBudgets
           : {},
       expenses: Array.isArray(parsed?.expenses) ? parsed.expenses : [],
+      assets: Array.isArray(parsed?.assets) ? parsed.assets : [],
     };
   } catch (error) {
     console.error("가계부 로컬 데이터 불러오기 오류:", error);
     return {
       monthlyBudgets: {},
       expenses: [],
+      assets: [],
     };
   }
 }

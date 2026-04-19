@@ -128,6 +128,9 @@ export function generateTodoSeries(base) {
       title: base.title,
       color: base.color || "blue",
       tag: base.tag || "",
+      location: base.location || "",
+      locationAddress: base.locationAddress || "",
+      locationPlaceId: base.locationPlaceId || "",
       dueDate: dateKey,
       dueTime: base.dueTime || "",
       repeat: base.repeat,
@@ -170,6 +173,12 @@ export function generateScheduleSeries(base) {
       title: base.title,
       color: base.color || "blue",
       tag: base.tag || "",
+      location: base.location || "",
+      locationAddress: base.locationAddress || "",
+      locationPlaceId: base.locationPlaceId || "",
+      dailyLocations: Array.isArray(base.dailyLocations)
+        ? base.dailyLocations.map((x) => ({ ...x }))
+        : [],
       startDate: startDateKey,
       startTime: base.startTime || "",
       endDate: formatDateKey(currentEnd),
@@ -223,4 +232,285 @@ export function getRepeatText(
   return repeatUntil
     ? `${map[repeat]} · ${repeatUntil.slice(2, 4)}년 ${Number(repeatUntil.slice(5, 7))}월 ${Number(repeatUntil.slice(8, 10))}일까지`
     : map[repeat];
+}
+
+export function isRecurringItem(item) {
+  return !!item && item.repeat && item.repeat !== "none";
+}
+
+export function isRecurringMasterItem(item) {
+  return isRecurringItem(item) && !item.groupId;
+}
+
+export function getRecurringItemBaseDate(item) {
+  if (!item) return "";
+
+  if (item.type === "todo") {
+    return item.dueDate || "";
+  }
+
+  if (item.type === "schedule") {
+    return item.startDate || "";
+  }
+
+  return "";
+}
+
+export function getSafeRepeatUntil(item) {
+  if (item?.repeatUntil) {
+    return item.repeatUntil;
+  }
+
+  return "9999-12-31";
+}
+
+export function isDateWithinRepeatBounds(dateKey, item) {
+  const baseDate = getRecurringItemBaseDate(item);
+  if (!baseDate || dateKey < baseDate) return false;
+
+  const repeatUntil = getSafeRepeatUntil(item);
+  if (repeatUntil && dateKey > repeatUntil) return false;
+
+  return true;
+}
+
+export function matchesRecurringDate(dateKey, item) {
+  if (!isRecurringItem(item)) return false;
+  if (!isDateWithinRepeatBounds(dateKey, item)) return false;
+
+  const baseDate = getRecurringItemBaseDate(item);
+  const targetDate = new Date(`${dateKey}T00:00`);
+  const baseDateObj = new Date(`${baseDate}T00:00`);
+
+  const diffDays = Math.floor(
+    (targetDate - baseDateObj) / (1000 * 60 * 60 * 24),
+  );
+
+  if (diffDays < 0) return false;
+
+  if (item.repeat === "daily") {
+    return true;
+  }
+
+  if (item.repeat === "weekly") {
+    return diffDays % 7 === 0;
+  }
+
+  if (item.repeat === "weekly_days") {
+    const weeklyDays = Array.isArray(item.weeklyDays) ? item.weeklyDays : [];
+    return weeklyDays.includes(targetDate.getDay());
+  }
+
+  if (item.repeat === "monthly") {
+    return baseDateObj.getDate() === targetDate.getDate();
+  }
+
+  if (item.repeat === "interval_days") {
+    const intervalDays = Math.max(1, Number(item.intervalDays) || 1);
+    return diffDays % intervalDays === 0;
+  }
+
+  return false;
+}
+
+export function buildRecurringTodoOccurrence(item, dateKey) {
+  return {
+    ...item,
+    id: `${item.id}__${dateKey}`,
+    sourceId: item.id,
+    occurrenceDateKey: dateKey,
+    dueDate: dateKey,
+    isVirtualOccurrence: true,
+  };
+}
+
+export function buildRecurringScheduleOccurrence(item, occurrenceStartDateKey) {
+  const baseStartDateObj = new Date(`${item.startDate}T00:00`);
+  const baseEndDateObj = new Date(`${item.endDate}T00:00`);
+  const occurrenceStartDateObj = new Date(`${occurrenceStartDateKey}T00:00`);
+
+  const durationDays = dateDiffDays(baseStartDateObj, baseEndDateObj);
+  const occurrenceEndDateObj = addDays(occurrenceStartDateObj, durationDays);
+
+  return {
+    ...item,
+    id: `${item.id}__${occurrenceStartDateKey}`,
+    sourceId: item.id,
+    occurrenceDateKey: occurrenceStartDateKey,
+    startDate: occurrenceStartDateKey,
+    endDate: formatDateKey(occurrenceEndDateObj),
+    isVirtualOccurrence: true,
+  };
+}
+
+export function expandRecurringPlannerItemsInRange(
+  sourceItems,
+  rangeStartKey,
+  rangeEndKey,
+) {
+  const items = Array.isArray(sourceItems) ? sourceItems : [];
+  const expanded = [];
+
+  items.forEach((item) => {
+    if (!item) return;
+
+    if (!isRecurringMasterItem(item)) {
+      expanded.push(item);
+      return;
+    }
+
+    if (
+      item.type === "schedule" &&
+      item.repeat === "weekly_days" &&
+      item.repeatSlotDates &&
+      typeof item.repeatSlotDates === "object"
+    ) {
+      Object.entries(item.repeatSlotDates).forEach(([weekday, slotDate]) => {
+        if (!slotDate) return;
+        if (slotDate < rangeStartKey || slotDate > rangeEndKey) return;
+
+        const occurrence = buildRecurringScheduleOccurrence(item, slotDate);
+        const slotStatus =
+          item.repeatSlotStatuses?.[String(weekday)] || "pending";
+
+        expanded.push({
+          ...occurrence,
+          status: slotStatus,
+          slotWeekday: Number(weekday),
+        });
+      });
+
+      return;
+    }
+
+    let cursor = new Date(`${rangeStartKey}T00:00`);
+    const end = new Date(`${rangeEndKey}T00:00`);
+
+    while (cursor <= end) {
+      const dateKey = formatDateKey(cursor);
+
+      if (matchesRecurringDate(dateKey, item)) {
+        if (item.type === "todo") {
+          expanded.push(buildRecurringTodoOccurrence(item, dateKey));
+        } else if (item.type === "schedule") {
+          expanded.push(buildRecurringScheduleOccurrence(item, dateKey));
+        }
+      }
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  return expanded;
+}
+
+export function getOccurrenceDateKeyFromItemId(itemId = "") {
+  const text = String(itemId || "");
+  const parts = text.split("__");
+  return parts.length > 1 ? parts[1] : "";
+}
+
+export function getDateKeyBefore(dateKey) {
+  const date = new Date(`${dateKey}T00:00`);
+  date.setDate(date.getDate() - 1);
+  return formatDateKey(date);
+}
+
+export function getDateKeyAfter(dateKey) {
+  const date = new Date(`${dateKey}T00:00`);
+  date.setDate(date.getDate() + 1);
+  return formatDateKey(date);
+}
+
+export function getPreviousOccurrenceDateKey(baseItem, pivotDateKey) {
+  if (!baseItem?.repeat || baseItem.repeat === "none" || !pivotDateKey) {
+    return "";
+  }
+
+  const startDate = baseItem.type === "schedule"
+    ? baseItem.startDate
+    : baseItem.dueDate;
+
+  if (!startDate || pivotDateKey <= startDate) {
+    return "";
+  }
+
+  const cursorEnd = getDateKeyBefore(pivotDateKey);
+  const candidates = getOccurrenceDateKeys(
+    startDate,
+    baseItem.repeat,
+    baseItem.repeatUntil || cursorEnd,
+    baseItem.weeklyDays || [],
+    baseItem.intervalDays || 1,
+  ).filter((dateKey) => dateKey < pivotDateKey);
+
+  return candidates.length ? candidates[candidates.length - 1] : "";
+}
+
+export function getNextOccurrenceDateKey(baseItem, pivotDateKey) {
+  if (!baseItem?.repeat || baseItem.repeat === "none" || !pivotDateKey) {
+    return "";
+  }
+
+  const startDate = baseItem.type === "schedule"
+    ? baseItem.startDate
+    : baseItem.dueDate;
+
+  const safeUntil = baseItem.repeatUntil || "9999-12-31";
+
+  const candidates = getOccurrenceDateKeys(
+    startDate,
+    baseItem.repeat,
+    safeUntil,
+    baseItem.weeklyDays || [],
+    baseItem.intervalDays || 1,
+  ).filter((dateKey) => dateKey > pivotDateKey);
+
+  return candidates.length ? candidates[0] : "";
+}
+
+export function cloneScheduleForOccurrence(baseItem, occurrenceDateKey, overrides = {}) {
+  const baseStart = new Date(`${baseItem.startDate}T00:00`);
+  const baseEnd = new Date(`${baseItem.endDate}T00:00`);
+  const occurrenceStart = new Date(`${occurrenceDateKey}T00:00`);
+  const durationDays = dateDiffDays(baseStart, baseEnd);
+  const occurrenceEnd = addDays(occurrenceStart, durationDays);
+
+  return {
+    ...baseItem,
+    ...overrides,
+    id: makeId(),
+    startDate: occurrenceDateKey,
+    endDate: formatDateKey(occurrenceEnd),
+    repeat: overrides.repeat ?? "none",
+    repeatUntil: overrides.repeatUntil ?? "",
+    weeklyDays: overrides.weeklyDays ?? [],
+    intervalDays: overrides.intervalDays ?? null,
+    isRecurring: overrides.isRecurring ?? false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+export function getNextDateForWeekday(baseDateKey, weekday) {
+  const baseDate = new Date(`${baseDateKey}T00:00`);
+  const diff = (weekday - baseDate.getDay() + 7) % 7;
+  baseDate.setDate(baseDate.getDate() + diff);
+  return formatDateKey(baseDate);
+}
+
+export function buildWeeklySlotDates(startDateKey, weeklyDays = []) {
+  const slotDates = {};
+
+  weeklyDays.forEach((day) => {
+    slotDates[String(day)] = getNextDateForWeekday(startDateKey, Number(day));
+  });
+
+  return slotDates;
+}
+
+export function moveWeeklySlotToNext(slotDateKey) {
+  const next = new Date(`${slotDateKey}T00:00`);
+  next.setDate(next.getDate() + 7);
+  return formatDateKey(next);
 }

@@ -1,12 +1,23 @@
 // plannerItems.js
-import { makeDateTime } from "./utils.js";
-import { generateTodoSeries, generateScheduleSeries } from "./repeat.js";
+import { makeDateTime, makeId } from "./utils.js";
+
+import {
+  getPreviousOccurrenceDateKey,
+  getNextOccurrenceDateKey,
+  cloneScheduleForOccurrence,
+  buildWeeklySlotDates, 
+  moveWeeklySlotToNext
+} from "./repeat.js";
 
 export function saveEditedSingleItem({
   type,
   title,
   color,
   tag,
+  location,
+  locationAddress,
+  locationPlaceId,
+  dailyLocations = [],
   editingId,
   items,
   todoDueDate,
@@ -22,11 +33,13 @@ export function saveEditedSingleItem({
   scheduleWeekdayInputs,
   scheduleRepeatInterval,
 }) {
+  const targetId = String(editingId || "").split("__")[0];
+
   if (type === "todo") {
     const dueDate = todoDueDate?.value;
     const dueTime = getTimeValue("todoDue");
-    const repeat = todoRepeat?.value;
-    const repeatUntil = todoRepeatUntil?.value;
+    const repeat = todoRepeat?.value || "none";
+    const repeatUntil = todoRepeatUntil?.value || "";
     const weeklyDays = [...todoWeekdayInputs]
       .filter((input) => input.checked)
       .map((input) => Number(input.value));
@@ -37,30 +50,38 @@ export function saveEditedSingleItem({
       return items;
     }
 
-    if (repeat !== "none" && !repeatUntil) {
-      alert("반복 종료일을 입력하세요.");
-      return items;
-    }
-
     if (repeat === "weekly_days" && weeklyDays.length === 0) {
       alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
       return items;
     }
 
+    if (
+      repeat !== "none" &&
+      repeatUntil &&
+      new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
+    ) {
+      alert("반복 종료일은 기한 날짜보다 같거나 뒤여야 합니다.");
+      return items;
+    }
+
     return items.map((item) =>
-      item.id === editingId
+      item.id === targetId
         ? {
             ...item,
             type: "todo",
             title,
             color,
             tag,
+            location,
+            locationAddress,
+            locationPlaceId,
             dueDate,
             dueTime,
             repeat,
             repeatUntil,
             weeklyDays,
             intervalDays,
+            isRecurring: repeat !== "none",
           }
         : item,
     );
@@ -70,8 +91,8 @@ export function saveEditedSingleItem({
   const startTime = getTimeValue("scheduleStart");
   const endDate = scheduleEndDate?.value;
   const endTime = getTimeValue("scheduleEnd");
-  const repeat = scheduleRepeat?.value;
-  const repeatUntil = scheduleRepeatUntil?.value;
+  const repeat = scheduleRepeat?.value || "none";
+  const repeatUntil = scheduleRepeatUntil?.value || "";
   const weeklyDays = [...scheduleWeekdayInputs]
     .filter((input) => input.checked)
     .map((input) => Number(input.value));
@@ -90,24 +111,32 @@ export function saveEditedSingleItem({
     return items;
   }
 
-  if (repeat !== "none" && !repeatUntil) {
-    alert("반복 종료일을 입력하세요.");
-    return items;
-  }
-
   if (repeat === "weekly_days" && weeklyDays.length === 0) {
     alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
     return items;
   }
 
+  if (
+    repeat !== "none" &&
+    repeatUntil &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
+  ) {
+    alert("반복 종료일은 시작 날짜보다 같거나 뒤여야 합니다.");
+    return items;
+  }
+
   return items.map((item) =>
-    item.id === editingId
+    item.id === targetId
       ? {
           ...item,
           type: "schedule",
           title,
           color,
           tag,
+          location,
+          locationAddress,
+          locationPlaceId,
+          dailyLocations: Array.isArray(dailyLocations) ? dailyLocations : [],
           startDate,
           startTime,
           endDate,
@@ -116,6 +145,7 @@ export function saveEditedSingleItem({
           repeatUntil,
           weeklyDays,
           intervalDays,
+          isRecurring: repeat !== "none",
         }
       : item,
   );
@@ -126,6 +156,9 @@ export function saveTodoSeriesFromForm({
   title,
   color,
   tag,
+  location,
+  locationAddress,
+  locationPlaceId,
   todoDueDate,
   getTimeValue,
   todoRepeat,
@@ -135,8 +168,8 @@ export function saveTodoSeriesFromForm({
 }) {
   const dueDate = todoDueDate?.value;
   const dueTime = getTimeValue("todoDue");
-  const repeat = todoRepeat?.value;
-  const repeatUntil = todoRepeatUntil?.value;
+  const repeat = todoRepeat?.value || "none";
+  const repeatUntil = todoRepeatUntil?.value || "";
   const weeklyDays = [...todoWeekdayInputs]
     .filter((input) => input.checked)
     .map((input) => Number(input.value));
@@ -148,38 +181,42 @@ export function saveTodoSeriesFromForm({
     return items;
   }
 
-  if (repeat !== "none" && !repeatUntil) {
-    alert("반복 종료일을 입력하세요.");
-    todoRepeatUntil?.focus();
-    return items;
-  }
-
-  if (
-    repeat !== "none" &&
-    new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
-  ) {
-    alert("반복 종료일은 기한 날짜보다 뒤여야 합니다.");
-    return items;
-  }
-
   if (repeat === "weekly_days" && weeklyDays.length === 0) {
     alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
     return items;
   }
 
-  const seriesItems = generateTodoSeries({
+  if (
+    repeat !== "none" &&
+    repeatUntil &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
+  ) {
+    alert("반복 종료일은 기한 날짜보다 같거나 뒤여야 합니다.");
+    return items;
+  }
+
+  const nextItem = {
+    id: makeId(),
+    type: "todo",
     title,
     color,
     tag,
+    location,
+    locationAddress,
+    locationPlaceId,
     dueDate,
     dueTime,
     repeat,
     repeatUntil,
-    weeklyDays,
-    intervalDays,
-  });
+    weeklyDays: repeat === "weekly_days" ? weeklyDays : [],
+    intervalDays: repeat === "interval_days" ? intervalDays : null,
+    status: "pending",
+    isRecurring: repeat !== "none",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
 
-  return [...items, ...seriesItems];
+  return [...items, nextItem];
 }
 
 export function saveScheduleSeriesFromForm({
@@ -187,6 +224,10 @@ export function saveScheduleSeriesFromForm({
   title,
   color,
   tag,
+  location,
+  locationAddress,
+  locationPlaceId,
+  dailyLocations = [],
   scheduleStartDate,
   getTimeValue,
   scheduleEndDate,
@@ -199,8 +240,8 @@ export function saveScheduleSeriesFromForm({
   const startTime = getTimeValue("scheduleStart");
   const endDate = scheduleEndDate?.value;
   const endTime = getTimeValue("scheduleEnd");
-  const repeat = scheduleRepeat?.value;
-  const repeatUntil = scheduleRepeatUntil?.value;
+  const repeat = scheduleRepeat?.value || "none";
+  const repeatUntil = scheduleRepeatUntil?.value || "";
   const weeklyDays = [...scheduleWeekdayInputs]
     .filter((input) => input.checked)
     .map((input) => Number(input.value));
@@ -219,40 +260,51 @@ export function saveScheduleSeriesFromForm({
     return items;
   }
 
-  if (repeat !== "none" && !repeatUntil) {
-    alert("반복 종료일을 입력하세요.");
-    scheduleRepeatUntil?.focus();
-    return items;
-  }
-
-  if (
-    repeat !== "none" &&
-    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
-  ) {
-    alert("반복 종료일은 시작 날짜보다 뒤여야 합니다.");
-    return items;
-  }
-
   if (repeat === "weekly_days" && weeklyDays.length === 0) {
     alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
     return items;
   }
 
-  const seriesItems = generateScheduleSeries({
+  if (
+    repeat !== "none" &&
+    repeatUntil &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
+  ) {
+    alert("반복 종료일은 시작 날짜보다 같거나 뒤여야 합니다.");
+    return items;
+  }
+
+  const nextItem = {
+    id: makeId(),
+    type: "schedule",
     title,
     color,
     tag,
+    location,
+    locationAddress,
+    locationPlaceId,
+    dailyLocations: Array.isArray(dailyLocations) ? dailyLocations : [],
     startDate,
     startTime,
     endDate,
     endTime,
     repeat,
     repeatUntil,
-    weeklyDays,
-    intervalDays,
-  });
+    weeklyDays: repeat === "weekly_days" ? weeklyDays : [],
+    intervalDays: repeat === "interval_days" ? intervalDays : null,
+    repeatSlotDates:
+      repeat === "weekly_days" ? buildWeeklySlotDates(startDate, weeklyDays) : {},
+    repeatSlotStatuses:
+      repeat === "weekly_days"
+        ? Object.fromEntries(weeklyDays.map((day) => [String(day), "pending"]))
+        : {},
+    status: "pending",
+    isRecurring: repeat !== "none",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
 
-  return [...items, ...seriesItems];
+  return [...items, nextItem];
 }
 
 export function addItemFromSelectedDateData({
@@ -262,6 +314,10 @@ export function addItemFromSelectedDateData({
   popupTitleInput,
   popupItemColor,
   popupItemTag,
+  popupItemLocation,
+  popupItemLocationAddress,
+  popupItemLocationPlaceId,
+  popupDailyLocations = [],
   popupTodoDate,
   popupTodoRepeat,
   popupTodoRepeatUntil,
@@ -284,6 +340,9 @@ export function addItemFromSelectedDateData({
   const title = popupTitleInput?.value.trim();
   const color = popupItemColor?.value || "blue";
   const tag = popupItemTag?.value.trim() || "";
+  const location = popupItemLocation?.value || "";
+  const locationAddress = popupItemLocationAddress?.value || "";
+  const locationPlaceId = popupItemLocationPlaceId?.value || "";
 
   if (!title) {
     alert("제목을 입력하세요.");
@@ -293,8 +352,8 @@ export function addItemFromSelectedDateData({
 
   if (type === "todo") {
     const dueDate = popupTodoDate?.value || selectedDate;
-    const repeat = popupTodoRepeat?.value;
-    const repeatUntil = popupTodoRepeatUntil?.value;
+    const repeat = popupTodoRepeat?.value || "none";
+    const repeatUntil = popupTodoRepeatUntil?.value || "";
     const weeklyDays = [...popupTodoWeekdayInputs]
       .filter((input) => input.checked)
       .map((input) => Number(input.value));
@@ -307,46 +366,51 @@ export function addItemFromSelectedDateData({
       return items;
     }
 
-    if (repeat !== "none" && !repeatUntil) {
-      alert("반복 종료일을 입력하세요.");
-      popupTodoRepeatUntil?.focus();
-      return items;
-    }
-
-    if (
-      repeat !== "none" &&
-      new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
-    ) {
-      alert("반복 종료일은 기한 날짜보다 뒤여야 합니다.");
-      return items;
-    }
-
     if (repeat === "weekly_days" && weeklyDays.length === 0) {
       alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
       return items;
     }
 
-    const seriesItems = generateTodoSeries({
-      title,
-      color,
-      tag,
-      dueDate,
-      dueTime,
-      repeat,
-      repeatUntil,
-      weeklyDays,
-      intervalDays,
-    });
+    if (
+      repeat !== "none" &&
+      repeatUntil &&
+      new Date(`${repeatUntil}T00:00`) < new Date(`${dueDate}T00:00`)
+    ) {
+      alert("반복 종료일은 기한 날짜보다 같거나 뒤여야 합니다.");
+      return items;
+    }
 
-    return [...items, ...seriesItems];
+    return [
+      ...items,
+      {
+        id: makeId(),
+        type: "todo",
+        title,
+        color,
+        tag,
+        location,
+        locationAddress,
+        locationPlaceId,
+        dueDate,
+        dueTime,
+        repeat,
+        repeatUntil,
+        weeklyDays: repeat === "weekly_days" ? weeklyDays : [],
+        intervalDays: repeat === "interval_days" ? intervalDays : null,
+        status: "pending",
+        isRecurring: repeat !== "none",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ];
   }
 
   const startDate = popupScheduleStartDate?.value || selectedDate;
   const endDate = popupScheduleEndDate?.value || startDate;
   const startTime = getTimeValue("popupScheduleStart");
   const endTime = getTimeValue("popupScheduleEnd");
-  const repeat = popupScheduleRepeat?.value;
-  const repeatUntil = popupScheduleRepeatUntil?.value;
+  const repeat = popupScheduleRepeat?.value || "none";
+  const repeatUntil = popupScheduleRepeatUntil?.value || "";
   const weeklyDays = [...popupScheduleWeekdayInputs]
     .filter((input) => input.checked)
     .map((input) => Number(input.value));
@@ -365,40 +429,54 @@ export function addItemFromSelectedDateData({
     return items;
   }
 
-  if (repeat !== "none" && !repeatUntil) {
-    alert("반복 종료일을 입력하세요.");
-    popupScheduleRepeatUntil?.focus();
-    return items;
-  }
-
-  if (
-    repeat !== "none" &&
-    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
-  ) {
-    alert("반복 종료일은 시작 날짜보다 뒤여야 합니다.");
-    return items;
-  }
-
   if (repeat === "weekly_days" && weeklyDays.length === 0) {
     alert("요일별 반복은 최소 1개 이상의 요일을 체크해야 합니다.");
     return items;
   }
 
-  const seriesItems = generateScheduleSeries({
-    title,
-    color,
-    tag,
-    startDate,
-    startTime,
-    endDate,
-    endTime,
-    repeat,
-    repeatUntil,
-    weeklyDays,
-    intervalDays,
-  });
+  if (
+    repeat !== "none" &&
+    repeatUntil &&
+    new Date(`${repeatUntil}T00:00`) < new Date(`${startDate}T00:00`)
+  ) {
+    alert("반복 종료일은 시작 날짜보다 같거나 뒤여야 합니다.");
+    return items;
+  }
 
-  return [...items, ...seriesItems];
+  return [
+    ...items,
+    {
+      id: makeId(),
+      type: "schedule",
+      title,
+      color,
+      tag,
+      location,
+      locationAddress,
+      locationPlaceId,
+      dailyLocations: Array.isArray(popupDailyLocations)
+        ? popupDailyLocations.map((x) => ({ ...x }))
+        : [],
+      startDate,
+      startTime,
+      endDate,
+      endTime,
+      repeat,
+      repeatUntil,
+      weeklyDays: repeat === "weekly_days" ? weeklyDays : [],
+      intervalDays: repeat === "interval_days" ? intervalDays : null,
+      repeatSlotDates:
+        repeat === "weekly_days" ? buildWeeklySlotDates(startDate, weeklyDays) : {},
+      repeatSlotStatuses:
+        repeat === "weekly_days"
+          ? Object.fromEntries(weeklyDays.map((day) => [String(day), "pending"]))
+          : {},
+      status: "pending",
+      isRecurring: repeat !== "none",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+  ];
 }
 
 export function getNextStatus(currentStatus) {
@@ -429,4 +507,306 @@ export function toggleItemStatus(items, id) {
 
 export function deleteItemById(items, id) {
   return items.filter((item) => item.id !== id);
+}
+
+export function applyRecurringScheduleEditScope({
+  items,
+  editingId,
+  occurrenceDateKey,
+  scope,
+  editedData,
+}) {
+  const targetId = String(editingId || "").split("__")[0];
+  const targetItem = items.find((item) => item.id === targetId);
+
+  if (!targetItem) return items;
+  if (targetItem.type !== "schedule") return items;
+  if (!targetItem.repeat || targetItem.repeat === "none") return items;
+
+  const remainingItems = items.filter((item) => item.id !== targetId);
+
+  if (scope === "all") {
+    return [
+      ...remainingItems,
+      {
+        ...targetItem,
+        ...editedData,
+        id: targetId,
+        updatedAt: Date.now(),
+      },
+    ];
+  }
+
+  const prevOccurrence = getPreviousOccurrenceDateKey(targetItem, occurrenceDateKey);
+  const nextOccurrence = getNextOccurrenceDateKey(targetItem, occurrenceDateKey);
+
+  if (scope === "only_this") {
+    const nextList = [...remainingItems];
+
+    if (prevOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        repeatUntil: prevOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    nextList.push(
+      cloneScheduleForOccurrence(targetItem, occurrenceDateKey, {
+        ...editedData,
+        repeat: "none",
+        repeatUntil: "",
+        weeklyDays: [],
+        intervalDays: null,
+        isRecurring: false,
+      }),
+    );
+
+    if (nextOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        startDate: nextOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return nextList;
+  }
+
+  if (scope === "future") {
+    const nextList = [...remainingItems];
+
+    if (prevOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        repeatUntil: prevOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    nextList.push({
+      ...targetItem,
+      ...editedData,
+      id: makeId(),
+      startDate: occurrenceDateKey,
+      updatedAt: Date.now(),
+    });
+
+    return nextList;
+  }
+
+  if (scope === "past") {
+    const nextList = [...remainingItems];
+
+    nextList.push({
+      ...targetItem,
+      ...editedData,
+      id: makeId(),
+      repeatUntil: occurrenceDateKey,
+      updatedAt: Date.now(),
+    });
+
+    if (nextOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        startDate: nextOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return nextList;
+  }
+
+  return items;
+}
+
+export function applyRecurringScheduleDeleteScope({
+  items,
+  editingId,
+  occurrenceDateKey,
+  scope,
+}) {
+  const targetId = String(editingId || "").split("__")[0];
+  const targetItem = items.find((item) => item.id === targetId);
+
+  if (!targetItem) return items;
+  if (targetItem.type !== "schedule") return items;
+  if (!targetItem.repeat || targetItem.repeat === "none") return items;
+
+  // weekly_days + 한 사이클 슬롯 방식은 예전 "분할 삭제"가 아니라
+  // 슬롯 자체를 직접 갱신해야 달력과 목록이 같이 맞음
+  if (
+    targetItem.repeat === "weekly_days" &&
+    targetItem.repeatSlotDates &&
+    typeof targetItem.repeatSlotDates === "object"
+  ) {
+    const weekday = String(new Date(`${occurrenceDateKey}T00:00`).getDay());
+    const currentSlotDate = targetItem.repeatSlotDates?.[weekday];
+
+    if (!currentSlotDate || currentSlotDate !== occurrenceDateKey) {
+      return items;
+    }
+
+    return items
+      .map((item) => {
+        if (item.id !== targetId) return item;
+
+        const nextWeeklyDays = Array.isArray(item.weeklyDays)
+          ? [...item.weeklyDays]
+          : [];
+
+        const nextSlotDates = {
+          ...(item.repeatSlotDates || {}),
+        };
+
+        const nextSlotStatuses = {
+          ...(item.repeatSlotStatuses || {}),
+        };
+
+        if (scope === "only_this") {
+          nextSlotDates[weekday] = moveWeeklySlotToNext(currentSlotDate);
+          nextSlotStatuses[weekday] = "pending";
+        } else if (scope === "future" || scope === "past" || scope === "all") {
+          delete nextSlotDates[weekday];
+          delete nextSlotStatuses[weekday];
+
+          const filteredWeeklyDays = nextWeeklyDays.filter(
+            (day) => String(day) !== weekday,
+          );
+
+          // 해당 요일 슬롯이 전부 없어지면 일정 자체도 제거
+          if (filteredWeeklyDays.length === 0 || scope === "all") {
+            return null;
+          }
+
+          return {
+            ...item,
+            weeklyDays: filteredWeeklyDays,
+            repeatSlotDates: nextSlotDates,
+            repeatSlotStatuses: nextSlotStatuses,
+            updatedAt: Date.now(),
+          };
+        }
+
+        return {
+          ...item,
+          repeatSlotDates: nextSlotDates,
+          repeatSlotStatuses: nextSlotStatuses,
+          updatedAt: Date.now(),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  const remainingItems = items.filter((item) => item.id !== targetId);
+
+  if (scope === "all") {
+    return remainingItems;
+  }
+
+  const prevOccurrence = getPreviousOccurrenceDateKey(targetItem, occurrenceDateKey);
+  const nextOccurrence = getNextOccurrenceDateKey(targetItem, occurrenceDateKey);
+
+  if (scope === "only_this") {
+    const nextList = [...remainingItems];
+
+    if (prevOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        repeatUntil: prevOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    if (nextOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        startDate: nextOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return nextList;
+  }
+
+  if (scope === "future") {
+    const nextList = [...remainingItems];
+
+    if (prevOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        repeatUntil: prevOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return nextList;
+  }
+
+  if (scope === "past") {
+    const nextList = [...remainingItems];
+
+    if (nextOccurrence) {
+      nextList.push({
+        ...targetItem,
+        id: makeId(),
+        startDate: nextOccurrence,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return nextList;
+  }
+
+  return items;
+}
+
+export function toggleRecurringScheduleSlotStatus(items, id) {
+  const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
+  const targetDate = occurrenceDateKey;
+
+  return items.map((item) => {
+    if (item.id !== targetId) return item;
+    if (item.type !== "schedule") return item;
+    if (item.repeat !== "weekly_days") return item;
+    if (!targetDate) return item;
+
+    const weekday = String(new Date(`${targetDate}T00:00`).getDay());
+    const currentSlotDate = item.repeatSlotDates?.[weekday];
+
+    if (currentSlotDate !== targetDate) {
+      return item;
+    }
+
+    const currentStatus = item.repeatSlotStatuses?.[weekday] || "pending";
+    const nextStatus = getNextStatus(currentStatus);
+
+    const nextSlotStatuses = {
+      ...(item.repeatSlotStatuses || {}),
+      [weekday]: nextStatus,
+    };
+
+    const nextSlotDates = {
+      ...(item.repeatSlotDates || {}),
+    };
+
+    if (nextStatus === "success") {
+      nextSlotDates[weekday] = moveWeeklySlotToNext(currentSlotDate);
+      nextSlotStatuses[weekday] = "pending";
+    }
+
+    return {
+      ...item,
+      repeatSlotDates: nextSlotDates,
+      repeatSlotStatuses: nextSlotStatuses,
+      updatedAt: Date.now(),
+    };
+  });
 }

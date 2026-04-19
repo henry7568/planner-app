@@ -7,6 +7,9 @@ import {
 } from "./utils.js";
 import { renderSelectedCard } from "./renderItems.js";
 import { getStatusSymbol } from "./plannerItems.js";
+import {
+  expandRecurringPlannerItemsInRange,
+} from "./repeat.js";
 
 let deps = {};
 
@@ -100,17 +103,44 @@ export function createCalendarCell(dateObj, isOtherMonth) {
       <div class="calendar-date">${dateObj.getDate()}</div>
       <div class="calendar-items">
         ${visibleItems
-          .map(
-            (item) => `
-          <div class="calendar-event ${item.type} ${item.status} item-color-${item.color || "blue"}" title="${escapeHtml(item.title)}">
-            <div class="calendar-event-top">
-              <span class="calendar-type-badge ${item.type}">${item.type === "todo" ? "할일" : "일정"}</span>
-              <span class="calendar-time">${getCalendarItemTime(item)}</span>
-            </div>
-            <div class="calendar-title">${escapeHtml(item.title)}</div>
-          </div>
-        `,
-          )
+          .map((item) => {
+            const locationText = getScheduleLocationTextForDate(dateKey, item);
+            const timeText = getCalendarItemTime(item);
+
+            const typeIcon =
+              item.type === "todo"
+                ? `<span class="calendar-type-icon todo" title="할일">✔</span>`
+                : `<span class="calendar-type-icon schedule" title="일정">🗓</span>`;
+
+            const bottomClass = timeText
+              ? "calendar-event-bottom"
+              : "calendar-event-bottom no-time";
+
+            return `
+              <div class="calendar-event ${item.type} ${item.status} item-color-${item.color || "blue"}"
+                title="${escapeHtml(item.title)}${timeText ? ` · ${escapeHtml(timeText)}` : ""}${locationText ? ` · ${escapeHtml(locationText)}` : ""}">
+                <div class="calendar-event-top">
+                  ${typeIcon}
+                  <span class="calendar-title-inline">${escapeHtml(item.title)}</span>
+                </div>
+
+                ${
+                  timeText || locationText
+                    ? `
+                  <div class="${bottomClass}">
+                    <div class="calendar-event-meta-left">
+                      ${timeText ? `<span class="calendar-time">${escapeHtml(timeText)}</span>` : ""}
+                    </div>
+                    <div class="calendar-event-meta-right">
+                      ${locationText ? `<span class="calendar-location">📍 ${escapeHtml(locationText)}</span>` : ""}
+                    </div>
+                  </div>
+                `
+                    : ""
+                }
+              </div>
+            `;
+          })
           .join("")}
         ${moreCount > 0 ? `<div class="calendar-more">+ ${moreCount}개 더</div>` : ""}
       </div>
@@ -119,9 +149,50 @@ export function createCalendarCell(dateObj, isOtherMonth) {
 }
 
 export function getCalendarItemTime(item) {
-  return item.type === "todo"
-    ? item.dueTime || "시간없음"
-    : item.startTime || "시간없음";
+  if (item.type === "todo") {
+    return item.dueTime || "시간없음";
+  }
+
+  const rawStartTime = item.startTime || "";
+  const rawEndTime = item.endTime || "";
+
+  const startTime = rawStartTime.trim();
+  const endTime = rawEndTime.trim();
+
+  const isMidnightRange =
+    startTime === "00:00" &&
+    endTime === "00:00" &&
+    item.startDate !== item.endDate;
+
+  const isAllDayNoTime =
+    !startTime && !endTime;
+
+  if (isAllDayNoTime || isMidnightRange) {
+    return "";
+  }
+
+  if (startTime && endTime) {
+    if (startTime === "00:00" && endTime === "00:00") {
+      return "";
+    }
+    return `${startTime}~${endTime}`;
+  }
+
+  if (startTime) {
+    if (startTime === "00:00" && item.startDate !== item.endDate) {
+      return "";
+    }
+    return startTime;
+  }
+
+  if (endTime) {
+    if (endTime === "00:00" && item.startDate !== item.endDate) {
+      return "";
+    }
+    return `~${endTime}`;
+  }
+
+  return "";
 }
 
 export function selectCalendarDate(dateKey) {
@@ -173,7 +244,7 @@ export function renderSelectedDateAllDay(dateKey, itemsForDate) {
     <div class="all-day-wrap">
       <div class="all-day-title">종일 일정</div>
       <div class="all-day-list">
-        ${allDayItems.map((item) => renderAllDayItem(item)).join("")}
+        ${allDayItems.map((item) => renderAllDayItem(dateKey, item)).join("")}
       </div>
     </div>
   `;
@@ -209,12 +280,14 @@ export function isAllDayTimelineItem(dateKey, item) {
   return false;
 }
 
-export function renderAllDayItem(item) {
+export function renderAllDayItem(dateKey, item) {
   const colorClass = `item-color-${item.color || "blue"}`;
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="all-day-repeat">↻</span>`
       : "";
+
+  const locationText = getScheduleLocationTextForDate(dateKey, item);
 
   return `
     <div
@@ -230,6 +303,7 @@ export function renderAllDayItem(item) {
         <span class="all-day-text">${escapeHtml(item.title)}</span>
         ${repeatIcon}
       </div>
+      ${locationText ? `<div class="all-day-location">📍 ${escapeHtml(locationText)}</div>` : ""}
     </div>
   `;
 }
@@ -373,6 +447,7 @@ export function buildTimelineBlock(dateKey, item) {
     return {
       id: item.id,
       item,
+      dateKey,
       startMinutes,
       endMinutes,
       isTodoPoint: true,
@@ -405,6 +480,7 @@ export function buildTimelineBlock(dateKey, item) {
     return {
       id: item.id,
       item,
+      dateKey,
       startMinutes,
       endMinutes,
     };
@@ -502,6 +578,8 @@ export function renderPositionedTimelineBlock(block) {
   const widthPercent = 100 / block.totalColumns;
   const leftPercent = widthPercent * block.column;
 
+  const locationText = getScheduleLocationTextForDate(block.dateKey, item);
+
   let timeText = "";
 
   if (item.type === "todo") {
@@ -537,6 +615,7 @@ export function renderPositionedTimelineBlock(block) {
           <div class="timeline-point-sub">
             <span class="timeline-time">${timeText}</span>
             ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+            ${locationText ? `<span class="timeline-tag">📍 ${escapeHtml(locationText)}</span>` : ""}
           </div>
         </div>
       </div>
@@ -567,6 +646,7 @@ export function renderPositionedTimelineBlock(block) {
       <div class="timeline-block-sub">
         <span class="timeline-time">${timeText}</span>
         ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+        ${locationText ? `<span class="timeline-tag">📍 ${escapeHtml(locationText)}</span>` : ""}
       </div>
     </div>
   `;
@@ -691,27 +771,59 @@ export function closeDatePopup() {
 }
 
 export function getItemsForDate(dateKey) {
-  return sortItems(getItems().filter((item) => isItemOnDate(dateKey, item)));
+  const expandedItems = expandRecurringPlannerItemsInRange(
+    getItems(),
+    dateKey,
+    dateKey,
+  );
+
+  return sortItems(expandedItems.filter((item) => isItemOnDate(dateKey, item)));
 }
 
 export function isItemOnDate(dateKey, item) {
-  if (item.type === "todo") return item.dueDate === dateKey;
+  if (!item) return false;
 
-  const target = new Date(`${dateKey}T00:00`);
-  const start = new Date(`${item.startDate}T00:00`);
-  const end = new Date(`${item.endDate}T00:00`);
+  if (item.type === "todo") {
+    return item.dueDate === dateKey;
+  }
 
-  return target >= start && target <= end;
+  if (item.type === "schedule") {
+    const target = new Date(`${dateKey}T00:00`);
+    const start = new Date(`${item.startDate}T00:00`);
+    const end = new Date(`${item.endDate}T00:00`);
+
+    return target >= start && target <= end;
+  }
+
+  return false;
 }
 
 export function sortItems(itemArray) {
-  return [...itemArray].sort((a, b) => getSortDateTime(a) - getSortDateTime(b));
+  return [...(itemArray || [])].sort((a, b) => {
+    const aTime = getSortDateTime(a).getTime();
+    const bTime = getSortDateTime(b).getTime();
+
+    if (aTime !== bTime) {
+      return aTime - bTime;
+    }
+
+    if ((a.type || "") !== (b.type || "")) {
+      return (a.type || "").localeCompare(b.type || "", "ko");
+    }
+
+    return String(a.title || "").localeCompare(String(b.title || ""), "ko");
+  });
 }
 
 export function getSortDateTime(item) {
+  if (!item) {
+    return new Date("9999-12-31T23:59");
+  }
+
   if (item.type === "todo") {
     return new Date(makeDateTime(item.dueDate, item.dueTime || "23:59"));
   }
+
   return new Date(makeDateTime(item.startDate, item.startTime || "00:00"));
 }
 
@@ -755,4 +867,32 @@ export function getScheduleProgressText(item) {
   if (nowDate < start) return "시작 전";
   if (nowDate > end) return "종료됨";
   return "진행 중";
+}
+
+function getScheduleLocationTextForDate(dateKey, item) {
+  if (
+    Array.isArray(item.dailyLocations) &&
+    item.dailyLocations.length > 0 &&
+    dateKey
+  ) {
+    const sorted = [...item.dailyLocations].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    let current = null;
+
+    for (const entry of sorted) {
+      if (entry.date <= dateKey) {
+        current = entry;
+        continue;
+      }
+      break;
+    }
+
+    if (current?.label) {
+      return current.label;
+    }
+  }
+
+  return item.location || "";
 }

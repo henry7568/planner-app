@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>할일 / 일정 관리 앱</title>
+    <title>Life-Planner</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -13,7 +13,7 @@
 
     <section id="authScreen" class="auth-screen hidden">
       <div class="auth-card">
-        <h1>할일 / 일정 관리 앱</h1>
+        <h1>Life-Planner</h1>
         <p class="auth-subtext">
           로그인하면 다른 기기에서도 같은 데이터를 사용할 수 있습니다.
         </p>
@@ -108,8 +108,10 @@
       <header class="app-header">
         <div class="app-header-top">
           <div>
-            <h1>할일 / 일정 관리 앱</h1>
-            <p class="sub-text">할일은 기한, 일정은 기간으로 관리합니다.</p>
+            <button id="appHomeLogoBtn" class="app-home-logo-btn" type="button">
+              Life-Planner
+            </button>
+            <p class="sub-text">인생을 설계합니다.</p>
           </div>
 
           <div class="user-box">
@@ -125,7 +127,29 @@
       </header>
 
       <main class="main-content">
-        <section id="tab-dashboard" class="tab-section">
+        <section id="tab-home" class="tab-section">
+          <section class="card">
+            <div class="filter-row">
+              <div>
+                <h2>홈</h2>
+              </div>
+            </div>
+            <div class="hub-grid">
+              <button id="openScheduleHubBtn" class="hub-card" type="button">
+                <span class="hub-icon">🗓️</span>
+                <h3>스케줄</h3>
+                <p>일정/할일을 관리할 수 있습니다.</p>
+              </button>
+
+              <button id="openFinanceHubBtn" class="hub-card" type="button">
+                <span class="hub-icon">💰</span>
+                <h3>자산</h3>
+                <p>자산을 관리할 수 있습니다.</p>
+              </button>
+            </div>
+          </section>
+        </section>
+        <section id="tab-dashboard" class="tab-section hidden">
           <section class="card">
             <div class="filter-row">
               <div>
@@ -311,13 +335,79 @@
                   </select>
                 </div>
 
-                <div class="form-group">
-                  <label for="itemTag">태그</label>
-                  <input
-                    type="text"
-                    id="itemTag"
-                    placeholder="예: 여행 / 공부 / 쇼핑"
-                  />
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="itemTag">태그</label>
+                    <input
+                      type="text"
+                      id="itemTag"
+                      placeholder="예: 여행 / 공부 / 쇼핑"
+                    />
+                  </div>
+
+                  <div id="singleLocationSection" class="form-group">
+                    <label>장소</label>
+
+                    <div id="itemPlaceEmptyState" class="place-empty-state">
+                      <button
+                        type="button"
+                        id="openItemPlaceSearchBtn"
+                        class="secondary-btn place-open-btn"
+                      >
+                        장소 추가
+                      </button>
+                    </div>
+
+                    <div id="itemPlaceChipWrap" class="place-chip-wrap hidden">
+                      <button
+                        type="button"
+                        id="itemPlaceChip"
+                        class="place-chip"
+                        title="장소 보기"
+                      >
+                        <span class="place-chip-icon">📍</span>
+                        <span
+                          id="itemPlaceChipText"
+                          class="place-chip-text"
+                        ></span>
+                      </button>
+
+                      <div class="place-chip-actions">
+                        <button
+                          type="button"
+                          id="changeItemPlaceBtn"
+                          class="secondary-btn place-mini-btn"
+                        >
+                          변경
+                        </button>
+                        <button
+                          type="button"
+                          id="clearItemPlaceBtn"
+                          class="secondary-btn place-mini-btn"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+
+                    <a
+                      id="itemPlaceLink"
+                      class="place-link hidden"
+                      href="#"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      구글맵에서 보기
+                    </a>
+
+                    <div id="locationModeHelperText" class="small-text">
+                      하루 일정은 기본 장소 기능을 사용합니다.
+                    </div>
+
+                    <input type="hidden" id="itemLocation" />
+                    <input type="hidden" id="itemLocationAddress" />
+                    <input type="hidden" id="itemLocationPlaceId" />
+                  </div>
                 </div>
               </div>
 
@@ -372,7 +462,23 @@
                   </div>
                   <div class="form-group">
                     <label for="todoRepeatUntil">반복 종료일</label>
-                    <input type="date" id="todoRepeatUntil" />
+                    <div class="repeat-until-control">
+                      <input type="date" id="todoRepeatUntil" />
+                      <button
+                        id="todoRepeatUntilNoneBtn"
+                        class="secondary-btn repeat-until-value-btn hidden"
+                        type="button"
+                      >
+                        없음
+                      </button>
+                      <button
+                        id="todoRepeatUntilToggleBtn"
+                        class="secondary-btn repeat-until-toggle-btn"
+                        type="button"
+                      >
+                        없음 사용
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -523,7 +629,23 @@
                   </div>
                   <div class="form-group">
                     <label for="scheduleRepeatUntil">반복 종료일</label>
-                    <input type="date" id="scheduleRepeatUntil" />
+                    <div class="repeat-until-control">
+                      <input type="date" id="scheduleRepeatUntil" />
+                      <button
+                        id="scheduleRepeatUntilNoneBtn"
+                        class="secondary-btn repeat-until-value-btn hidden"
+                        type="button"
+                      >
+                        없음
+                      </button>
+                      <button
+                        id="scheduleRepeatUntilToggleBtn"
+                        class="secondary-btn repeat-until-toggle-btn"
+                        type="button"
+                      >
+                        없음 사용
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -599,6 +721,29 @@
                     placeholder="예: 3일마다"
                   />
                 </div>
+                <div id="scheduleDailyLocationsSection" class="form-group">
+                  <label>날짜별 장소</label>
+
+                  <div class="small-text" style="margin-bottom: 8px">
+                    여행처럼 여러 날 일정일 경우 날짜마다 다른 장소를 지정할 수
+                    있습니다.
+                  </div>
+
+                  <div
+                    id="scheduleDailyLocationList"
+                    class="daily-location-list"
+                  ></div>
+
+                  <div class="button-row">
+                    <button
+                      id="openScheduleDailyLocationBtn"
+                      class="secondary-btn"
+                      type="button"
+                    >
+                      날짜별 장소 추가
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div class="button-row">
@@ -672,7 +817,7 @@
               <div>
                 <h2>가계부</h2>
                 <p class="small-text">
-                  월 예산, 남은 금액, 금일 지출액을 한눈에 확인할 수 있습니다.
+                  예산, 수익/지출, 자산을 한 번에 관리합니다.
                 </p>
               </div>
 
@@ -717,13 +862,12 @@
             </div>
 
             <div class="item-meta" style="margin-top: 14px">
-              <span class="meta-badge"
-                >기간: <strong id="financeCurrentPeriodLabel">-</strong></span
-              >
-              <span class="meta-badge"
-                >설정 예산:
-                <strong id="financeMonthlyBudgetText">0 원</strong></span
-              >
+              <span class="meta-badge">
+                기간: <strong id="financeCurrentPeriodLabel">-</strong>
+              </span>
+              <span class="meta-badge">
+                설정 예산: <strong id="financeMonthlyBudgetText">0 원</strong>
+              </span>
             </div>
           </section>
 
@@ -747,8 +891,23 @@
               </div>
 
               <div class="summary-item">
-                <span class="summary-label">사용 금액</span>
+                <span class="summary-label">월 지출</span>
                 <strong id="financeMonthlySpentText">0 원</strong>
+              </div>
+
+              <div class="summary-item">
+                <span class="summary-label">월 수익</span>
+                <strong id="financeMonthlyIncomeText">0 원</strong>
+              </div>
+
+              <div class="summary-item">
+                <span class="summary-label">월 순수익</span>
+                <strong id="financeMonthlyNetText">0 원</strong>
+              </div>
+
+              <div class="summary-item">
+                <span class="summary-label">총 자산</span>
+                <strong id="financeTotalAssetText">0 원</strong>
               </div>
             </div>
 
@@ -763,22 +922,84 @@
                   class="achievement-bar-fill"
                 ></div>
               </div>
-              <p class="small-text">사용 금액 / 총 생활비 기준</p>
+              <p class="small-text">월 지출 / 총 생활비 기준</p>
+            </div>
+
+            <div class="item-meta" style="margin-top: 14px">
+              <span class="meta-badge">
+                최다 지출 카테고리:
+                <strong id="financeSummaryTopCategoryText">-</strong>
+              </span>
+              <span class="meta-badge">
+                필터 결과:
+                <strong id="financeSummaryExpenseCountText">0건</strong>
+              </span>
             </div>
           </section>
 
-          <section id="financeExpenseFormCard" class="card">
+          <section class="card">
+            <div class="button-row">
+              <button
+                id="financeOpenExpenseFormBtn"
+                class="primary-btn"
+                type="button"
+              >
+                내역 추가
+              </button>
+            </div>
+          </section>
+
+          <section id="financeExpenseFormCard" class="card hidden">
             <h2>지출 추가</h2>
 
             <div class="form-grid-2">
               <div class="form-group">
-                <label for="financeExpenseDate">날짜</label>
-                <input id="financeExpenseDate" type="date" />
+                <label for="financeTransactionType">유형</label>
+                <select id="financeTransactionType">
+                  <option value="expense">지출</option>
+                  <option value="income">수익</option>
+                </select>
               </div>
 
               <div class="form-group">
+                <label for="financeExpenseDate">날짜</label>
+                <input id="financeExpenseDate" type="date" />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
                 <label for="financeExpenseTime">시간</label>
                 <input id="financeExpenseTime" type="time" />
+              </div>
+
+              <div class="form-group">
+                <label for="financeExpenseRepeat">반복</label>
+                <select id="financeExpenseRepeat">
+                  <option value="none">반복 없음</option>
+                  <option value="monthly">매월 반복</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="financeExpenseRepeatUntil">반복 종료일</label>
+              <div class="repeat-until-control">
+                <input type="date" id="financeExpenseRepeatUntil" />
+                <button
+                  id="financeExpenseRepeatUntilNoneBtn"
+                  class="secondary-btn repeat-until-value-btn hidden"
+                  type="button"
+                >
+                  없음
+                </button>
+                <button
+                  id="financeExpenseRepeatUntilToggleBtn"
+                  class="secondary-btn repeat-until-toggle-btn"
+                  type="button"
+                >
+                  없음 사용
+                </button>
               </div>
             </div>
 
@@ -788,7 +1009,7 @@
                 <input
                   id="financeExpenseTitle"
                   type="text"
-                  placeholder="예: 스타벅스 / 병원 / 배달"
+                  placeholder="예: 스타벅스 / 월급 / 환급금"
                 />
               </div>
 
@@ -809,6 +1030,7 @@
                 <label for="financeExpenseCategory">카테고리</label>
                 <select id="financeExpenseCategory">
                   <option value="">선택</option>
+
                   <option value="식사">식사</option>
                   <option value="카페">카페</option>
                   <option value="생활용품">생활용품</option>
@@ -820,6 +1042,14 @@
                   <option value="주거/통신">주거/통신</option>
                   <option value="교육">교육</option>
                   <option value="저축">저축</option>
+
+                  <option value="급여">급여</option>
+                  <option value="용돈">용돈</option>
+                  <option value="환급">환급</option>
+                  <option value="이자">이자</option>
+                  <option value="투자수익">투자수익</option>
+                  <option value="기타수익">기타수익</option>
+
                   <option value="기타">기타</option>
                 </select>
               </div>
@@ -838,7 +1068,7 @@
                 <input
                   id="financeExpenseTag"
                   type="text"
-                  placeholder="예: 배달 / 공연 / 약국"
+                  placeholder="예: 배달 / 월급 / 배당"
                 />
               </div>
 
@@ -868,22 +1098,13 @@
               </div>
 
               <div class="form-group">
-                <label for="financeExpenseMerchant">사용처</label>
+                <label for="financeExpenseMerchant">사용처 / 출처</label>
                 <input
                   id="financeExpenseMerchant"
                   type="text"
-                  placeholder="예: 쿠팡 / 스타벅스 / 다이소"
+                  placeholder="예: 쿠팡 / 회사 / 은행"
                 />
               </div>
-            </div>
-
-            <div class="form-group">
-              <label for="financeExpenseMemo">메모</label>
-              <textarea
-                id="financeExpenseMemo"
-                rows="3"
-                placeholder="추가 메모"
-              ></textarea>
             </div>
 
             <div class="card" style="padding: 16px; margin-top: 16px">
@@ -939,9 +1160,9 @@
           <section id="financeExpenseListCard" class="card">
             <div class="filter-row">
               <div>
-                <h2>지출 목록</h2>
+                <h2>수익 / 지출 목록</h2>
                 <p class="small-text">
-                  월, 카테고리, 결제수단, 검색어로 필터링할 수 있습니다.
+                  월, 유형, 카테고리, 결제수단, 검색어로 필터링할 수 있습니다.
                 </p>
               </div>
 
@@ -950,6 +1171,15 @@
                   <label for="financeListMonthFilter">월</label>
                   <select id="financeListMonthFilter">
                     <option value="">전체</option>
+                  </select>
+                </div>
+
+                <div class="filter-box">
+                  <label for="financeListFlowFilter">유형</label>
+                  <select id="financeListFlowFilter">
+                    <option value="">전체</option>
+                    <option value="expense">지출</option>
+                    <option value="income">수익</option>
                   </select>
                 </div>
 
@@ -968,6 +1198,13 @@
                     <option value="cash">현금</option>
                     <option value="transfer">계좌이체</option>
                     <option value="simple_pay">간편결제</option>
+                  </select>
+                </div>
+
+                <div class="filter-box">
+                  <label for="financeListSortFilter">정렬</label>
+                  <select id="financeListSortFilter">
+                    <option value="latest">최신순</option>
                   </select>
                 </div>
 
@@ -1006,21 +1243,82 @@
           <section id="financeCategoryCard" class="card">
             <h2>카테고리별 합계</h2>
             <div id="financeCategorySummaryList" class="item-list"></div>
-            <div id="financeCategoryChartWrap" style="margin-top: 16px"></div>
           </section>
 
-          <section id="financeSalaryCard" class="card">
-            <h2>월급계산기</h2>
+          <section id="financeAssetCard" class="card">
+            <h2>총 자산 관리</h2>
             <p class="small-text">
-              대한민국 기준 세전 월급에서 공제 항목을 반영해 예상 실수령액을
-              계산합니다.
+              기본 자산만 간단히 관리합니다. 주식, 적금, 예금만 등록합니다.
             </p>
 
             <div class="form-grid-2">
               <div class="form-group">
-                <label for="salaryGrossMonthlyInput">세전 월급</label>
+                <label for="financeAssetCategory">자산 종류</label>
+                <select id="financeAssetCategory">
+                  <option value="stock">주식</option>
+                  <option value="savings">적금</option>
+                  <option value="deposit">예금</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="financeAssetTitle">자산명</label>
                 <input
-                  id="salaryGrossMonthlyInput"
+                  id="financeAssetTitle"
+                  type="text"
+                  placeholder="예: 삼성전자 / 청년적금 / 파킹통장"
+                />
+              </div>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="financeAssetAmount">금액</label>
+                <input
+                  id="financeAssetAmount"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  placeholder="예: 5000000"
+                />
+              </div>
+
+              <div class="form-group" style="justify-content: flex-end">
+                <label style="visibility: hidden">저장</label>
+                <button
+                  id="financeSaveAssetBtn"
+                  class="primary-btn"
+                  type="button"
+                >
+                  자산 저장
+                </button>
+              </div>
+            </div>
+
+            <div
+              class="item-meta"
+              style="margin-top: 14px; margin-bottom: 14px"
+            >
+              <span class="meta-badge">
+                총 자산: <strong id="financeTotalAssetText">0 원</strong>
+              </span>
+            </div>
+
+            <div id="financeAssetList" class="item-list"></div>
+          </section>
+        </section>
+        <section id="tab-salary" class="tab-section hidden">
+          <section class="card">
+            <h2>월급 계산기</h2>
+            <p class="small-text">
+              간단한 공제율 기준으로 세전 월급과 예상 실수령액을 계산합니다.
+            </p>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="salaryGrossInput">세전 월급</label>
+                <input
+                  id="salaryGrossInput"
                   type="number"
                   min="0"
                   step="1000"
@@ -1029,107 +1327,113 @@
               </div>
 
               <div class="form-group">
-                <label for="salaryNonTaxableInput">비과세 금액</label>
+                <label for="salaryDeductionRateInput">공제율(%)</label>
                 <input
-                  id="salaryNonTaxableInput"
+                  id="salaryDeductionRateInput"
                   type="number"
                   min="0"
-                  step="1000"
-                  placeholder="예: 200000"
+                  max="100"
+                  step="0.1"
+                  value="9.4"
+                  placeholder="예: 9.4"
                 />
               </div>
             </div>
 
             <div class="form-grid-2">
               <div class="form-group">
-                <label for="salaryDependentsInput">부양가족 수</label>
+                <label for="salaryBonusInput">월 추가 수당/보너스</label>
                 <input
-                  id="salaryDependentsInput"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value="1"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="salaryChildrenInput">자녀 수</label>
-                <input
-                  id="salaryChildrenInput"
+                  id="salaryBonusInput"
                   type="number"
                   min="0"
-                  step="1"
+                  step="1000"
                   value="0"
+                  placeholder="예: 150000"
                 />
               </div>
             </div>
+          </section>
 
-            <div class="button-row">
-              <button id="salaryCalculateBtn" class="primary-btn" type="button">
-                계산하기
-              </button>
-            </div>
+          <section class="card">
+            <h2>계산 결과</h2>
 
-            <div class="home-grid" style="margin-top: 18px">
-              <div class="home-card">
-                <h3>국민연금</h3>
-                <p class="home-number" id="salaryNationalPensionText">0 원</p>
+            <div class="summary">
+              <div class="summary-item">
+                <span class="summary-label">월 총지급</span>
+                <strong id="salaryTotalPayText">0 원</strong>
               </div>
 
-              <div class="home-card">
-                <h3>건강보험</h3>
-                <p class="home-number" id="salaryHealthInsuranceText">0 원</p>
+              <div class="summary-item">
+                <span class="summary-label">과세 대상</span>
+                <strong id="salaryTaxablePayText">0 원</strong>
               </div>
 
-              <div class="home-card">
-                <h3>장기요양</h3>
-                <p class="home-number" id="salaryLongTermCareText">0 원</p>
+              <div class="summary-item">
+                <span class="summary-label">예상 공제액</span>
+                <strong id="salaryDeductionText">0 원</strong>
               </div>
 
-              <div class="home-card">
-                <h3>고용보험</h3>
-                <p class="home-number" id="salaryEmploymentInsuranceText">
-                  0 원
-                </p>
-              </div>
-
-              <div class="home-card">
-                <h3>소득세</h3>
-                <p class="home-number" id="salaryIncomeTaxText">0 원</p>
-              </div>
-
-              <div class="home-card">
-                <h3>지방소득세</h3>
-                <p class="home-number" id="salaryResidentTaxText">0 원</p>
-              </div>
-
-              <div class="home-card" style="grid-column: 1 / -1">
-                <h3>예상 실수령액</h3>
-                <p class="home-number" id="salaryNetPayText">0 원</p>
+              <div class="summary-item">
+                <span class="summary-label">예상 실수령액</span>
+                <strong id="salaryNetPayText">0 원</strong>
               </div>
             </div>
           </section>
         </section>
+        <div id="financeEditPopupOverlay" class="popup-overlay hidden">
+          <div class="popup-panel finance-edit-popup-panel">
+            <div class="popup-header">
+              <div>
+                <h2 class="popup-title">수익 / 지출 수정</h2>
+                <p class="popup-subtext">
+                  내역을 수정하거나 삭제할 수 있습니다.
+                </p>
+              </div>
+
+              <button
+                id="closeFinanceEditPopupBtn"
+                class="secondary-btn"
+                type="button"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div id="financeEditPopupMount"></div>
+          </div>
+        </div>
       </main>
 
       <nav class="bottom-tabbar">
         <button
-          class="bottom-tab-btn active"
-          data-tab="dashboard"
+          id="dynamicLeftTabBtn"
+          class="bottom-tab-btn hidden"
           type="button"
+          data-tab=""
         >
-          <span class="tab-icon">⌂</span>
-          <span class="tab-text">전체</span>
+          <span class="tab-icon">◀</span>
+          <span class="tab-text">왼쪽</span>
         </button>
 
-        <button class="bottom-tab-btn" data-tab="planner" type="button">
-          <span class="tab-icon">＋</span>
-          <span class="tab-text">일정/할일</span>
+        <button
+          id="homeTabBtn"
+          class="bottom-tab-btn active is-home"
+          type="button"
+          data-tab="home"
+        >
+          <span class="tab-icon">🏠</span>
+          <span class="tab-text">홈</span>
         </button>
 
-        <button class="bottom-tab-btn" data-tab="finance" type="button">
-          <span class="tab-icon">₩</span>
-          <span class="tab-text">가계부</span>
+        <button
+          id="dynamicRightTabBtn"
+          class="bottom-tab-btn hidden"
+          type="button"
+          data-tab=""
+        >
+          <span class="tab-icon">▶</span>
+          <span class="tab-text">오른쪽</span>
         </button>
       </nav>
     </div>
@@ -1166,7 +1470,9 @@
         <section class="quick-add-box">
           <div class="quick-add-header-row">
             <h4 class="quick-add-title">선택한 날짜에 추가</h4>
-            <button id="openPopupQuickAddBtn" type="button" class="primary-btn">추가</button>
+            <button id="openPopupQuickAddBtn" class="primary-btn" type="button">
+              추가
+            </button>
           </div>
 
           <div id="popupQuickAddForm" class="planner-form-card hidden">
@@ -1202,14 +1508,80 @@
                 </select>
               </div>
 
-              <div class="form-group">
-                <label for="popupItemTag">태그</label>
-                <input
-                  id="popupItemTag"
-                  class="form-control"
-                  type="text"
-                  placeholder="예: 여행 / 공부 / 쇼핑"
-                />
+              <div class="form-row two-cols">
+                <div class="form-group">
+                  <label for="popupItemTag">태그</label>
+                  <input
+                    id="popupItemTag"
+                    class="form-control"
+                    type="text"
+                    placeholder="예: 여행 / 공부 / 쇼핑"
+                  />
+                </div>
+
+                <div id="popupSingleLocationSection" class="form-group">
+                  <label>장소</label>
+
+                  <div id="popupPlaceEmptyState" class="place-empty-state">
+                    <button
+                      type="button"
+                      id="openPopupPlaceSearchBtn"
+                      class="secondary-btn place-open-btn"
+                    >
+                      장소 추가
+                    </button>
+                  </div>
+
+                  <div id="popupPlaceChipWrap" class="place-chip-wrap hidden">
+                    <button
+                      type="button"
+                      id="popupPlaceChip"
+                      class="place-chip"
+                      title="장소 보기"
+                    >
+                      <span class="place-chip-icon">📍</span>
+                      <span
+                        id="popupPlaceChipText"
+                        class="place-chip-text"
+                      ></span>
+                    </button>
+
+                    <div class="place-chip-actions">
+                      <button
+                        type="button"
+                        id="changePopupPlaceBtn"
+                        class="secondary-btn place-mini-btn"
+                      >
+                        변경
+                      </button>
+                      <button
+                        type="button"
+                        id="clearPopupPlaceBtn"
+                        class="secondary-btn place-mini-btn"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+
+                  <a
+                    id="popupPlaceLink"
+                    class="place-link hidden"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    구글맵에서 보기
+                  </a>
+
+                  <div id="popupLocationModeHelperText" class="small-text">
+                    하루 일정은 기본 장소 기능을 사용합니다.
+                  </div>
+
+                  <input id="popupItemLocation" type="hidden" />
+                  <input id="popupItemLocationAddress" type="hidden" />
+                  <input id="popupItemLocationPlaceId" type="hidden" />
+                </div>
               </div>
             </div>
 
@@ -1260,82 +1632,98 @@
                   <select id="popupTodoRepeat" class="form-control">
                     <option value="none">반복 없음</option>
                     <option value="daily">매일</option>
+                    <option value="weekly_days">요일별 반복</option>
                     <option value="weekly">매주</option>
                     <option value="monthly">매월</option>
-                    <option value="weekly_days">요일별</option>
                     <option value="interval_days">N일마다</option>
                   </select>
                 </div>
 
                 <div class="form-group">
                   <label for="popupTodoRepeatUntil">반복 종료일</label>
-                  <input
-                    id="popupTodoRepeatUntil"
-                    class="form-control"
-                    type="date"
-                  />
+                  <div class="repeat-until-control">
+                    <input
+                      id="popupTodoRepeatUntil"
+                      class="form-control"
+                      type="date"
+                    />
+                    <button
+                      id="popupTodoRepeatUntilNoneBtn"
+                      class="secondary-btn repeat-until-value-btn hidden"
+                      type="button"
+                    >
+                      없음
+                    </button>
+                    <button
+                      id="popupTodoRepeatUntilToggleBtn"
+                      class="secondary-btn repeat-until-toggle-btn"
+                      type="button"
+                    >
+                      없음 사용
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div id="popupTodoWeeklyDaysWrap" class="hidden">
-                <label>요일 선택</label>
-                <div class="weekday-row">
-                  <label
-                    ><input
-                      type="checkbox"
-                      class="popup-todo-weekday"
-                      value="0"
-                    />
-                    일</label
-                  >
-                  <label
-                    ><input
+              <div id="popupTodoWeeklyDaysWrap" class="form-group hidden">
+                <label>반복 요일</label>
+                <div class="weekday-check-grid">
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="1"
                     />
-                    월</label
-                  >
-                  <label
-                    ><input
+                    월
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="2"
                     />
-                    화</label
-                  >
-                  <label
-                    ><input
+                    화
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="3"
                     />
-                    수</label
-                  >
-                  <label
-                    ><input
+                    수
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="4"
                     />
-                    목</label
-                  >
-                  <label
-                    ><input
+                    목
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="5"
                     />
-                    금</label
-                  >
-                  <label
-                    ><input
+                    금
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-todo-weekday"
                       value="6"
                     />
-                    토</label
-                  >
+                    토
+                  </label>
+                  <label class="weekday-check">
+                    <input
+                      type="checkbox"
+                      class="popup-todo-weekday"
+                      value="0"
+                    />
+                    일
+                  </label>
                 </div>
               </div>
 
@@ -1451,82 +1839,98 @@
                   <select id="popupScheduleRepeat" class="form-control">
                     <option value="none">반복 없음</option>
                     <option value="daily">매일</option>
+                    <option value="weekly_days">요일별 반복</option>
                     <option value="weekly">매주</option>
                     <option value="monthly">매월</option>
-                    <option value="weekly_days">요일별</option>
                     <option value="interval_days">N일마다</option>
                   </select>
                 </div>
 
                 <div class="form-group">
                   <label for="popupScheduleRepeatUntil">반복 종료일</label>
-                  <input
-                    id="popupScheduleRepeatUntil"
-                    class="form-control"
-                    type="date"
-                  />
+                  <div class="repeat-until-control">
+                    <input
+                      id="popupScheduleRepeatUntil"
+                      class="form-control"
+                      type="date"
+                    />
+                    <button
+                      id="popupScheduleRepeatUntilNoneBtn"
+                      class="secondary-btn repeat-until-value-btn hidden"
+                      type="button"
+                    >
+                      없음
+                    </button>
+                    <button
+                      id="popupScheduleRepeatUntilToggleBtn"
+                      class="secondary-btn repeat-until-toggle-btn"
+                      type="button"
+                    >
+                      없음 사용
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div id="popupScheduleWeeklyDaysWrap" class="hidden">
-                <label>요일 선택</label>
-                <div class="weekday-row">
-                  <label
-                    ><input
-                      type="checkbox"
-                      class="popup-schedule-weekday"
-                      value="0"
-                    />
-                    일</label
-                  >
-                  <label
-                    ><input
+              <div id="popupScheduleWeeklyDaysWrap" class="form-group hidden">
+                <label>반복 요일</label>
+                <div class="weekday-check-grid">
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="1"
                     />
-                    월</label
-                  >
-                  <label
-                    ><input
+                    월
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="2"
                     />
-                    화</label
-                  >
-                  <label
-                    ><input
+                    화
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="3"
                     />
-                    수</label
-                  >
-                  <label
-                    ><input
+                    수
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="4"
                     />
-                    목</label
-                  >
-                  <label
-                    ><input
+                    목
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="5"
                     />
-                    금</label
-                  >
-                  <label
-                    ><input
+                    금
+                  </label>
+                  <label class="weekday-check">
+                    <input
                       type="checkbox"
                       class="popup-schedule-weekday"
                       value="6"
                     />
-                    토</label
-                  >
+                    토
+                  </label>
+                  <label class="weekday-check">
+                    <input
+                      type="checkbox"
+                      class="popup-schedule-weekday"
+                      value="0"
+                    />
+                    일
+                  </label>
                 </div>
               </div>
 
@@ -1542,6 +1946,28 @@
                   min="1"
                   value="2"
                 />
+              </div>
+              <div id="popupScheduleDailyLocationsSection" class="form-group">
+                <label>날짜별 장소</label>
+
+                <div class="small-text" style="margin-bottom: 8px">
+                  여러 날 일정이면 날짜별로 장소를 다르게 지정할 수 있습니다.
+                </div>
+
+                <div
+                  id="popupScheduleDailyLocationList"
+                  class="daily-location-list"
+                ></div>
+
+                <div class="button-row">
+                  <button
+                    id="openPopupScheduleDailyLocationBtn"
+                    class="secondary-btn"
+                    type="button"
+                  >
+                    날짜별 장소 추가
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1581,7 +2007,95 @@
         <div id="editPopupMount"></div>
       </div>
     </div>
+    <div id="recurringEditScopeOverlay" class="popup-overlay hidden">
+      <div class="popup-panel" style="max-width: 560px">
+        <div class="popup-header">
+          <div>
+            <h3 class="popup-title">반복 일정 적용 범위</h3>
+            <p class="popup-subtext">
+              수정 내용을 어느 범위까지 적용할지 선택하세요.
+            </p>
+          </div>
+          <button
+            id="closeRecurringEditScopeBtn"
+            class="secondary-btn"
+            type="button"
+          >
+            닫기
+          </button>
+        </div>
 
+        <div
+          class="button-row"
+          style="flex-direction: column; align-items: stretch"
+        >
+          <button id="scopeOnlyThisBtn" class="secondary-btn" type="button">
+            해당 일정에만 적용
+          </button>
+
+          <button id="scopeFutureBtn" class="secondary-btn" type="button">
+            해당 일정 이후에 적용
+          </button>
+
+          <button id="scopePastBtn" class="secondary-btn" type="button">
+            해당 일정 이전에 적용
+          </button>
+
+          <button id="scopeAllBtn" class="primary-btn" type="button">
+            전체 일정에 적용
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="placeSearchModalOverlay" class="popup-overlay hidden">
+      <div class="popup-panel">
+        <div class="popup-header">
+          <div>
+            <h3 id="placeSearchModalTitle" class="popup-title">
+              항목 장소 선택
+            </h3>
+            <p class="popup-subtext">
+              장소를 검색해서 선택하면 항목에 바로 반영됩니다.
+            </p>
+          </div>
+
+          <button
+            id="closePlaceSearchModalBtn"
+            class="secondary-btn"
+            type="button"
+          >
+            닫기
+          </button>
+        </div>
+
+        <div class="place-search-modal-body">
+          <div id="placeSearchDateRow" class="form-group hidden">
+            <label for="placeSearchDateInput">적용 시작 날짜</label>
+            <input id="placeSearchDateInput" type="date" />
+            <p class="small-text">
+              이 날짜부터 다음 장소 변경 전까지 자동으로 같은 장소가 유지됩니다.
+            </p>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px">
+            <label for="placeSearchKeywordInput">장소 검색</label>
+            <input
+              id="placeSearchKeywordInput"
+              type="text"
+              placeholder="도시 / 공항 / 관광지 / 식당 등을 검색하세요"
+            />
+          </div>
+
+          <div id="placeSearchStatusText" class="small-text">
+            검색어를 입력하면 장소 목록이 표시됩니다.
+          </div>
+
+          <div id="placeSearchResultList" class="place-search-result-list">
+            <div class="place-empty-result">검색어를 입력하세요.</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script type="module" src="./js/app.js"></script>
   </body>

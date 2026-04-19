@@ -8,6 +8,7 @@ import {
   getTodoDiffMinutes,
   getItemsForDate,
 } from "./calendar.js";
+import { expandRecurringPlannerItemsInRange } from "./repeat.js";
 
 let deps = {};
 
@@ -223,6 +224,138 @@ export function renderTodayList() {
     .join("");
 }
 
+export function getSummaryList(type, filtered) {
+  const todayKey = formatDateKey(new Date());
+
+  if (type === "all") return sortItems(filtered);
+  if (type === "pending") {
+    return sortItems(filtered.filter((item) => item.status === "pending"));
+  }
+  if (type === "fail") {
+    return sortItems(filtered.filter((item) => item.status === "fail"));
+  }
+  if (type === "success") {
+    return sortItems(filtered.filter((item) => item.status === "success"));
+  }
+  if (type === "todo") {
+    return sortItems(filtered.filter((item) => item.type === "todo"));
+  }
+  if (type === "schedule") {
+    return sortItems(filtered.filter((item) => item.type === "schedule"));
+  }
+  if (type === "today") {
+    return sortItems(filtered.filter((item) => isItemOnDate(todayKey, item)));
+  }
+  if (type === "urgent") {
+    return sortItems(
+      filtered.filter((item) => {
+        if (item.type !== "todo") return false;
+        const diff = getTodoDiffMinutes(item);
+        return diff >= 0 && diff <= 1440;
+      }),
+    );
+  }
+
+  return [];
+}
+
+export function getFilteredItems() {
+  const selectedFilterYear = getSelectedFilterYear();
+  const selectedFilterMonth = getSelectedFilterMonth();
+
+  let rangeStartKey = "1900-01-01";
+  let rangeEndKey = "9999-12-31";
+
+  if (selectedFilterYear && selectedFilterMonth) {
+    const monthDate = new Date(
+      Number(selectedFilterYear),
+      Number(selectedFilterMonth) - 1,
+      1,
+    );
+    const lastDate = new Date(
+      Number(selectedFilterYear),
+      Number(selectedFilterMonth),
+      0,
+    );
+
+    rangeStartKey = formatDateKey(monthDate);
+    rangeEndKey = formatDateKey(lastDate);
+  } else if (selectedFilterYear) {
+    rangeStartKey = `${selectedFilterYear}-01-01`;
+    rangeEndKey = `${selectedFilterYear}-12-31`;
+  }
+
+  let filtered = expandRecurringPlannerItemsInRange(
+    getItems(),
+    rangeStartKey,
+    rangeEndKey,
+  );
+
+  const selectedFilterType = getSelectedFilterType();
+
+  if (selectedFilterType) {
+    filtered = filtered.filter((item) => item.type === selectedFilterType);
+  }
+
+  if (selectedFilterYear) {
+    filtered = filtered.filter(
+      (item) => getYearFromItem(item) === selectedFilterYear,
+    );
+  }
+
+  if (selectedFilterMonth) {
+    filtered = filtered.filter(
+      (item) => getMonthFromItem(item) === selectedFilterMonth,
+    );
+  }
+
+  return filtered;
+}
+
+export function getAchievementRate(filteredItems) {
+  const success = filteredItems.filter(
+    (item) => item.status === "success",
+  ).length;
+  const fail = filteredItems.filter((item) => item.status === "fail").length;
+  const base = success + fail;
+
+  if (base === 0) return 0;
+
+  return Math.round((success / base) * 100);
+}
+
+export function renderYearOptions() {
+  const { yearFilter } = getRefs();
+  if (!yearFilter) return;
+
+  const expanded = expandRecurringPlannerItemsInRange(
+    getItems(),
+    "1900-01-01",
+    "9999-12-31",
+  );
+
+  const years = [...new Set(expanded.map((item) => getYearFromItem(item)))].sort();
+
+  yearFilter.innerHTML = `<option value="">전체</option>`;
+
+  years.forEach((year) => {
+    const option = document.createElement("option");
+    option.value = year;
+    option.textContent = `${year.slice(2)}년`;
+
+    if (year === getSelectedFilterYear()) {
+      option.selected = true;
+    }
+
+    yearFilter.appendChild(option);
+  });
+
+  if (getSelectedFilterYear() && !years.includes(getSelectedFilterYear())) {
+    deps.setSelectedFilterYear?.("");
+    yearFilter.value = "";
+  }
+}
+
 export function openSummaryPopup(type) {
   const { summaryPopupLabel, summaryPopupList, summaryPopupOverlay } = getRefs();
 
@@ -260,105 +393,6 @@ export function openSummaryPopup(type) {
 export function closeSummaryPopup() {
   const { summaryPopupOverlay } = getRefs();
   summaryPopupOverlay?.classList.add("hidden");
-}
-
-export function getSummaryList(type, filtered) {
-  const todayKey = formatDateKey(new Date());
-
-  if (type === "all") return sortItems(filtered);
-  if (type === "pending") {
-    return sortItems(filtered.filter((item) => item.status === "pending"));
-  }
-  if (type === "fail") {
-    return sortItems(filtered.filter((item) => item.status === "fail"));
-  }
-  if (type === "success") {
-    return sortItems(filtered.filter((item) => item.status === "success"));
-  }
-  if (type === "todo") {
-    return sortItems(filtered.filter((item) => item.type === "todo"));
-  }
-  if (type === "schedule") {
-    return sortItems(filtered.filter((item) => item.type === "schedule"));
-  }
-  if (type === "today") {
-    return sortItems(filtered.filter((item) => isItemOnDate(todayKey, item)));
-  }
-  if (type === "urgent") {
-    return sortItems(
-      filtered.filter((item) => {
-        if (item.type !== "todo") return false;
-        const diff = getTodoDiffMinutes(item);
-        return diff >= 0 && diff <= 1440;
-      }),
-    );
-  }
-
-  return [];
-}
-
-export function getFilteredItems() {
-  let filtered = [...getItems()];
-
-  const selectedFilterType = getSelectedFilterType();
-  const selectedFilterYear = getSelectedFilterYear();
-  const selectedFilterMonth = getSelectedFilterMonth();
-
-  if (selectedFilterType) {
-    filtered = filtered.filter((item) => item.type === selectedFilterType);
-  }
-
-  if (selectedFilterYear) {
-    filtered = filtered.filter(
-      (item) => getYearFromItem(item) === selectedFilterYear,
-    );
-  }
-
-  if (selectedFilterMonth) {
-    filtered = filtered.filter(
-      (item) => getMonthFromItem(item) === selectedFilterMonth,
-    );
-  }
-
-  return filtered;
-}
-
-export function getAchievementRate(filteredItems) {
-  const success = filteredItems.filter(
-    (item) => item.status === "success",
-  ).length;
-  const fail = filteredItems.filter((item) => item.status === "fail").length;
-  const base = success + fail;
-
-  if (base === 0) return 0;
-
-  return Math.round((success / base) * 100);
-}
-
-export function renderYearOptions() {
-  const { yearFilter } = getRefs();
-  if (!yearFilter) return;
-
-  const years = [...new Set(getItems().map((item) => getYearFromItem(item)))].sort();
-
-  yearFilter.innerHTML = `<option value="">전체</option>`;
-
-  years.forEach((year) => {
-    const option = document.createElement("option");
-    option.value = year;
-    option.textContent = `${year.slice(2)}년`;
-
-    if (year === getSelectedFilterYear()) {
-      option.selected = true;
-    }
-
-    yearFilter.appendChild(option);
-  });
-
-  if (getSelectedFilterYear() && !years.includes(getSelectedFilterYear())) {
-    deps.setSelectedFilterYear?.("");
-    yearFilter.value = "";
-  }
 }
 
 export function renderMonthOptions() {
