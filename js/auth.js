@@ -9,7 +9,9 @@ import {
 
 import {
   loadRemotePlannerData,
+  loadRemoteFinanceData,
   loadLocalBackup,
+  loadFinanceLocal,
 } from "./storage.js";
 
 function getState() {
@@ -42,10 +44,12 @@ export function initAuth({ renderAll }) {
     if (user) {
       showAppUI(user);
       await loadRemotePlannerData(user.uid);
+      await loadRemoteFinanceData(user.uid);
       renderAll();
     } else {
       showAuthUI();
       state.items = loadLocalBackup();
+      state.financeData = loadFinanceLocal();
       renderAll();
     }
   });

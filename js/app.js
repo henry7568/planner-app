@@ -84,13 +84,17 @@ import {
   saveFinanceExpense,
   saveFinanceAsset,
   resetFinanceExpenseForm,
+  resetFinanceAssetForm,
   syncFinanceSubCategoryOptions,
   syncFinanceExpenseFormButtons,
   deleteFinanceExpense,
-  startEditFinanceExpense,
   deleteEditingFinanceExpense,
+  deleteEditingFinanceAsset,
+  startEditFinanceExpense,
+  startEditFinanceAsset,
   handleFinancePageChange,
   openFinanceExpenseForm,
+  openFinanceAssetForm,
   closeFinanceEditPopup,
 } from "./finance.js";
 
@@ -224,13 +228,13 @@ const HUB_TAB_MAP = {
   finance: {
     left: {
       tab: "finance",
-      label: "가계부",
-      icon: "📒",
+      label: "대쉬보드",
+      icon: "📊",
     },
     right: {
       tab: "salary",
-      label: "월급계산",
-      icon: "🧮",
+      label: "유틸",
+      icon: "🧰",
     },
   },
 };
@@ -468,6 +472,39 @@ const financeOpenExpenseFormBtn = document.getElementById(
   "financeOpenExpenseFormBtn",
 );
 
+const financeOpenAssetManageTabBtn = document.getElementById(
+  "financeOpenAssetManageTabBtn",
+);
+const financeBackToDashboardBtn = document.getElementById(
+  "financeBackToDashboardBtn",
+);
+
+const financeDashboardHomeSection = document.getElementById(
+  "financeDashboardHomeSection",
+);
+const financeAssetManagePageSection = document.getElementById(
+  "financeAssetManagePageSection",
+);
+
+const financeUtilityHomeSection = document.getElementById(
+  "financeUtilityHomeSection",
+);
+const financeLedgerSection = document.getElementById("financeLedgerSection");
+const financeSalarySection = document.getElementById("financeSalarySection");
+
+const financeOpenLedgerSectionBtn = document.getElementById(
+  "financeOpenLedgerSectionBtn",
+);
+const financeOpenSalarySectionBtn = document.getElementById(
+  "financeOpenSalarySectionBtn",
+);
+const financeBackToUtilityHomeFromLedgerBtn = document.getElementById(
+  "financeBackToUtilityHomeFromLedgerBtn",
+);
+const financeBackToUtilityHomeFromSalaryBtn = document.getElementById(
+  "financeBackToUtilityHomeFromSalaryBtn",
+);
+
 const financeCurrentPeriodLabel = document.getElementById(
   "financeCurrentPeriodLabel",
 );
@@ -547,7 +584,41 @@ const closeFinanceEditPopupBtn = document.getElementById(
   "closeFinanceEditPopupBtn",
 );
 
+const financeAssetFormCard = document.getElementById("financeAssetFormCard");
+const financeOpenAssetFormBtn = document.getElementById(
+  "financeOpenAssetFormBtn",
+);
+const financeOpenExpenseFormFromAssetBtn = document.getElementById(
+  "financeOpenExpenseFormFromAssetBtn",
+);
+
+const financeAssetCategory = document.getElementById("financeAssetCategory");
+const financeAssetTitle = document.getElementById("financeAssetTitle");
+const financeAssetAmount = document.getElementById("financeAssetAmount");
+const financeAssetBaseDate = document.getElementById("financeAssetBaseDate");
+const financeAssetRepeat = document.getElementById("financeAssetRepeat");
+const financeAssetRepeatUntil = document.getElementById(
+  "financeAssetRepeatUntil",
+);
+const financeAssetRepeatUntilToggleBtn = document.getElementById(
+  "financeAssetRepeatUntilToggleBtn",
+);
+const financeAssetRepeatUntilNoneBtn = document.getElementById(
+  "financeAssetRepeatUntilNoneBtn",
+);
+const financeSaveAssetBtn = document.getElementById("financeSaveAssetBtn");
+const financeCancelAssetEditBtn = document.getElementById(
+  "financeCancelAssetEditBtn",
+);
+const financeDeleteAssetBtn = document.getElementById("financeDeleteAssetBtn");
+const financeTotalAssetText = document.getElementById("financeTotalAssetText");
+const financeAssetList = document.getElementById("financeAssetList");
+const financeAssetTransactionList = document.getElementById(
+  "financeAssetTransactionList",
+);
+
 let financeEditingExpenseId = null;
+let financeEditingAssetId = null;
 let financePage = 1;
 const FINANCE_PAGE_SIZE = 10;
 
@@ -581,13 +652,6 @@ const financeListSortFilter = document.getElementById("financeListSortFilter");
 const financeListSearchInput = document.getElementById(
   "financeListSearchInput",
 );
-
-const financeAssetCategory = document.getElementById("financeAssetCategory");
-const financeAssetTitle = document.getElementById("financeAssetTitle");
-const financeAssetAmount = document.getElementById("financeAssetAmount");
-const financeSaveAssetBtn = document.getElementById("financeSaveAssetBtn");
-const financeTotalAssetText = document.getElementById("financeTotalAssetText");
-const financeAssetList = document.getElementById("financeAssetList");
 
 const itemLocationAutocompleteMount = document.getElementById(
   "itemLocationAutocompleteMount",
@@ -665,20 +729,48 @@ const scopeFutureBtn = document.getElementById("scopeFutureBtn");
 const scopePastBtn = document.getElementById("scopePastBtn");
 const scopeAllBtn = document.getElementById("scopeAllBtn");
 
-const todoRepeatUntilToggleBtn = document.getElementById("todoRepeatUntilToggleBtn");
-const todoRepeatUntilNoneBtn = document.getElementById("todoRepeatUntilNoneBtn");
+const todoRepeatUntilToggleBtn = document.getElementById(
+  "todoRepeatUntilToggleBtn",
+);
+const todoRepeatUntilNoneBtn = document.getElementById(
+  "todoRepeatUntilNoneBtn",
+);
 
-const scheduleRepeatUntilToggleBtn = document.getElementById("scheduleRepeatUntilToggleBtn");
-const scheduleRepeatUntilNoneBtn = document.getElementById("scheduleRepeatUntilNoneBtn");
+const scheduleRepeatUntilToggleBtn = document.getElementById(
+  "scheduleRepeatUntilToggleBtn",
+);
+const scheduleRepeatUntilNoneBtn = document.getElementById(
+  "scheduleRepeatUntilNoneBtn",
+);
 
-const popupTodoRepeatUntilToggleBtn = document.getElementById("popupTodoRepeatUntilToggleBtn");
-const popupTodoRepeatUntilNoneBtn = document.getElementById("popupTodoRepeatUntilNoneBtn");
+const popupTodoRepeatUntilToggleBtn = document.getElementById(
+  "popupTodoRepeatUntilToggleBtn",
+);
+const popupTodoRepeatUntilNoneBtn = document.getElementById(
+  "popupTodoRepeatUntilNoneBtn",
+);
 
-const popupScheduleRepeatUntilToggleBtn = document.getElementById("popupScheduleRepeatUntilToggleBtn");
-const popupScheduleRepeatUntilNoneBtn = document.getElementById("popupScheduleRepeatUntilNoneBtn");
+const popupScheduleRepeatUntilToggleBtn = document.getElementById(
+  "popupScheduleRepeatUntilToggleBtn",
+);
+const popupScheduleRepeatUntilNoneBtn = document.getElementById(
+  "popupScheduleRepeatUntilNoneBtn",
+);
 
-const financeExpenseRepeatUntilToggleBtn = document.getElementById("financeExpenseRepeatUntilToggleBtn");
-const financeExpenseRepeatUntilNoneBtn = document.getElementById("financeExpenseRepeatUntilNoneBtn");
+const financeExpenseRepeatUntilToggleBtn = document.getElementById(
+  "financeExpenseRepeatUntilToggleBtn",
+);
+const financeExpenseRepeatUntilNoneBtn = document.getElementById(
+  "financeExpenseRepeatUntilNoneBtn",
+);
+
+const financeAssetManageSection = document.getElementById(
+  "financeAssetManageSection",
+);
+
+const financeOpenAssetManageSectionBtn = document.getElementById(
+  "financeOpenAssetManageSectionBtn",
+);
 
 let currentUser = null;
 let items = [];
@@ -688,6 +780,7 @@ let editingOccurrenceDateKey = "";
 let pendingRecurringEditPayload = null;
 
 let activePlaceTarget = "main";
+let activeDailyLocationEditIndex = null;
 
 window.AppState = {
   get currentUser() {
@@ -702,6 +795,13 @@ window.AppState = {
   },
   set items(value) {
     items = value;
+  },
+
+  get financeData() {
+    return financeData;
+  },
+  set financeData(value) {
+    financeData = value;
   },
 
   get isRemoteLoading() {
@@ -808,6 +908,12 @@ window.setPopupScheduleDailyLocations = function (value) {
   renderScheduleDailyLocationList("popup");
 };
 
+window.showFinanceDashboardHome = showFinanceDashboardHome;
+window.showFinanceAssetManagePage = showFinanceAssetManagePage;
+window.showFinanceUtilityHome = showFinanceUtilityHome;
+window.showFinanceLedgerSection = showFinanceLedgerSection;
+window.showFinanceSalarySection = showFinanceSalarySection;
+
 configureCalendarModule({
   refs: {
     calendarTitle,
@@ -889,6 +995,7 @@ configureFinanceModule({
     financeBudgetAmount,
     financeSaveBudgetBtn,
     financeOpenExpenseFormBtn,
+    financeOpenAssetManageTabBtn,
 
     financeCurrentPeriodLabel,
     financeMonthlyBudgetText,
@@ -921,6 +1028,24 @@ configureFinanceModule({
     financeSaveExpenseBtn,
     financeCancelExpenseEditBtn,
     financeDeleteExpenseBtn,
+
+    financeAssetFormCard,
+    financeOpenAssetFormBtn,
+    financeAssetCategory,
+    financeAssetTitle,
+    financeAssetAmount,
+    financeAssetBaseDate,
+    financeAssetRepeat,
+    financeAssetRepeatUntil,
+    financeAssetRepeatUntilToggleBtn,
+    financeAssetRepeatUntilNoneBtn,
+    financeSaveAssetBtn,
+    financeCancelAssetEditBtn,
+    financeDeleteAssetBtn,
+    financeTotalAssetText,
+    financeAssetList,
+    financeAssetTransactionList,
+
     financeEditPopupOverlay,
     financeEditPopupMount,
     closeFinanceEditPopupBtn,
@@ -942,17 +1067,6 @@ configureFinanceModule({
     financeListPaymentFilter,
     financeListSortFilter,
     financeListSearchInput,
-
-    financeAssetCategory,
-    financeAssetTitle,
-    financeAssetAmount,
-    financeSaveAssetBtn,
-    financeTotalAssetText,
-    financeAssetList,
-
-    financeEditPopupOverlay,
-    financeEditPopupMount,
-    closeFinanceEditPopupBtn,
   },
 
   getFinanceData: () => financeData,
@@ -963,6 +1077,11 @@ configureFinanceModule({
   getFinanceEditingExpenseId: () => financeEditingExpenseId,
   setFinanceEditingExpenseId: (value) => {
     financeEditingExpenseId = value;
+  },
+
+  getFinanceEditingAssetId: () => financeEditingAssetId,
+  setFinanceEditingAssetId: (value) => {
+    financeEditingAssetId = value;
   },
 
   getFinancePage: () => financePage,
@@ -1112,6 +1231,7 @@ configurePlannerUiModule({
   openDatePopup,
   syncPlaceUi,
   syncScheduleLocationMode,
+  resetNestedTabState,
 });
 
 initAuth({ renderAll });
@@ -1331,10 +1451,88 @@ async function initAppOnce() {
 
   financeSaveBudgetBtn?.addEventListener("click", saveFinanceBudget);
   financeOpenExpenseFormBtn?.addEventListener("click", openFinanceExpenseForm);
+  financeOpenExpenseFormFromAssetBtn?.addEventListener("click", () => {
+    showFinanceAssetManagePage();
+    openFinanceExpenseForm();
+  });
+  financeOpenAssetFormBtn?.addEventListener("click", openFinanceAssetForm);
   financeSaveAssetBtn?.addEventListener("click", saveFinanceAsset);
+
+  financeOpenAssetManageTabBtn?.addEventListener("click", () => {
+    showFinanceAssetManagePage();
+  });
+
+  financeBackToDashboardBtn?.addEventListener("click", () => {
+    showFinanceDashboardHome();
+  });
+
+  financeOpenLedgerSectionBtn?.addEventListener("click", () => {
+    showFinanceLedgerSection();
+  });
+
+  financeOpenSalarySectionBtn?.addEventListener("click", () => {
+    showFinanceSalarySection();
+  });
+
+  financeBackToUtilityHomeFromLedgerBtn?.addEventListener("click", () => {
+    showFinanceUtilityHome();
+  });
+
+  financeBackToUtilityHomeFromSalaryBtn?.addEventListener("click", () => {
+    showFinanceUtilityHome();
+  });
 
   financeMonthKey?.addEventListener("change", renderFinance);
   financePeriodStartDay?.addEventListener("input", renderFinance);
+
+  financeAssetRepeat?.addEventListener("change", () => {
+    const showRepeatExtras = (financeAssetRepeat?.value || "none") !== "none";
+
+    if (financeAssetRepeatUntil) {
+      financeAssetRepeatUntil.disabled = !showRepeatExtras;
+      if (!showRepeatExtras) {
+        financeAssetRepeatUntil.value = "";
+      }
+    }
+
+    syncRepeatUntilToggleState("financeAsset");
+  });
+
+  financeAssetRepeatUntilToggleBtn?.addEventListener("click", () => {
+    const dateInput = financeAssetRepeatUntil;
+    const valueBtn = financeAssetRepeatUntilNoneBtn;
+    const toggleBtn = financeAssetRepeatUntilToggleBtn;
+
+    if (!dateInput || !valueBtn || !toggleBtn) return;
+    if ((financeAssetRepeat?.value || "none") === "none") return;
+
+    const isNoneMode = dateInput.classList.contains("hidden");
+
+    if (isNoneMode) {
+      dateInput.classList.remove("hidden");
+      valueBtn.classList.add("hidden");
+      toggleBtn.textContent = "없음 사용";
+      return;
+    }
+
+    dateInput.value = "";
+    dateInput.classList.add("hidden");
+    valueBtn.classList.remove("hidden");
+    toggleBtn.textContent = "날짜 사용";
+  });
+
+  financeAssetRepeatUntilNoneBtn?.addEventListener("click", () => {
+    const dateInput = financeAssetRepeatUntil;
+    const valueBtn = financeAssetRepeatUntilNoneBtn;
+    const toggleBtn = financeAssetRepeatUntilToggleBtn;
+
+    if (!dateInput || !valueBtn || !toggleBtn) return;
+
+    valueBtn.classList.add("hidden");
+    dateInput.classList.remove("hidden");
+    toggleBtn.textContent = "없음 사용";
+  });
+
   financeSaveExpenseBtn?.addEventListener("click", () => {
     const result = saveFinanceExpense();
 
@@ -1357,6 +1555,14 @@ async function initAppOnce() {
 
   financeDeleteExpenseBtn?.addEventListener("click", () => {
     deleteEditingFinanceExpense();
+  });
+
+  financeCancelAssetEditBtn?.addEventListener("click", () => {
+    resetFinanceAssetForm();
+  });
+
+  financeDeleteAssetBtn?.addEventListener("click", () => {
+    deleteEditingFinanceAsset();
   });
 
   closeFinanceEditPopupBtn?.addEventListener("click", () => {
@@ -1440,6 +1646,58 @@ function enterHomeTab() {
   }
 
   switchTab("home");
+}
+
+function hideAllFinanceDashboardSections() {
+  financeDashboardHomeSection?.classList.add("hidden");
+  financeAssetManagePageSection?.classList.add("hidden");
+}
+
+function showFinanceDashboardHome() {
+  hideAllFinanceDashboardSections();
+  financeDashboardHomeSection?.classList.remove("hidden");
+}
+
+function showFinanceAssetManagePage() {
+  hideAllFinanceDashboardSections();
+  financeAssetManagePageSection?.classList.remove("hidden");
+}
+
+function hideAllFinanceUtilitySections() {
+  financeUtilityHomeSection?.classList.add("hidden");
+  financeLedgerSection?.classList.add("hidden");
+  financeSalarySection?.classList.add("hidden");
+}
+
+function showFinanceUtilityHome() {
+  hideAllFinanceUtilitySections();
+  financeUtilityHomeSection?.classList.remove("hidden");
+}
+
+function showFinanceLedgerSection() {
+  hideAllFinanceUtilitySections();
+  financeLedgerSection?.classList.remove("hidden");
+}
+
+function showFinanceSalarySection() {
+  hideAllFinanceUtilitySections();
+  financeSalarySection?.classList.remove("hidden");
+}
+
+function resetNestedTabState(tabName) {
+  if (tabName === "finance") {
+    showFinanceDashboardHome();
+    return;
+  }
+
+  if (tabName === "salary") {
+    showFinanceUtilityHome();
+    return;
+  }
+
+  if (tabName === "planner") {
+    closePlannerFormCard();
+  }
 }
 
 function openHubGroup(groupName) {
@@ -1628,6 +1886,36 @@ function handleDocumentClick(e) {
     const id = actionTarget.dataset.id;
     if (!id) return;
     startEditFinanceExpense(id);
+    return;
+  }
+
+  if (action === "open-edit-finance-asset") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    startEditFinanceAsset(id);
+    return;
+  }
+
+  if (action === "select-place-result") {
+    const index = Number(actionTarget.dataset.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    applyPlaceResultSelection(index);
+    return;
+  }
+
+  if (action === "edit-daily-location") {
+    const mode = actionTarget.dataset.mode === "popup" ? "popup" : "main";
+    const index = Number(actionTarget.dataset.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    startEditDailyLocation(mode, index);
+    return;
+  }
+
+  if (action === "remove-daily-location") {
+    const mode = actionTarget.dataset.mode === "popup" ? "popup" : "main";
+    const index = Number(actionTarget.dataset.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    removeDailyLocation(mode, index);
     return;
   }
 }
@@ -2212,8 +2500,14 @@ function openPlaceSearchModal(mode) {
   const dateInput = document.getElementById("placeSearchDateInput");
 
   if (placeSearchModalTitle) {
-    placeSearchModalTitle.textContent =
-      activePlaceSelectMode === "daily" ? "날짜별 장소 선택" : "항목 장소 선택";
+    if (activePlaceSelectMode === "daily") {
+      placeSearchModalTitle.textContent =
+        activeDailyLocationEditIndex !== null
+          ? "날짜별 장소 수정"
+          : "날짜별 장소 선택";
+    } else {
+      placeSearchModalTitle.textContent = "항목 장소 선택";
+    }
   }
 
   if (placeSearchKeywordInput) {
@@ -2222,7 +2516,9 @@ function openPlaceSearchModal(mode) {
 
   if (placeSearchStatusText) {
     placeSearchStatusText.textContent =
-      "검색어를 입력하면 장소 목록이 표시됩니다.";
+      activePlaceSelectMode === "daily" && activeDailyLocationEditIndex !== null
+        ? "수정할 장소를 검색해서 다시 선택하세요."
+        : "검색어를 입력하면 장소 목록이 표시됩니다.";
   }
 
   if (placeSearchResultList) {
@@ -2247,15 +2543,22 @@ function openPlaceSearchModal(mode) {
       dateInput.min = startDate || "";
       dateInput.max = endDate || "";
 
+      const editingItem =
+        activeDailyLocationEditIndex !== null
+          ? normalized[activeDailyLocationEditIndex] || null
+          : null;
+
       const preferredDate =
-        normalized.length > 0
-          ? normalized[normalized.length - 1].date
-          : startDate || "";
+        editingItem?.date ||
+        getNextAvailableDailyLocationDate(mode, normalized) ||
+        startDate ||
+        "";
 
       dateInput.value = preferredDate;
     }
   } else {
     dateRow?.classList.add("hidden");
+
     if (dateInput) {
       dateInput.value = "";
       dateInput.min = "";
@@ -2266,6 +2569,11 @@ function openPlaceSearchModal(mode) {
   placeSearchModalOverlay?.classList.remove("hidden");
 
   requestAnimationFrame(() => {
+    if (activePlaceSelectMode === "daily" && !placeSearchKeywordInput?.value) {
+      placeSearchKeywordInput?.focus();
+      return;
+    }
+
     placeSearchKeywordInput?.focus();
   });
 }
@@ -2299,6 +2607,8 @@ function closePlaceSearchModal() {
     dateInput.min = "";
     dateInput.max = "";
   }
+
+  activeDailyLocationEditIndex = null;
 }
 
 function finalizePlaceSelection(mode) {
@@ -2314,6 +2624,58 @@ function clearPlaceSelection(mode) {
   if (placeIdInput) placeIdInput.value = "";
 
   syncPlaceUi(mode);
+}
+
+async function applyPlaceResultSelection(index) {
+  const items = Array.isArray(placeSearchResultList?._items)
+    ? placeSearchResultList._items
+    : [];
+
+  const selected = items[index];
+  const placePrediction = selected?.placePrediction;
+
+  if (!placePrediction) return;
+
+  try {
+    const place = placePrediction.toPlace();
+
+    await place.fetchFields({
+      fields: ["displayName", "formattedAddress", "id"],
+    });
+
+    const selectedPlace = {
+      label: place.displayName || selected.label || "",
+      address: place.formattedAddress || selected.secondaryText || "",
+      placeId: place.id || "",
+    };
+
+    const targetMode = activePlaceTarget === "popup" ? "popup" : "main";
+
+    if (activePlaceSelectMode === "daily") {
+      addDailyLocationEntry(targetMode, selectedPlace);
+      closePlaceSearchModal();
+      return;
+    }
+
+    const uiRefs = getPlaceUiRefs(targetMode);
+
+    if (uiRefs.locationInput) {
+      uiRefs.locationInput.value = selectedPlace.label;
+    }
+
+    if (uiRefs.addressInput) {
+      uiRefs.addressInput.value = selectedPlace.address;
+    }
+
+    if (uiRefs.placeIdInput) {
+      uiRefs.placeIdInput.value = selectedPlace.placeId;
+    }
+
+    finalizePlaceSelection(targetMode);
+  } catch (error) {
+    console.error("장소 선택 반영 오류:", error);
+    alert("선택한 장소를 반영하는 중 오류가 발생했습니다.");
+  }
 }
 
 function syncPlaceUi(mode) {
@@ -2424,16 +2786,30 @@ function renderScheduleDailyLocationList(mode) {
         <div class="daily-location-card">
           <div class="daily-location-card-top">
             <div class="daily-location-date">${formatKoreanDate(item.date)}부터</div>
-            <button
-              type="button"
-              class="delete-btn"
-              data-action="remove-daily-location"
-              data-mode="${mode}"
-              data-index="${index}"
-            >
-              삭제
-            </button>
+
+            <div class="daily-location-actions">
+              <button
+                type="button"
+                class="secondary-btn place-mini-btn"
+                data-action="edit-daily-location"
+                data-mode="${mode}"
+                data-index="${index}"
+              >
+                수정
+              </button>
+
+              <button
+                type="button"
+                class="delete-btn"
+                data-action="remove-daily-location"
+                data-mode="${mode}"
+                data-index="${index}"
+              >
+                삭제
+              </button>
+            </div>
           </div>
+
           <div class="daily-location-name">${escapeHtml(item.label || "")}</div>
           <div class="daily-location-address">${escapeHtml(item.address || "")}</div>
         </div>
@@ -2467,10 +2843,22 @@ function addDailyLocationEntry(mode, place) {
   }
 
   const current = Array.isArray(target.list) ? [...target.list] : [];
+  const normalizedCurrent = normalizeDailyLocationEntries(
+    current,
+    startDate,
+    endDate,
+  );
+
+  const nextBase =
+    activeDailyLocationEditIndex !== null
+      ? normalizedCurrent.filter(
+          (_, index) => index !== activeDailyLocationEditIndex,
+        )
+      : normalizedCurrent.filter((item) => item.date !== selectedDate);
 
   const next = normalizeDailyLocationEntries(
     [
-      ...current.filter((item) => item.date !== selectedDate),
+      ...nextBase.filter((item) => item.date !== selectedDate),
       {
         date: selectedDate,
         label: place.label || "",
@@ -2484,6 +2872,35 @@ function addDailyLocationEntry(mode, place) {
 
   target.set(next);
   renderScheduleDailyLocationList(mode);
+  activeDailyLocationEditIndex = null;
+}
+
+function removeDailyLocation(mode, index) {
+  const target = getScheduleDailyLocationsTarget(mode);
+  const { startDate, endDate } = getScheduleDateRange(mode);
+
+  const current = normalizeDailyLocationEntries(
+    target.list,
+    startDate,
+    endDate,
+  );
+
+  if (!Number.isInteger(index) || index < 0 || index >= current.length) {
+    return;
+  }
+
+  const next = current.filter((_, currentIndex) => currentIndex !== index);
+
+  target.set(next);
+  renderScheduleDailyLocationList(mode);
+
+  if (
+    activePlaceSelectMode === "daily" &&
+    activePlaceTarget === mode &&
+    activeDailyLocationEditIndex === index
+  ) {
+    activeDailyLocationEditIndex = null;
+  }
 }
 
 function getNextAvailableDailyLocationDate(mode, currentList) {
@@ -2520,12 +2937,34 @@ function getRepresentativeLocation(item) {
   return item.location || "";
 }
 
-function removeDailyLocation(mode, index) {
+function startEditDailyLocation(mode, index) {
   const target = getScheduleDailyLocationsTarget(mode);
-  const current = Array.isArray(target.list) ? [...target.list] : [];
-  current.splice(index, 1);
-  target.set(current);
-  renderScheduleDailyLocationList(mode);
+  const { startDate, endDate } = getScheduleDateRange(mode);
+  const current = normalizeDailyLocationEntries(
+    target.list,
+    startDate,
+    endDate,
+  );
+  const editingItem = current[index];
+
+  if (!editingItem) return;
+
+  activePlaceTarget = mode;
+  activePlaceSelectMode = "daily";
+  activeDailyLocationEditIndex = index;
+
+  openPlaceSearchModal(mode);
+
+  requestAnimationFrame(() => {
+    const dateInput = document.getElementById("placeSearchDateInput");
+    if (dateInput) {
+      dateInput.value = editingItem.date || "";
+    }
+
+    if (placeSearchStatusText) {
+      placeSearchStatusText.textContent = `${formatKoreanDate(editingItem.date)}부터 적용될 새 장소를 검색해서 선택하세요.`;
+    }
+  });
 }
 
 async function searchPlaceResults(keyword) {
@@ -3030,16 +3469,26 @@ function syncRepeatUntilToggleState(key) {
   const config = repeatUntilToggleMap[key];
   if (!config) return;
 
-  const repeatValue = config.repeatSelect?.value || "none";
-  const isRepeatEnabled = repeatValue !== "none";
-  const isNoEnd = isRepeatEnabled && !config.input?.value;
+  const isNoneMode = config.input?.classList.contains("hidden");
 
-  config.input?.classList.toggle("hidden", isNoEnd || !isRepeatEnabled);
-  config.valueBtn?.classList.toggle("hidden", !isNoEnd || !isRepeatEnabled);
-  config.toggleBtn?.classList.toggle("hidden", isNoEnd || !isRepeatEnabled);
+  if (isNoneMode) {
+    config.input?.classList.add("hidden");
+    config.valueBtn?.classList.remove("hidden");
+    config.toggleBtn?.classList.remove("hidden");
+
+    if (config.input) {
+      config.input.disabled = true;
+    }
+
+    return;
+  }
+
+  config.input?.classList.remove("hidden");
+  config.valueBtn?.classList.add("hidden");
+  config.toggleBtn?.classList.remove("hidden");
 
   if (config.input) {
-    config.input.disabled = !isRepeatEnabled || isNoEnd;
+    config.input.disabled = false;
   }
 }
 

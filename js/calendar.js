@@ -153,42 +153,30 @@ export function getCalendarItemTime(item) {
     return item.dueTime || "시간없음";
   }
 
-  const rawStartTime = item.startTime || "";
-  const rawEndTime = item.endTime || "";
+  const rawStartTime = String(item.startTime || "").trim();
+  const rawEndTime = String(item.endTime || "").trim();
 
-  const startTime = rawStartTime.trim();
-  const endTime = rawEndTime.trim();
+  const startTime = rawStartTime;
+  const endTime = rawEndTime;
 
-  const isMidnightRange =
-    startTime === "00:00" &&
-    endTime === "00:00" &&
-    item.startDate !== item.endDate;
+  const isAllDayLikeRange =
+    (!startTime && !endTime) ||
+    ((startTime === "00:00" || !startTime) &&
+      (endTime === "00:00" || endTime === "24:00" || !endTime));
 
-  const isAllDayNoTime =
-    !startTime && !endTime;
-
-  if (isAllDayNoTime || isMidnightRange) {
+  if (isAllDayLikeRange) {
     return "";
   }
 
   if (startTime && endTime) {
-    if (startTime === "00:00" && endTime === "00:00") {
-      return "";
-    }
     return `${startTime}~${endTime}`;
   }
 
   if (startTime) {
-    if (startTime === "00:00" && item.startDate !== item.endDate) {
-      return "";
-    }
     return startTime;
   }
 
   if (endTime) {
-    if (endTime === "00:00" && item.startDate !== item.endDate) {
-      return "";
-    }
     return `~${endTime}`;
   }
 
@@ -253,26 +241,45 @@ export function renderSelectedDateAllDay(dateKey, itemsForDate) {
 export function isAllDayTimelineItem(dateKey, item) {
   if (item.type !== "schedule") return false;
 
-  const noStartTime = !item.startTime;
-  const noEndTime = !item.endTime;
+  const startTime = String(item.startTime || "").trim();
+  const endTime = String(item.endTime || "").trim();
 
+  const noStartTime = !startTime;
+  const noEndTime = !endTime;
+
+  const isStartBoundaryAllDay = noStartTime || startTime === "00:00";
+  const isEndBoundaryAllDay =
+    noEndTime || endTime === "00:00" || endTime === "24:00";
+
+  // 여러 날 일정의 가운데 날짜는 항상 종일
   if (item.startDate < dateKey && item.endDate > dateKey) {
     return true;
   }
 
-  if (item.startDate === dateKey && item.endDate > dateKey && noStartTime) {
+  // 첫날: 시작이 자정(또는 시간 없음)이면 종일 일정으로 처리
+  if (
+    item.startDate === dateKey &&
+    item.endDate > dateKey &&
+    isStartBoundaryAllDay
+  ) {
     return true;
   }
 
-  if (item.startDate < dateKey && item.endDate === dateKey && noEndTime) {
+  // 마지막날: 종료가 자정/24:00(또는 시간 없음)이면 종일 일정으로 처리
+  if (
+    item.startDate < dateKey &&
+    item.endDate === dateKey &&
+    isEndBoundaryAllDay
+  ) {
     return true;
   }
 
+  // 하루짜리 일정인데 시작/종료가 모두 종일 경계 시간이면 종일 일정
   if (
     item.startDate === dateKey &&
     item.endDate === dateKey &&
-    noStartTime &&
-    noEndTime
+    isStartBoundaryAllDay &&
+    isEndBoundaryAllDay
   ) {
     return true;
   }

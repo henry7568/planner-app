@@ -101,7 +101,9 @@ export function setupTabs() {
 
   bottomTabButtons?.forEach((button) => {
     button.addEventListener("click", () => {
-      switchTab(button.dataset.tab);
+      const targetTab = button.dataset.tab || "";
+      if (!targetTab) return;
+      switchTab(targetTab);
     });
   });
 }
@@ -110,9 +112,16 @@ export function switchTab(tabName) {
   const { bottomTabButtons, tabSections } = getRefs();
 
   deps.setCurrentTab?.(tabName);
+  deps.resetNestedTabState?.(tabName);
 
   bottomTabButtons?.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tab === tabName);
+    const btnTab = btn.dataset.tab || "";
+    const isActive =
+      btnTab === tabName ||
+      (tabName === "finance" && btnTab === "finance") ||
+      (tabName === "salary" && btnTab === "salary");
+
+    btn.classList.toggle("active", isActive);
   });
 
   tabSections?.forEach((section) => section.classList.add("hidden"));

@@ -36,6 +36,90 @@ function syncFinanceSubCategoryOptions(categoryValue, selectedValue = "") {
   deps.syncFinanceSubCategoryOptions?.(categoryValue, selectedValue);
 }
 
+function addIncomeTransactionsToAssets(parsedTransactions) {
+  if (!Array.isArray(parsedTransactions) || !parsedTransactions.length) {
+    return 0;
+  }
+
+  const current = getFinanceData();
+
+  const nextData = {
+    monthlyBudgets: { ...(current.monthlyBudgets || {}) },
+    expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
+    assets: Array.isArray(current.assets)
+      ? current.assets.map((item) => ({ ...item }))
+      : [],
+  };
+
+  let addedCount = 0;
+
+  parsedTransactions.forEach((item) => {
+    if (!item || item.sign !== "+") {
+      return;
+    }
+
+    if (!item.title || !item.amount) {
+      return;
+    }
+
+    const normalizedTitle = String(item.title || "").trim();
+    if (!normalizedTitle) {
+      return;
+    }
+
+    const assetBaseDate = item.date || new Date().toISOString().slice(0, 10);
+
+    const existingIndex = nextData.assets.findIndex((asset) => {
+      return (
+        String(asset.category || "") === "deposit" &&
+        String(asset.title || "").trim() === normalizedTitle &&
+        String(asset.repeat || "none") === "none"
+      );
+    });
+
+    if (existingIndex >= 0) {
+      const currentAmount = Number(nextData.assets[existingIndex].amount) || 0;
+
+      nextData.assets[existingIndex] = {
+        ...nextData.assets[existingIndex],
+        amount: currentAmount + (Number(item.amount) || 0),
+        baseDate:
+          nextData.assets[existingIndex].baseDate ||
+          nextData.assets[existingIndex].displayDate ||
+          assetBaseDate,
+        repeat: nextData.assets[existingIndex].repeat || "none",
+        repeatUntil: nextData.assets[existingIndex].repeatUntil || "",
+        isRecurring:
+          (nextData.assets[existingIndex].repeat || "none") !== "none",
+        updatedAt: Date.now(),
+      };
+    } else {
+      nextData.assets.push({
+        id: makeId(),
+        category: "deposit",
+        title: normalizedTitle,
+        amount: Number(item.amount) || 0,
+        baseDate: assetBaseDate,
+        repeat: "none",
+        repeatUntil: "",
+        isRecurring: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    addedCount += 1;
+  });
+
+  if (addedCount > 0) {
+    setFinanceData(nextData);
+    saveFinanceLocal(nextData);
+    renderFinance();
+  }
+
+  return addedCount;
+}
+
 export async function analyzeFinanceReceiptImage() {
   const refs = getRefs();
   const file = refs.financeReceiptImageInput?.files?.[0];
@@ -75,6 +159,14 @@ export async function analyzeFinanceReceiptImage() {
     }
 
     const parsedTransactions = parseFinanceTransactionListText(rawText);
+
+    if (!parsedTransactions.length) {
+      alert("거래내역 항목을 찾지 못했습니다.");
+      return;
+    }
+
+    const addedIncomeAssetCount = addIncomeTransactionsToAssets(parsedTransactions);
+
     const reviewTargets = parsedTransactions.filter((item) => {
       return (
         item &&
@@ -86,11 +178,27 @@ export async function analyzeFinanceReceiptImage() {
     });
 
     if (!reviewTargets.length) {
-      alert("검토할 지출(-금액) 항목을 찾지 못했습니다.");
+      if (refs.financeReceiptImageInput) {
+        refs.financeReceiptImageInput.value = "";
+      }
+
+      if (addedIncomeAssetCount > 0) {
+        alert(`입금 ${addedIncomeAssetCount}건을 자산에 자동 반영했습니다.`);
+      } else {
+        alert("검토할 지출(-금액) 항목을 찾지 못했습니다.");
+      }
       return;
     }
 
     startFinanceOcrReview(reviewTargets, rawText);
+
+    if (addedIncomeAssetCount > 0) {
+      setTimeout(() => {
+        alert(
+          `입금 ${addedIncomeAssetCount}건을 자산에 자동 반영했고,\n지출 ${reviewTargets.length}건은 이어서 검토합니다.`,
+        );
+      }, 80);
+    }
   } catch (error) {
     console.error("거래내역 OCR 분석 오류:", error);
     alert("이미지 분석 중 오류가 발생했습니다.");
@@ -491,47 +599,82 @@ export function bulkAddFinanceTransactions(parsedTransactions, rawText = "") {
   const nextData = {
     monthlyBudgets: { ...(current.monthlyBudgets || {}) },
     expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
-    assets: Array.isArray(current.assets) ? [...current.assets] : [],
+    assets: Array.isArray(current.assets)
+      ? current.assets.map((item) => ({ ...item }))
+      : [],
   };
 
   let addedCount = 0;
 
   parsedTransactions.forEach((item) => {
-    if (!item) return;
-
-    if (item.sign !== "-") {
+    if (!item || !item.date || !item.title || !item.amount) {
       return;
     }
 
-    if (!item.date || !item.title || !item.amount) {
+    if (item.sign === "-") {
+      const categoryResult = guessFinanceCategoryFromText(item.title);
+
+      nextData.expenses.push({
+        id: makeId(),
+        date: item.date,
+        time: item.time || "",
+        title: item.title,
+        amount: item.amount,
+        category: categoryResult.category || "기타",
+        subCategory: categoryResult.subCategory || "기타",
+        paymentMethod: item.paymentMethod || "",
+        merchant: item.title,
+        tag: "OCR자동추가",
+        color: "blue",
+        flowType: "expense",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      addedCount += 1;
       return;
     }
 
-    const categoryResult = guessFinanceCategoryFromText(item.title);
+    if (item.sign === "+") {
+      const normalizedTitle = String(item.title || "").trim();
+      if (!normalizedTitle) {
+        return;
+      }
 
-    nextData.expenses.push({
-      id: makeId(),
-      date: item.date,
-      time: item.time || "",
-      title: item.title,
-      amount: item.amount,
-      category: categoryResult.category || "기타",
-      subCategory: categoryResult.subCategory || "기타",
-      paymentMethod: item.paymentMethod || "",
-      merchant: item.title,
-      tag: "OCR자동추가",
-      color: "blue",
-      flowType: "expense",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+      const existingIndex = nextData.assets.findIndex((asset) => {
+        return (
+          String(asset.category || "") === "deposit" &&
+          String(asset.title || "").trim() === normalizedTitle
+        );
+      });
 
-    addedCount++;
+      if (existingIndex >= 0) {
+        const currentAmount = Number(nextData.assets[existingIndex].amount) || 0;
+
+        nextData.assets[existingIndex] = {
+          ...nextData.assets[existingIndex],
+          amount: currentAmount + (Number(item.amount) || 0),
+          updatedAt: Date.now(),
+        };
+      } else {
+        nextData.assets.push({
+          id: makeId(),
+          category: "deposit",
+          title: normalizedTitle,
+          amount: Number(item.amount) || 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+
+      addedCount += 1;
+    }
   });
 
   if (addedCount > 0) {
     setFinanceData(nextData);
     saveFinanceLocal(nextData);
+    renderFinance();
   }
 
   return addedCount;

@@ -812,388 +812,441 @@
         </section>
 
         <section id="tab-finance" class="tab-section hidden">
-          <section id="financeBudgetCard" class="card">
+          <section id="financeDashboardHomeSection">
+            <section class="card">
+              <div class="filter-row">
+                <div>
+                  <h2>자산 대쉬보드</h2>
+                  <p class="small-text">
+                    총 자산 요약과 자산 관리 진입 버튼을 제공합니다.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section id="financeSummaryCard" class="card">
+              <h2>자산 요약</h2>
+
+              <div class="summary">
+                <div class="summary-item">
+                  <span class="summary-label">총 자산</span>
+                  <strong id="financeTotalAssetText">0 원</strong>
+                </div>
+
+                <div class="summary-item">
+                  <span class="summary-label">월 수익</span>
+                  <strong id="financeMonthlyIncomeText">0 원</strong>
+                </div>
+
+                <div class="summary-item">
+                  <span class="summary-label">월 지출</span>
+                  <strong id="financeMonthlySpentText">0 원</strong>
+                </div>
+
+                <div class="summary-item">
+                  <span class="summary-label">월 순변동</span>
+                  <strong id="financeMonthlyNetText">0 원</strong>
+                </div>
+              </div>
+
+              <div class="item-meta" style="margin-top: 14px">
+                <span class="meta-badge">
+                  최다 지출 카테고리:
+                  <strong id="financeSummaryTopCategoryText">-</strong>
+                </span>
+                <span class="meta-badge">
+                  필터 결과:
+                  <strong id="financeSummaryExpenseCountText">0건</strong>
+                </span>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2>자산 관리</h2>
+
+              <div class="home-grid">
+                <button
+                  id="financeOpenAssetManageTabBtn"
+                  class="home-card home-card-btn"
+                  type="button"
+                >
+                  <span class="home-icon">🏦</span>
+                  <h3>총 자산 관리</h3>
+                  <p class="home-number">열기</p>
+                </button>
+              </div>
+            </section>
+          </section>
+
+          <section id="financeAssetManagePageSection" class="hidden">
+            <section class="card">
+              <div class="button-row">
+                <button
+                  id="financeBackToDashboardBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  뒤로가기
+                </button>
+              </div>
+            </section>
+
+            <section id="financeAssetCard" class="card">
+              <div class="filter-row finance-asset-header-row">
+                <div>
+                  <h2>총 자산 관리</h2>
+                  <p class="small-text">
+                    자산 카드와 입출금 전체 내역을 함께 확인합니다.
+                  </p>
+                </div>
+
+                <div class="finance-asset-action-group">
+                  <div class="button-row finance-asset-top-actions">
+                    <button
+                      id="financeOpenExpenseFormBtn"
+                      class="primary-btn"
+                      type="button"
+                    >
+                      입출금 추가
+                    </button>
+
+                    <button
+                      id="financeOpenAssetFormBtn"
+                      class="primary-btn"
+                      type="button"
+                    >
+                      자산 등록
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <section id="financeAssetFormCard" class="card hidden">
+                <h2>자산 추가</h2>
+
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="financeAssetCategory">자산 종류</label>
+                    <select id="financeAssetCategory">
+                      <option value="stock">주식</option>
+                      <option value="savings">적금</option>
+                      <option value="deposit">예금</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="financeAssetTitle">자산명</label>
+                    <input
+                      id="financeAssetTitle"
+                      type="text"
+                      placeholder="예: 삼성전자 / 청년적금 / 파킹통장"
+                    />
+                  </div>
+                </div>
+
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="financeAssetAmount">금액</label>
+                    <input
+                      id="financeAssetAmount"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      placeholder="예: 5000000"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="financeAssetBaseDate">기준 날짜</label>
+                    <input id="financeAssetBaseDate" type="date" />
+                  </div>
+                </div>
+
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="financeAssetRepeat">반복</label>
+                    <select id="financeAssetRepeat">
+                      <option value="none">반복 없음</option>
+                      <option value="monthly">매월반복</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="financeAssetRepeatUntil">반복 종료일</label>
+                    <div class="repeat-until-control">
+                      <input type="date" id="financeAssetRepeatUntil" />
+                      <button
+                        id="financeAssetRepeatUntilNoneBtn"
+                        class="secondary-btn repeat-until-value-btn hidden"
+                        type="button"
+                      >
+                        없음
+                      </button>
+                      <button
+                        id="financeAssetRepeatUntilToggleBtn"
+                        class="secondary-btn repeat-until-toggle-btn"
+                        type="button"
+                      >
+                        없음 사용
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="button-row">
+                  <button
+                    id="financeSaveAssetBtn"
+                    class="primary-btn"
+                    type="button"
+                  >
+                    자산 저장
+                  </button>
+
+                  <button
+                    id="financeCancelAssetEditBtn"
+                    class="secondary-btn"
+                    type="button"
+                  >
+                    닫기
+                  </button>
+
+                  <button
+                    id="financeDeleteAssetBtn"
+                    class="delete-btn hidden"
+                    type="button"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </section>
+
+              <div
+                class="item-meta"
+                style="margin-top: 14px; margin-bottom: 14px"
+              >
+                <span class="meta-badge">
+                  총 자산: <strong id="financeTotalAssetText">0 원</strong>
+                </span>
+              </div>
+
+              <div id="financeAssetList" class="item-list"></div>
+
+              <section class="card" style="margin-top: 16px">
+                <h2>입출금 전체 내역</h2>
+                <div id="financeAssetTransactionList" class="item-list"></div>
+              </section>
+            </section>
+          </section>
+        </section>
+        <section id="tab-salary" class="tab-section hidden">
+          <section id="financeUtilityHomeSection" class="card">
             <div class="filter-row">
               <div>
-                <h2>가계부</h2>
+                <h2>유틸</h2>
                 <p class="small-text">
-                  예산, 수익/지출, 자산을 한 번에 관리합니다.
+                  가계부와 월급 계산기 기능을 제공합니다.
                 </p>
               </div>
+            </div>
 
-              <div class="filter-controls">
-                <div class="filter-box">
-                  <label for="financeMonthKey">기준 월</label>
-                  <input id="financeMonthKey" type="month" />
+            <div class="home-grid">
+              <button
+                id="financeOpenLedgerSectionBtn"
+                class="home-card home-card-btn"
+                type="button"
+              >
+                <span class="home-icon">📒</span>
+                <h3>가계부</h3>
+                <p class="home-number">열기</p>
+              </button>
+
+              <button
+                id="financeOpenSalarySectionBtn"
+                class="home-card home-card-btn"
+                type="button"
+              >
+                <span class="home-icon">🧮</span>
+                <h3>월급 계산기</h3>
+                <p class="home-number">열기</p>
+              </button>
+            </div>
+          </section>
+
+          <section id="financeLedgerSection" class="hidden">
+            <section class="card">
+              <div class="button-row">
+                <button
+                  id="financeBackToUtilityHomeFromLedgerBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  뒤로가기
+                </button>
+              </div>
+            </section>
+
+            <section id="financeBudgetCard" class="card">
+              <div class="filter-row">
+                <div>
+                  <h2>가계부</h2>
+                  <p class="small-text">예산과 지출 내역을 관리합니다.</p>
                 </div>
 
-                <div class="filter-box">
-                  <label for="financePeriodStartDay">시작일</label>
-                  <input
-                    id="financePeriodStartDay"
-                    type="number"
-                    min="1"
-                    max="31"
-                    placeholder="예: 23"
-                  />
+                <div class="filter-controls">
+                  <div class="filter-box">
+                    <label for="financeMonthKey">기준 월</label>
+                    <input id="financeMonthKey" type="month" />
+                  </div>
+
+                  <div class="filter-box">
+                    <label for="financePeriodStartDay">시작일</label>
+                    <input
+                      id="financePeriodStartDay"
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="예: 23"
+                    />
+                  </div>
+
+                  <div class="filter-box">
+                    <label for="financeBudgetAmount">월 예산</label>
+                    <input
+                      id="financeBudgetAmount"
+                      type="number"
+                      min="0"
+                      step="1000"
+                      placeholder="예: 1250000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="button-row">
+                <button
+                  id="financeSaveBudgetBtn"
+                  class="primary-btn"
+                  type="button"
+                >
+                  예산 저장
+                </button>
+              </div>
+
+              <div class="item-meta" style="margin-top: 14px">
+                <span class="meta-badge">
+                  기간: <strong id="financeCurrentPeriodLabel">-</strong>
+                </span>
+                <span class="meta-badge">
+                  설정 예산: <strong id="financeMonthlyBudgetText">0 원</strong>
+                </span>
+                <span class="meta-badge">
+                  남은 금액:
+                  <strong id="financeRemainingBudgetText">0 원</strong>
+                </span>
+                <span class="meta-badge">
+                  금일 지출액: <strong id="financeTodaySpentText">0 원</strong>
+                </span>
+              </div>
+
+              <div class="achievement-card">
+                <div class="achievement-header">
+                  <h3>예산 사용률</h3>
+                  <strong id="financeBudgetProgressText">0%</strong>
+                </div>
+                <div class="achievement-bar">
+                  <div
+                    id="financeBudgetProgressBar"
+                    class="achievement-bar-fill"
+                  ></div>
+                </div>
+                <p class="small-text">월 지출 / 총 생활비 기준</p>
+              </div>
+            </section>
+
+            <section id="financeExpenseFormCard" class="card hidden">
+              <h2>입출금 추가</h2>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="financeTransactionType">유형</label>
+                  <select id="financeTransactionType">
+                    <option value="expense">지출</option>
+                    <option value="income">입금</option>
+                  </select>
                 </div>
 
-                <div class="filter-box">
-                  <label for="financeBudgetAmount">월 예산</label>
+                <div class="form-group">
+                  <label for="financeExpenseDate">날짜</label>
+                  <input id="financeExpenseDate" type="date" />
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="financeExpenseTime">시간</label>
+                  <input id="financeExpenseTime" type="time" />
+                </div>
+
+                <div class="form-group">
+                  <label for="financeExpenseAmount">금액</label>
                   <input
-                    id="financeBudgetAmount"
+                    id="financeExpenseAmount"
                     type="number"
                     min="0"
-                    step="1000"
-                    placeholder="예: 1250000"
+                    step="100"
+                    placeholder="예: 12000"
                   />
                 </div>
               </div>
-            </div>
 
-            <div class="button-row">
-              <button
-                id="financeSaveBudgetBtn"
-                class="primary-btn"
-                type="button"
-              >
-                예산 저장
-              </button>
-            </div>
-
-            <div class="item-meta" style="margin-top: 14px">
-              <span class="meta-badge">
-                기간: <strong id="financeCurrentPeriodLabel">-</strong>
-              </span>
-              <span class="meta-badge">
-                설정 예산: <strong id="financeMonthlyBudgetText">0 원</strong>
-              </span>
-            </div>
-          </section>
-
-          <section id="financeSummaryCard" class="card">
-            <h2>요약</h2>
-
-            <div class="summary">
-              <div class="summary-item">
-                <span class="summary-label">총 생활비</span>
-                <strong id="financeTotalBudgetText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">남은 금액</span>
-                <strong id="financeRemainingBudgetText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">금일 지출액</span>
-                <strong id="financeTodaySpentText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">월 지출</span>
-                <strong id="financeMonthlySpentText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">월 수익</span>
-                <strong id="financeMonthlyIncomeText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">월 순수익</span>
-                <strong id="financeMonthlyNetText">0 원</strong>
-              </div>
-
-              <div class="summary-item">
-                <span class="summary-label">총 자산</span>
-                <strong id="financeTotalAssetText">0 원</strong>
-              </div>
-            </div>
-
-            <div class="achievement-card">
-              <div class="achievement-header">
-                <h3>예산 사용률</h3>
-                <strong id="financeBudgetProgressText">0%</strong>
-              </div>
-              <div class="achievement-bar">
-                <div
-                  id="financeBudgetProgressBar"
-                  class="achievement-bar-fill"
-                ></div>
-              </div>
-              <p class="small-text">월 지출 / 총 생활비 기준</p>
-            </div>
-
-            <div class="item-meta" style="margin-top: 14px">
-              <span class="meta-badge">
-                최다 지출 카테고리:
-                <strong id="financeSummaryTopCategoryText">-</strong>
-              </span>
-              <span class="meta-badge">
-                필터 결과:
-                <strong id="financeSummaryExpenseCountText">0건</strong>
-              </span>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="button-row">
-              <button
-                id="financeOpenExpenseFormBtn"
-                class="primary-btn"
-                type="button"
-              >
-                내역 추가
-              </button>
-            </div>
-          </section>
-
-          <section id="financeExpenseFormCard" class="card hidden">
-            <h2>지출 추가</h2>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeTransactionType">유형</label>
-                <select id="financeTransactionType">
-                  <option value="expense">지출</option>
-                  <option value="income">수익</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="financeExpenseDate">날짜</label>
-                <input id="financeExpenseDate" type="date" />
-              </div>
-            </div>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeExpenseTime">시간</label>
-                <input id="financeExpenseTime" type="time" />
-              </div>
-
-              <div class="form-group">
-                <label for="financeExpenseRepeat">반복</label>
-                <select id="financeExpenseRepeat">
-                  <option value="none">반복 없음</option>
-                  <option value="monthly">매월 반복</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="financeExpenseRepeatUntil">반복 종료일</label>
-              <div class="repeat-until-control">
-                <input type="date" id="financeExpenseRepeatUntil" />
-                <button
-                  id="financeExpenseRepeatUntilNoneBtn"
-                  class="secondary-btn repeat-until-value-btn hidden"
-                  type="button"
-                >
-                  없음
-                </button>
-                <button
-                  id="financeExpenseRepeatUntilToggleBtn"
-                  class="secondary-btn repeat-until-toggle-btn"
-                  type="button"
-                >
-                  없음 사용
-                </button>
-              </div>
-            </div>
-
-            <div class="form-grid-2">
               <div class="form-group">
                 <label for="financeExpenseTitle">항목명</label>
                 <input
                   id="financeExpenseTitle"
                   type="text"
-                  placeholder="예: 스타벅스 / 월급 / 환급금"
+                  placeholder="예: 점심 / 월급 / 송금 / 통신비"
                 />
               </div>
 
-              <div class="form-group">
-                <label for="financeExpenseAmount">금액</label>
-                <input
-                  id="financeExpenseAmount"
-                  type="number"
-                  min="0"
-                  step="100"
-                  placeholder="예: 12000"
-                />
-              </div>
-            </div>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeExpenseCategory">카테고리</label>
-                <select id="financeExpenseCategory">
-                  <option value="">선택</option>
-
-                  <option value="식사">식사</option>
-                  <option value="카페">카페</option>
-                  <option value="생활용품">생활용품</option>
-                  <option value="쇼핑">쇼핑</option>
-                  <option value="교통">교통</option>
-                  <option value="의료">의료</option>
-                  <option value="여가생활">여가생활</option>
-                  <option value="취미">취미</option>
-                  <option value="주거/통신">주거/통신</option>
-                  <option value="교육">교육</option>
-                  <option value="저축">저축</option>
-
-                  <option value="급여">급여</option>
-                  <option value="용돈">용돈</option>
-                  <option value="환급">환급</option>
-                  <option value="이자">이자</option>
-                  <option value="투자수익">투자수익</option>
-                  <option value="기타수익">기타수익</option>
-
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="financeExpenseSubCategory">세부 분류</label>
-                <select id="financeExpenseSubCategory">
-                  <option value="">선택</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeExpenseTag">태그</label>
-                <input
-                  id="financeExpenseTag"
-                  type="text"
-                  placeholder="예: 배달 / 월급 / 배당"
-                />
-              </div>
-
-              <div class="form-group">
-                <label for="financeExpenseColor">색상</label>
-                <select id="financeExpenseColor">
-                  <option value="blue">파랑</option>
-                  <option value="purple">보라</option>
-                  <option value="green">초록</option>
-                  <option value="orange">주황</option>
-                  <option value="red">빨강</option>
-                  <option value="gray">회색</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeExpensePaymentMethod">결제수단</label>
-                <select id="financeExpensePaymentMethod">
-                  <option value="">선택</option>
-                  <option value="card">카드</option>
-                  <option value="cash">현금</option>
-                  <option value="transfer">계좌이체</option>
-                  <option value="simple_pay">간편결제</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="financeExpenseMerchant">사용처 / 출처</label>
-                <input
-                  id="financeExpenseMerchant"
-                  type="text"
-                  placeholder="예: 쿠팡 / 회사 / 은행"
-                />
-              </div>
-            </div>
-
-            <div class="card" style="padding: 16px; margin-top: 16px">
-              <h3 style="margin-top: 0; margin-bottom: 12px">캡처 분석</h3>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label for="financeReceiptImageInput">결제내역 이미지</label>
-                  <input
-                    id="financeReceiptImageInput"
-                    type="file"
-                    accept="image/*"
-                  />
+                  <label for="financeExpenseCategory">카테고리</label>
+                  <select id="financeExpenseCategory">
+                    <option value="">선택</option>
+                    <option value="식사">식사</option>
+                    <option value="카페">카페</option>
+                    <option value="생활용품">생활용품</option>
+                    <option value="쇼핑">쇼핑</option>
+                    <option value="교통">교통</option>
+                    <option value="의료">의료</option>
+                    <option value="여가생활">여가생활</option>
+                    <option value="취미">취미</option>
+                    <option value="주거/통신">주거/통신</option>
+                    <option value="교육">교육</option>
+                    <option value="저축">저축</option>
+                    <option value="급여">급여</option>
+                    <option value="용돈">용돈</option>
+                    <option value="환급">환급</option>
+                    <option value="이자">이자</option>
+                    <option value="투자수익">투자수익</option>
+                    <option value="기타수익">기타수익</option>
+                    <option value="기타">기타</option>
+                  </select>
                 </div>
 
-                <div class="form-group" style="justify-content: flex-end">
-                  <label style="visibility: hidden">분석</label>
-                  <button
-                    id="financeAnalyzeReceiptBtn"
-                    class="secondary-btn"
-                    type="button"
-                  >
-                    캡처 분석
-                  </button>
+                <div class="form-group">
+                  <label for="financeExpenseSubCategory">서브카테고리</label>
+                  <select id="financeExpenseSubCategory">
+                    <option value="">선택</option>
+                  </select>
                 </div>
               </div>
-            </div>
 
-            <div class="button-row">
-              <button
-                id="financeSaveExpenseBtn"
-                class="primary-btn"
-                type="button"
-              >
-                지출 저장
-              </button>
-              <button
-                id="financeCancelExpenseEditBtn"
-                class="secondary-btn hidden"
-                type="button"
-              >
-                수정 취소
-              </button>
-              <button
-                id="financeDeleteExpenseBtn"
-                class="delete-btn hidden"
-                type="button"
-              >
-                삭제
-              </button>
-            </div>
-          </section>
-
-          <section id="financeExpenseListCard" class="card">
-            <div class="filter-row">
-              <div>
-                <h2>수익 / 지출 목록</h2>
-                <p class="small-text">
-                  월, 유형, 카테고리, 결제수단, 검색어로 필터링할 수 있습니다.
-                </p>
-              </div>
-
-              <div class="filter-controls">
-                <div class="filter-box">
-                  <label for="financeListMonthFilter">월</label>
-                  <select id="financeListMonthFilter">
-                    <option value="">전체</option>
-                  </select>
-                </div>
-
-                <div class="filter-box">
-                  <label for="financeListFlowFilter">유형</label>
-                  <select id="financeListFlowFilter">
-                    <option value="">전체</option>
-                    <option value="expense">지출</option>
-                    <option value="income">수익</option>
-                  </select>
-                </div>
-
-                <div class="filter-box">
-                  <label for="financeListCategoryFilter">카테고리</label>
-                  <select id="financeListCategoryFilter">
-                    <option value="">전체</option>
-                  </select>
-                </div>
-
-                <div class="filter-box">
-                  <label for="financeListPaymentFilter">결제수단</label>
-                  <select id="financeListPaymentFilter">
-                    <option value="">전체</option>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="financeExpensePaymentMethod">결제수단</label>
+                  <select id="financeExpensePaymentMethod">
+                    <option value="">선택</option>
                     <option value="card">카드</option>
                     <option value="cash">현금</option>
                     <option value="transfer">계좌이체</option>
@@ -1201,194 +1254,302 @@
                   </select>
                 </div>
 
-                <div class="filter-box">
-                  <label for="financeListSortFilter">정렬</label>
-                  <select id="financeListSortFilter">
-                    <option value="latest">최신순</option>
-                  </select>
-                </div>
-
-                <div class="filter-box">
-                  <label for="financeListSearchInput">검색</label>
+                <div class="form-group">
+                  <label for="financeExpenseMerchant">가맹점 / 상대</label>
                   <input
-                    id="financeListSearchInput"
+                    id="financeExpenseMerchant"
                     type="text"
-                    placeholder="항목명 / 사용처 / 태그"
+                    placeholder="예: 스타벅스 / 회사 / 김철수"
                   />
                 </div>
               </div>
-            </div>
 
-            <div id="financeExpenseList" class="item-list"></div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="financeExpenseTag">태그</label>
+                  <input
+                    id="financeExpenseTag"
+                    type="text"
+                    placeholder="예: 고정비 / 여행 / 생활비"
+                  />
+                </div>
 
-            <div class="pagination-wrap">
-              <button
-                id="financePrevPageBtn"
-                class="secondary-btn"
-                type="button"
-              >
-                이전
-              </button>
-              <span id="financePageText" class="pagination-text">1 / 1</span>
-              <button
-                id="financeNextPageBtn"
-                class="secondary-btn"
-                type="button"
-              >
-                다음
-              </button>
-            </div>
-          </section>
-
-          <section id="financeCategoryCard" class="card">
-            <h2>카테고리별 합계</h2>
-            <div id="financeCategorySummaryList" class="item-list"></div>
-          </section>
-
-          <section id="financeAssetCard" class="card">
-            <h2>총 자산 관리</h2>
-            <p class="small-text">
-              기본 자산만 간단히 관리합니다. 주식, 적금, 예금만 등록합니다.
-            </p>
-
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeAssetCategory">자산 종류</label>
-                <select id="financeAssetCategory">
-                  <option value="stock">주식</option>
-                  <option value="savings">적금</option>
-                  <option value="deposit">예금</option>
-                </select>
+                <div class="form-group">
+                  <label for="financeExpenseColor">색상</label>
+                  <select id="financeExpenseColor">
+                    <option value="blue">파랑</option>
+                    <option value="purple">보라</option>
+                    <option value="green">초록</option>
+                    <option value="orange">주황</option>
+                    <option value="red">빨강</option>
+                    <option value="gray">회색</option>
+                  </select>
+                </div>
               </div>
 
-              <div class="form-group">
-                <label for="financeAssetTitle">자산명</label>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="financeExpenseRepeat">반복</label>
+                  <select id="financeExpenseRepeat">
+                    <option value="none">반복 없음</option>
+                    <option value="monthly">매월반복</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="financeExpenseRepeatUntil">반복 종료일</label>
+                  <div class="repeat-until-control">
+                    <input type="date" id="financeExpenseRepeatUntil" />
+                    <button
+                      id="financeExpenseRepeatUntilNoneBtn"
+                      class="secondary-btn repeat-until-value-btn hidden"
+                      type="button"
+                    >
+                      없음
+                    </button>
+                    <button
+                      id="financeExpenseRepeatUntilToggleBtn"
+                      class="secondary-btn repeat-until-toggle-btn"
+                      type="button"
+                    >
+                      없음 사용
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="button-row finance-expense-ocr-row">
+                <label
+                  for="financeReceiptImageInput"
+                  class="secondary-btn finance-file-label-btn"
+                >
+                  캡쳐 선택
+                </label>
+
                 <input
-                  id="financeAssetTitle"
-                  type="text"
-                  placeholder="예: 삼성전자 / 청년적금 / 파킹통장"
+                  id="financeReceiptImageInput"
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
                 />
-              </div>
-            </div>
 
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="financeAssetAmount">금액</label>
-                <input
-                  id="financeAssetAmount"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  placeholder="예: 5000000"
-                />
-              </div>
-
-              <div class="form-group" style="justify-content: flex-end">
-                <label style="visibility: hidden">저장</label>
                 <button
-                  id="financeSaveAssetBtn"
+                  id="financeAnalyzeReceiptBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  캡쳐추가
+                </button>
+              </div>
+
+              <div class="button-row">
+                <button
+                  id="financeSaveExpenseBtn"
                   class="primary-btn"
                   type="button"
                 >
-                  자산 저장
+                  저장
+                </button>
+
+                <button
+                  id="financeCancelExpenseEditBtn"
+                  class="secondary-btn hidden"
+                  type="button"
+                >
+                  수정 취소
+                </button>
+
+                <button
+                  id="financeDeleteExpenseBtn"
+                  class="delete-btn hidden"
+                  type="button"
+                >
+                  삭제
                 </button>
               </div>
-            </div>
+            </section>
+            <section id="financeExpenseListCard" class="card">
+              <div class="filter-row">
+                <div>
+                  <h2>지출 내역 목록</h2>
+                  <p class="small-text">
+                    기존 가계부 탭 역할은 지출 내역 전용 목록으로 유지합니다.
+                  </p>
+                </div>
 
-            <div
-              class="item-meta"
-              style="margin-top: 14px; margin-bottom: 14px"
-            >
-              <span class="meta-badge">
-                총 자산: <strong id="financeTotalAssetText">0 원</strong>
-              </span>
-            </div>
+                <div class="filter-controls">
+                  <div class="filter-box">
+                    <label for="financeListMonthFilter">월</label>
+                    <select id="financeListMonthFilter">
+                      <option value="">전체</option>
+                    </select>
+                  </div>
 
-            <div id="financeAssetList" class="item-list"></div>
+                  <div class="filter-box">
+                    <label for="financeListFlowFilter">유형</label>
+                    <select id="financeListFlowFilter">
+                      <option value="">전체</option>
+                      <option value="expense">지출</option>
+                      <option value="income">입금</option>
+                    </select>
+                  </div>
+
+                  <div class="filter-box">
+                    <label for="financeListCategoryFilter">카테고리</label>
+                    <select id="financeListCategoryFilter">
+                      <option value="">전체</option>
+                    </select>
+                  </div>
+
+                  <div class="filter-box">
+                    <label for="financeListPaymentFilter">결제수단</label>
+                    <select id="financeListPaymentFilter">
+                      <option value="">전체</option>
+                    </select>
+                  </div>
+
+                  <div class="filter-box">
+                    <label for="financeListSortFilter">정렬</label>
+                    <select id="financeListSortFilter">
+                      <option value="latest">최신순</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="financeListSearchInput">검색</label>
+                <input
+                  id="financeListSearchInput"
+                  type="text"
+                  placeholder="제목 / 가맹점 / 태그 검색"
+                />
+              </div>
+
+              <div id="financeExpenseList" class="item-list"></div>
+
+              <div class="pagination-wrap">
+                <button
+                  id="financePrevPageBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  이전
+                </button>
+                <span id="financePageText" class="pagination-text">1 / 1</span>
+                <button
+                  id="financeNextPageBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  다음
+                </button>
+              </div>
+            </section>
+
+            <section id="financeCategoryCard" class="card">
+              <h2>지출 카테고리별 합계</h2>
+              <div id="financeCategorySummaryList" class="item-list"></div>
+            </section>
           </section>
-        </section>
-        <section id="tab-salary" class="tab-section hidden">
-          <section class="card">
-            <h2>월급 계산기</h2>
-            <p class="small-text">
-              간단한 공제율 기준으로 세전 월급과 예상 실수령액을 계산합니다.
-            </p>
 
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="salaryGrossInput">세전 월급</label>
-                <input
-                  id="salaryGrossInput"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  placeholder="예: 3000000"
-                />
+          <section id="financeSalarySection" class="hidden">
+            <section class="card">
+              <div class="button-row">
+                <button
+                  id="financeBackToUtilityHomeFromSalaryBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  뒤로가기
+                </button>
+              </div>
+            </section>
+
+            <section class="card">
+              <h2>월급 계산기</h2>
+              <p class="small-text">
+                간단한 공제율 기준으로 세전 월급과 예상 실수령액을 계산합니다.
+              </p>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="salaryGrossInput">세전 월급</label>
+                  <input
+                    id="salaryGrossInput"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    placeholder="예: 3000000"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="salaryBonusInput">추가 수당 / 상여</label>
+                  <input
+                    id="salaryBonusInput"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    placeholder="예: 200000"
+                  />
+                </div>
               </div>
 
-              <div class="form-group">
-                <label for="salaryDeductionRateInput">공제율(%)</label>
-                <input
-                  id="salaryDeductionRateInput"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value="9.4"
-                  placeholder="예: 9.4"
-                />
-              </div>
-            </div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="salaryNonTaxableInput">비과세 금액</label>
+                  <input
+                    id="salaryNonTaxableInput"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    placeholder="예: 200000"
+                  />
+                </div>
 
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="salaryBonusInput">월 추가 수당/보너스</label>
-                <input
-                  id="salaryBonusInput"
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value="0"
-                  placeholder="예: 150000"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section class="card">
-            <h2>계산 결과</h2>
-
-            <div class="summary">
-              <div class="summary-item">
-                <span class="summary-label">월 총지급</span>
-                <strong id="salaryTotalPayText">0 원</strong>
+                <div class="form-group">
+                  <label for="salaryDeductionRateInput">공제율(%)</label>
+                  <input
+                    id="salaryDeductionRateInput"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="예: 9.4"
+                  />
+                </div>
               </div>
 
-              <div class="summary-item">
-                <span class="summary-label">과세 대상</span>
-                <strong id="salaryTaxablePayText">0 원</strong>
-              </div>
+              <div class="summary">
+                <div class="summary-item">
+                  <span class="summary-label">총 지급액</span>
+                  <strong id="salaryTotalPayText">0 원</strong>
+                </div>
 
-              <div class="summary-item">
-                <span class="summary-label">예상 공제액</span>
-                <strong id="salaryDeductionText">0 원</strong>
-              </div>
+                <div class="summary-item">
+                  <span class="summary-label">과세 대상</span>
+                  <strong id="salaryTaxablePayText">0 원</strong>
+                </div>
 
-              <div class="summary-item">
-                <span class="summary-label">예상 실수령액</span>
-                <strong id="salaryNetPayText">0 원</strong>
+                <div class="summary-item">
+                  <span class="summary-label">예상 공제액</span>
+                  <strong id="salaryDeductionText">0 원</strong>
+                </div>
+
+                <div class="summary-item">
+                  <span class="summary-label">예상 실수령액</span>
+                  <strong id="salaryNetPayText">0 원</strong>
+                </div>
               </div>
-            </div>
+            </section>
           </section>
         </section>
         <div id="financeEditPopupOverlay" class="popup-overlay hidden">
           <div class="popup-panel finance-edit-popup-panel">
             <div class="popup-header">
               <div>
-                <h2 class="popup-title">수익 / 지출 수정</h2>
-                <p class="popup-subtext">
-                  내역을 수정하거나 삭제할 수 있습니다.
-                </p>
+                <h2 class="popup-title">수익 / 지출 추가</h2>
               </div>
 
               <button

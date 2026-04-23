@@ -1891,6 +1891,12 @@ body.modal-open {
   line-height: 1.5;
 }
 
+.daily-location-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .place-search-modal-body {
   display: flex;
   flex-direction: column;
@@ -2281,4 +2287,43 @@ body.modal-open {
 .repeat-until-value-btn {
   flex: 1;
   justify-content: center;
+}
+
+.finance-asset-header-row {
+  align-items: flex-start;
+}
+
+.finance-asset-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.finance-asset-top-actions {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.finance-ocr-actions {
+  margin-top: 0;
+}
+
+.finance-file-label-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.finance-expense-ocr-row {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.finance-file-label-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
 }

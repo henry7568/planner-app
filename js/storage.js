@@ -2,6 +2,7 @@
 
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
+let financeSaveTimer = null;
 function getState() {
   return window.AppState;
 }
@@ -38,6 +39,91 @@ export async function loadRemotePlannerData(uid) {
   } finally {
     state.isRemoteLoading = false;
     saveLocalBackup();
+  }
+}
+
+export async function loadRemoteFinanceData(uid) {
+  const state = getState();
+  const { db } = getRefs();
+
+  state.isRemoteLoading = true;
+
+  try {
+    const snapshot = await getDoc(
+      doc(db, "users", uid, "financeData", "default"),
+    );
+
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+
+      state.financeData = {
+        monthlyBudgets:
+          data && typeof data.monthlyBudgets === "object"
+            ? data.monthlyBudgets
+            : {},
+        expenses: Array.isArray(data?.expenses) ? data.expenses : [],
+        assets: Array.isArray(data?.assets) ? data.assets : [],
+      };
+    } else {
+      state.financeData = loadFinanceLocal();
+      await saveFinanceDataToCloud();
+    }
+  } catch (error) {
+    console.error("원격 가계부 데이터 불러오기 오류:", error);
+    state.financeData = loadFinanceLocal();
+  } finally {
+    state.isRemoteLoading = false;
+    saveFinanceLocal(state.financeData || {
+      monthlyBudgets: {},
+      expenses: [],
+      assets: [],
+    });
+  }
+}
+
+export function queueSaveFinanceData() {
+  const state = getState();
+
+  if (!state.currentUser || state.isRemoteLoading) return;
+
+  clearTimeout(financeSaveTimer);
+  financeSaveTimer = setTimeout(() => {
+    saveFinanceDataToCloud();
+  }, 350);
+}
+
+export async function saveFinanceDataToCloud() {
+  const state = getState();
+  const { db } = getRefs();
+
+  if (!state.currentUser || state.isRemoteLoading) return;
+
+  const financeData = state.financeData || {
+    monthlyBudgets: {},
+    expenses: [],
+    assets: [],
+  };
+
+  try {
+    await setDoc(
+      doc(db, "users", state.currentUser.uid, "financeData", "default"),
+      {
+        monthlyBudgets:
+          financeData && typeof financeData.monthlyBudgets === "object"
+            ? financeData.monthlyBudgets
+            : {},
+        expenses: Array.isArray(financeData?.expenses)
+          ? financeData.expenses
+          : [],
+        assets: Array.isArray(financeData?.assets)
+          ? financeData.assets
+          : [],
+        updatedAt: Date.now(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    console.error("원격 가계부 데이터 저장 오류:", error);
   }
 }
 
@@ -141,4 +227,26 @@ export function saveFinanceLocal(financeData) {
   } catch (error) {
     console.error("가계부 로컬 데이터 저장 오류:", error);
   }
+
+  try {
+    const state = getState();
+    if (state) {
+      state.financeData = {
+        monthlyBudgets:
+          financeData && typeof financeData.monthlyBudgets === "object"
+            ? financeData.monthlyBudgets
+            : {},
+        expenses: Array.isArray(financeData?.expenses)
+          ? financeData.expenses
+          : [],
+        assets: Array.isArray(financeData?.assets)
+          ? financeData.assets
+          : [],
+      };
+    }
+  } catch (error) {
+    console.error("가계부 상태 동기화 오류:", error);
+  }
+
+  queueSaveFinanceData();
 }
