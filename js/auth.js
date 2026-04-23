@@ -48,7 +48,10 @@ export function initAuth({ renderAll }) {
       renderAll();
     } else {
       showAuthUI();
-      state.items = loadLocalBackup();
+      const localPlannerData = loadLocalBackup();
+      state.items = localPlannerData.items;
+      state.projects = localPlannerData.projects;
+      state.inboxItems = localPlannerData.inboxItems;
       state.financeData = loadFinanceLocal();
       renderAll();
     }

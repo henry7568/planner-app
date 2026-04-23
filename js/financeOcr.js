@@ -1,6 +1,6 @@
 // financeOcr.js
 import { makeId } from "./utils.js";
-import { saveFinanceLocal } from "./storage.js";
+import { normalizeFinanceData, saveFinanceLocal } from "./storage.js";
 
 let deps = {};
 let financeOcrReviewQueue = [];
@@ -15,13 +15,7 @@ function getRefs() {
 }
 
 function getFinanceData() {
-  return (
-    deps.getFinanceData?.() || {
-      monthlyBudgets: {},
-      expenses: [],
-      assets: [],
-    }
-  );
+  return normalizeFinanceData(deps.getFinanceData?.());
 }
 
 function setFinanceData(value) {
@@ -36,20 +30,37 @@ function syncFinanceSubCategoryOptions(categoryValue, selectedValue = "") {
   deps.syncFinanceSubCategoryOptions?.(categoryValue, selectedValue);
 }
 
+function syncFinanceExpenseFormButtons() {
+  deps.syncFinanceExpenseFormButtons?.();
+}
+
 function addIncomeTransactionsToAssets(parsedTransactions) {
   if (!Array.isArray(parsedTransactions) || !parsedTransactions.length) {
     return 0;
   }
 
   const current = getFinanceData();
-
-  const nextData = {
-    monthlyBudgets: { ...(current.monthlyBudgets || {}) },
+  const nextData = normalizeFinanceData({
+    ...current,
+    budgetSettings: { ...(current.budgetSettings || {}) },
+    budgetEntries: Object.entries(current.budgetEntries || {}).reduce(
+      (acc, [monthKey, entry]) => {
+        acc[monthKey] = {
+          ...entry,
+          categoryBudgets:
+            entry?.categoryBudgets && typeof entry.categoryBudgets === "object"
+              ? { ...entry.categoryBudgets }
+              : {},
+        };
+        return acc;
+      },
+      {},
+    ),
     expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
     assets: Array.isArray(current.assets)
       ? current.assets.map((item) => ({ ...item }))
       : [],
-  };
+  });
 
   let addedCount = 0;
 
@@ -165,12 +176,10 @@ export async function analyzeFinanceReceiptImage() {
       return;
     }
 
-    const addedIncomeAssetCount = addIncomeTransactionsToAssets(parsedTransactions);
-
     const reviewTargets = parsedTransactions.filter((item) => {
       return (
         item &&
-        item.sign === "-" &&
+        (item.sign === "-" || item.sign === "+") &&
         item.date &&
         item.title &&
         item.amount
@@ -182,23 +191,11 @@ export async function analyzeFinanceReceiptImage() {
         refs.financeReceiptImageInput.value = "";
       }
 
-      if (addedIncomeAssetCount > 0) {
-        alert(`입금 ${addedIncomeAssetCount}건을 자산에 자동 반영했습니다.`);
-      } else {
-        alert("검토할 지출(-금액) 항목을 찾지 못했습니다.");
-      }
+      alert("검토할 거래 항목을 찾지 못했습니다.");
       return;
     }
 
     startFinanceOcrReview(reviewTargets, rawText);
-
-    if (addedIncomeAssetCount > 0) {
-      setTimeout(() => {
-        alert(
-          `입금 ${addedIncomeAssetCount}건을 자산에 자동 반영했고,\n지출 ${reviewTargets.length}건은 이어서 검토합니다.`,
-        );
-      }, 80);
-    }
   } catch (error) {
     console.error("거래내역 OCR 분석 오류:", error);
     alert("이미지 분석 중 오류가 발생했습니다.");
@@ -595,14 +592,27 @@ export function bulkAddFinanceTransactions(parsedTransactions, rawText = "") {
   }
 
   const current = getFinanceData();
-
-  const nextData = {
-    monthlyBudgets: { ...(current.monthlyBudgets || {}) },
+  const nextData = normalizeFinanceData({
+    ...current,
+    budgetSettings: { ...(current.budgetSettings || {}) },
+    budgetEntries: Object.entries(current.budgetEntries || {}).reduce(
+      (acc, [monthKey, entry]) => {
+        acc[monthKey] = {
+          ...entry,
+          categoryBudgets:
+            entry?.categoryBudgets && typeof entry.categoryBudgets === "object"
+              ? { ...entry.categoryBudgets }
+              : {},
+        };
+        return acc;
+      },
+      {},
+    ),
     expenses: Array.isArray(current.expenses) ? [...current.expenses] : [],
     assets: Array.isArray(current.assets)
       ? current.assets.map((item) => ({ ...item }))
       : [],
-  };
+  });
 
   let addedCount = 0;
 
@@ -794,10 +804,19 @@ function applyFinanceTransactionToForm(item, index, total) {
   if (!item) return;
 
   const transactionTypeEl = document.getElementById("financeTransactionType");
-  const formCardEl = document.getElementById("financeExpenseFormCard");
+  const formCardEl = refs.financeExpenseFormCard;
+  const isIncome = item.sign === "+";
 
   if (transactionTypeEl) {
-    transactionTypeEl.value = "expense";
+    transactionTypeEl.value = isIncome ? "income" : "expense";
+  }
+
+  if (formCardEl) {
+    if (isIncome) {
+      formCardEl.dataset.ocrIncomeAssetMode = "true";
+    } else {
+      delete formCardEl.dataset.ocrIncomeAssetMode;
+    }
   }
 
   formCardEl?.classList.remove("hidden");
@@ -818,7 +837,9 @@ function applyFinanceTransactionToForm(item, index, total) {
     refs.financeExpenseAmount.value = String(item.amount || "");
   }
 
-  const categoryResult = guessFinanceCategoryFromText(item.title || "");
+  const categoryResult = isIncome
+    ? { category: "기타수익", subCategory: "" }
+    : guessFinanceCategoryFromText(item.title || "");
 
   if (refs.financeExpenseCategory) {
     refs.financeExpenseCategory.value = categoryResult.category || "기타";
@@ -840,6 +861,24 @@ function applyFinanceTransactionToForm(item, index, total) {
     refs.financeExpenseMerchant.value = item.title || "";
   }
 
+  if (refs.financeExpenseTag) {
+    refs.financeExpenseTag.value = isIncome ? "OCR자산반영" : "OCR자동추가";
+  }
+
+  if (refs.financeIncomeAssetTargetSelect) {
+    const matchedAsset = (Array.isArray(getFinanceData().assets)
+      ? getFinanceData().assets
+      : []
+    ).find(
+      (asset) =>
+        String(asset.title || "").trim() === String(item.title || "").trim(),
+    );
+
+    refs.financeIncomeAssetTargetSelect.value = matchedAsset?.id || "";
+  }
+
+  syncFinanceExpenseFormButtons();
+
   if (refs.financeExpenseMemo) {
     refs.financeExpenseMemo.value = financeOcrReviewRawText || "";
   }
@@ -849,7 +888,9 @@ function applyFinanceTransactionToForm(item, index, total) {
   }, 120);
 
   alert(
-    `OCR 검토 ${index + 1}/${total}\n내용을 확인하거나 수정한 뒤 저장하세요.`,
+    isIncome
+      ? `OCR 검토 ${index + 1}/${total}\n입금 금액을 확인하고 반영할 자산을 선택하세요.`
+      : `OCR 검토 ${index + 1}/${total}\n내용을 확인하거나 수정한 뒤 저장하세요.`,
   );
 }
 

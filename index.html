@@ -294,15 +294,189 @@
         </section>
 
         <section id="tab-planner" class="tab-section hidden">
-          <section id="plannerFormLauncher" class="card">
-            <div class="button-row">
-              <button id="openPlannerFormBtn" class="primary-btn" type="button">
-                추가
+          <div class="planner-overview-grid">
+            <section id="plannerFormLauncher" class="card planner-hero-card">
+              <span class="planner-section-eyebrow">Schedule Workspace</span>
+              <h2>오늘의 스케줄과 할일을 바로 관리하세요</h2>
+              <p class="small-text">
+                새 일정 추가부터 오늘 항목 확인, 달력 탐색까지 한 흐름으로
+                이어집니다.
+              </p>
+              <div class="button-row">
+                <button
+                  id="openPlannerFormBtn"
+                  class="primary-btn"
+                  type="button"
+                >
+                  일정/할일 추가
+                </button>
+              </div>
+            </section>
+
+            <section class="card planner-today-card">
+              <div class="planner-section-heading">
+                <div>
+                  <span class="planner-section-eyebrow">Today Focus</span>
+                  <h2>오늘 일정</h2>
+                </div>
+              </div>
+              <div id="todayList" class="item-list"></div>
+            </section>
+          </div>
+
+          <div id="plannerWorkspaceHubSection" class="planner-workspace-grid">
+            <button
+              id="openPlannerInboxViewBtn"
+              class="card planner-workspace-entry planner-workspace-entry-btn"
+              type="button"
+            >
+              <span class="planner-section-eyebrow">Inbox</span>
+              <h2>Inbox 창 열기</h2>
+              <p class="small-text">
+                빠르게 메모를 쌓고, 할일이나 일정으로 전환할 항목을 모아둡니다.
+              </p>
+            </button>
+
+            <button
+              id="openPlannerProjectViewBtn"
+              class="card planner-workspace-entry planner-workspace-entry-btn"
+              type="button"
+            >
+              <span class="planner-section-eyebrow">Projects</span>
+              <h2>프로젝트 창 열기</h2>
+              <p class="small-text">
+                프로젝트를 만들고 연결된 일정, 열린 항목, Inbox 흐름을 함께 관리합니다.
+              </p>
+            </button>
+          </div>
+
+          <section id="plannerInboxSection" class="card planner-inbox-card hidden">
+            <div class="button-row planner-view-back-row">
+              <button
+                id="plannerBackToHomeFromInboxBtn"
+                class="secondary-btn"
+                type="button"
+              >
+                스케줄 홈으로
               </button>
             </div>
+
+            <section>
+              <div class="planner-section-heading">
+                <div>
+                  <span class="planner-section-eyebrow">Inbox</span>
+                  <h2>빠른 수집함</h2>
+                </div>
+              </div>
+
+              <div class="planner-inbox-capture">
+                <div class="form-group">
+                  <label for="plannerInboxTitleInput">아이디어 / 할 일 메모</label>
+                  <input
+                    type="text"
+                    id="plannerInboxTitleInput"
+                    placeholder="생각난 일, 확인할 것, 나중에 일정으로 바꿀 메모"
+                  />
+                </div>
+
+                <div class="planner-inline-row">
+                  <div class="form-group">
+                    <label for="plannerInboxProjectSelect">연결 프로젝트</label>
+                    <select id="plannerInboxProjectSelect"></select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="plannerInboxNoteInput">메모</label>
+                    <input
+                      type="text"
+                      id="plannerInboxNoteInput"
+                      placeholder="짧은 설명"
+                    />
+                  </div>
+                </div>
+
+                <div class="button-row">
+                  <button
+                    id="plannerInboxAddBtn"
+                    class="primary-btn"
+                    type="button"
+                  >
+                    Inbox에 넣기
+                  </button>
+                </div>
+              </div>
+
+              <div id="plannerInboxList" class="planner-stack-list"></div>
+            </section>
           </section>
+
+          <section id="plannerProjectSection" class="card planner-project-card hidden">
+            <div class="button-row planner-view-back-row">
+              <button
+                id="plannerBackToHomeFromProjectBtn"
+                class="secondary-btn"
+                type="button"
+              >
+                스케줄 홈으로
+              </button>
+            </div>
+
+            <section>
+              <div class="planner-section-heading">
+                <div>
+                  <span class="planner-section-eyebrow">Projects</span>
+                  <h2>프로젝트 보드</h2>
+                </div>
+              </div>
+
+              <div class="planner-inline-row planner-project-create-row">
+                <div class="form-group">
+                  <label for="plannerProjectNameInput">프로젝트 이름</label>
+                  <input
+                    type="text"
+                    id="plannerProjectNameInput"
+                    placeholder="예: 이사 준비, 자격증 공부"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="plannerProjectColorSelect">포인트 색상</label>
+                  <select id="plannerProjectColorSelect">
+                    <option value="blue">블루</option>
+                    <option value="teal">티얼</option>
+                    <option value="green">그린</option>
+                    <option value="orange">오렌지</option>
+                    <option value="red">레드</option>
+                    <option value="slate">슬레이트</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="plannerProjectDescriptionInput">프로젝트 설명</label>
+                <input
+                  type="text"
+                  id="plannerProjectDescriptionInput"
+                  placeholder="이 프로젝트에서 챙길 핵심 목표"
+                />
+              </div>
+
+              <div class="button-row">
+                <button
+                  id="plannerProjectAddBtn"
+                  class="secondary-btn"
+                  type="button"
+                >
+                  프로젝트 추가
+                </button>
+              </div>
+
+              <div id="plannerProjectList" class="planner-project-list"></div>
+            </section>
+          </section>
+
           <div id="plannerFormHome">
-            <section id="plannerFormCard" class="card hidden">
+            <section id="plannerFormCard" class="card planner-form-card hidden">
               <h2 id="plannerFormTitle">항목 추가</h2>
 
               <div class="form-group">
@@ -343,6 +517,11 @@
                       id="itemTag"
                       placeholder="예: 여행 / 공부 / 쇼핑"
                     />
+                  </div>
+
+                  <div class="form-group">
+                    <label for="itemProjectId">프로젝트</label>
+                    <select id="itemProjectId"></select>
                   </div>
 
                   <div id="singleLocationSection" class="form-group">
@@ -774,14 +953,10 @@
               </div>
             </section>
           </div>
-          <section class="card">
-            <h2>오늘 일정</h2>
-            <div id="todayList" class="item-list"></div>
-          </section>
-
-          <section class="card calendar-card">
+          <section class="card calendar-card planner-calendar-card">
             <div class="calendar-header">
               <div>
+                <span class="planner-section-eyebrow">Monthly View</span>
                 <h2>달력</h2>
                 <p class="small-text">할일과 일정이 모두 표시됩니다.</p>
               </div>
@@ -813,69 +988,88 @@
 
         <section id="tab-finance" class="tab-section hidden">
           <section id="financeDashboardHomeSection">
-            <section class="card">
-              <div class="filter-row">
-                <div>
-                  <h2>자산 대쉬보드</h2>
-                  <p class="small-text">
-                    총 자산 요약과 자산 관리 진입 버튼을 제공합니다.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section id="financeSummaryCard" class="card">
-              <h2>자산 요약</h2>
-
-              <div class="summary">
-                <div class="summary-item">
-                  <span class="summary-label">총 자산</span>
-                  <strong id="financeTotalAssetText">0 원</strong>
-                </div>
-
-                <div class="summary-item">
-                  <span class="summary-label">월 수익</span>
-                  <strong id="financeMonthlyIncomeText">0 원</strong>
-                </div>
-
-                <div class="summary-item">
-                  <span class="summary-label">월 지출</span>
-                  <strong id="financeMonthlySpentText">0 원</strong>
-                </div>
-
-                <div class="summary-item">
-                  <span class="summary-label">월 순변동</span>
-                  <strong id="financeMonthlyNetText">0 원</strong>
-                </div>
-              </div>
-
-              <div class="item-meta" style="margin-top: 14px">
-                <span class="meta-badge">
-                  최다 지출 카테고리:
-                  <strong id="financeSummaryTopCategoryText">-</strong>
-                </span>
-                <span class="meta-badge">
-                  필터 결과:
-                  <strong id="financeSummaryExpenseCountText">0건</strong>
-                </span>
-              </div>
-            </section>
-
-            <section class="card">
-              <h2>자산 관리</h2>
-
-              <div class="home-grid">
+            <div class="finance-home-overview-grid">
+              <section class="card finance-home-hero-card">
+                <span class="finance-home-eyebrow">Finance Overview</span>
+                <h2>자산 대시보드</h2>
+                <p class="small-text">
+                  총 자산 흐름과 월별 입출금 현황을 한눈에 확인할 수 있습니다.
+                </p>
                 <button
                   id="financeOpenAssetManageTabBtn"
-                  class="home-card home-card-btn"
+                  class="primary-btn"
                   type="button"
                 >
-                  <span class="home-icon">🏦</span>
-                  <h3>총 자산 관리</h3>
-                  <p class="home-number">열기</p>
+                  총 자산 관리 열기
                 </button>
-              </div>
-            </section>
+              </section>
+
+              <section id="financeSummaryCard" class="card finance-summary-card">
+                <div class="planner-section-heading">
+                  <div>
+                    <span class="finance-home-eyebrow">Snapshot</span>
+                    <h2>자산 요약</h2>
+                  </div>
+                </div>
+
+                <div class="summary finance-summary-grid">
+                  <div
+                    class="summary-item finance-summary-item clickable-item-card"
+                    data-action="open-finance-overview-summary"
+                    data-summary-type="dashboard_assets"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="summary-label">총 자산</span>
+                    <strong id="financeDashboardTotalAssetText">0 원</strong>
+                  </div>
+
+                  <div
+                    class="summary-item finance-summary-item clickable-item-card"
+                    data-action="open-finance-overview-summary"
+                    data-summary-type="monthly_income"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="summary-label">월 수익</span>
+                    <strong id="financeMonthlyIncomeText">0 원</strong>
+                  </div>
+
+                  <div
+                    class="summary-item finance-summary-item clickable-item-card"
+                    data-action="open-finance-overview-summary"
+                    data-summary-type="monthly_expense"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="summary-label">월 지출</span>
+                    <strong id="financeMonthlySpentText">0 원</strong>
+                  </div>
+
+                  <div
+                    class="summary-item finance-summary-item clickable-item-card"
+                    data-action="open-finance-overview-summary"
+                    data-summary-type="monthly_net"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <span class="summary-label">월 순변동</span>
+                    <strong id="financeMonthlyNetText">0 원</strong>
+                  </div>
+                </div>
+
+                <div class="item-meta finance-summary-meta">
+                  <span class="meta-badge">
+                    최다 지출 카테고리:
+                    <strong id="financeSummaryTopCategoryText">-</strong>
+                  </span>
+                  <span class="meta-badge">
+                    필터 결과:
+                    <strong id="financeSummaryExpenseCountText">0건</strong>
+                  </span>
+                </div>
+              </section>
+            </div>
           </section>
 
           <section id="financeAssetManagePageSection" class="hidden">
@@ -886,7 +1080,7 @@
                   class="secondary-btn"
                   type="button"
                 >
-                  뒤로가기
+                  자산 홈으로
                 </button>
               </div>
             </section>
@@ -1020,16 +1214,152 @@
                 </div>
               </section>
 
-              <div
-                class="item-meta"
-                style="margin-top: 14px; margin-bottom: 14px"
-              >
-                <span class="meta-badge">
-                  총 자산: <strong id="financeTotalAssetText">0 원</strong>
-                </span>
+              <div class="finance-asset-overview-grid">
+                <section class="finance-asset-hero-card">
+                  <span class="finance-asset-eyebrow">Asset Snapshot</span>
+                  <h3>총 자산</h3>
+                  <strong id="financeManageTotalAssetText">0 원</strong>
+                  <p>
+                    등록 자산과 입출금 흐름을 함께 반영한 현재 기준 자산입니다.
+                  </p>
+                </section>
+
+                <div class="finance-asset-insight-grid">
+                  <div
+                    class="achievement-card finance-asset-insight-card clickable-item-card"
+                    data-action="open-finance-asset-summary"
+                    data-summary-type="assets"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <div class="achievement-header">
+                      <h3>등록 자산 수</h3>
+                      <strong id="financeAssetRegisteredTotalText">0개</strong>
+                    </div>
+                    <p class="small-text">
+                      현재 관리 중인 자산 항목 개수입니다.
+                    </p>
+                  </div>
+
+                  <div
+                    class="achievement-card finance-asset-insight-card clickable-item-card"
+                    data-action="open-finance-asset-summary"
+                    data-summary-type="visible_assets"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <div class="achievement-header">
+                      <h3>필터 자산 합계</h3>
+                      <strong id="financeAssetTransactionNetText">0 원</strong>
+                    </div>
+                    <p class="small-text">
+                      현재 검색과 필터 조건에 맞는 자산 합계입니다.
+                    </p>
+                  </div>
+
+                  <div
+                    class="achievement-card finance-asset-insight-card clickable-item-card"
+                    data-action="open-finance-asset-summary"
+                    data-summary-type="recurring_assets"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <div class="achievement-header">
+                      <h3>월 반복 자산</h3>
+                      <strong id="financeAssetRecurringMonthlyText">0 원</strong>
+                    </div>
+                    <p class="small-text">
+                      매월 자동으로 쌓이는 자산 금액을 모아 보여줍니다.
+                    </p>
+                  </div>
+
+                  <div
+                    class="achievement-card finance-asset-insight-card clickable-item-card"
+                    data-action="open-finance-asset-summary"
+                    data-summary-type="largest_asset"
+                    role="button"
+                    tabindex="0"
+                  >
+                    <div class="achievement-header">
+                      <h3>가장 큰 자산</h3>
+                      <strong id="financeAssetLargestText">-</strong>
+                    </div>
+                    <p
+                      id="financeAssetLargestMetaText"
+                      class="small-text"
+                    >
+                      아직 자산이 없습니다.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div id="financeAssetList" class="item-list"></div>
+              <section class="card finance-asset-tool-card">
+                <div class="filter-row">
+                  <div>
+                    <h2>자산 보기 옵션</h2>
+                    <p class="small-text">
+                      검색, 분류, 정렬로 필요한 자산만 빠르게 볼 수 있습니다.
+                    </p>
+                  </div>
+
+                  <div class="filter-controls">
+                    <div class="filter-box">
+                      <label for="financeAssetSearchInput">검색</label>
+                      <input
+                        id="financeAssetSearchInput"
+                        type="text"
+                        placeholder="자산명 검색"
+                      />
+                    </div>
+
+                    <div class="filter-box">
+                      <label for="financeAssetCategoryFilter">종류</label>
+                      <select id="financeAssetCategoryFilter">
+                        <option value="">전체</option>
+                      </select>
+                    </div>
+
+                    <div class="filter-box">
+                      <label for="financeAssetSortFilter">정렬</label>
+                      <select id="financeAssetSortFilter">
+                        <option value="current_high">현재 금액 큰 순</option>
+                        <option value="latest">최근 기준일 순</option>
+                        <option value="title_asc">이름 순</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="finance-asset-body-grid">
+                <section class="card finance-asset-summary-card">
+                  <div class="finance-asset-section-heading">
+                    <div>
+                      <h2>자산 분포</h2>
+                      <p class="small-text">
+                        종류별 비중을 빠르게 확인할 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    id="financeAssetCategorySummaryList"
+                    class="item-list finance-asset-category-list"
+                  ></div>
+                </section>
+
+                <section class="finance-asset-list-panel">
+                  <div class="finance-asset-section-heading">
+                    <div>
+                      <h2>자산 카드</h2>
+                      <p class="small-text">
+                        카드 클릭으로 수정하고, 바로 입금·출금 기록을 남길 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                  <div id="financeAssetList" class="item-list"></div>
+                </section>
+              </div>
 
               <section class="card" style="margin-top: 16px">
                 <h2>입출금 전체 내역</h2>
@@ -1039,20 +1369,21 @@
           </section>
         </section>
         <section id="tab-salary" class="tab-section hidden">
-          <section id="financeUtilityHomeSection" class="card">
-            <div class="filter-row">
+          <section id="financeUtilityHomeSection" class="card finance-utility-home-card">
+            <div class="planner-section-heading">
               <div>
+                <span class="finance-home-eyebrow">Utilities</span>
                 <h2>유틸</h2>
                 <p class="small-text">
-                  가계부와 월급 계산기 기능을 제공합니다.
+                  가계부와 월급 계산기 기능을 같은 톤으로 빠르게 이동합니다.
                 </p>
               </div>
             </div>
 
-            <div class="home-grid">
+            <div class="home-grid finance-utility-grid">
               <button
                 id="financeOpenLedgerSectionBtn"
-                class="home-card home-card-btn"
+                class="home-card home-card-btn finance-utility-entry"
                 type="button"
               >
                 <span class="home-icon">📒</span>
@@ -1062,7 +1393,7 @@
 
               <button
                 id="financeOpenSalarySectionBtn"
-                class="home-card home-card-btn"
+                class="home-card home-card-btn finance-utility-entry"
                 type="button"
               >
                 <span class="home-icon">🧮</span>
@@ -1080,12 +1411,12 @@
                   class="secondary-btn"
                   type="button"
                 >
-                  뒤로가기
+                  유틸 홈으로
                 </button>
               </div>
             </section>
 
-            <section id="financeBudgetCard" class="card">
+            <section id="financeBudgetCard" class="card finance-ledger-hero-card">
               <div class="filter-row">
                 <div>
                   <h2>가계부</h2>
@@ -1163,7 +1494,7 @@
               </div>
             </section>
 
-            <section id="financeExpenseFormCard" class="card hidden">
+            <section id="financeExpenseFormCard" class="card finance-ledger-form-card hidden">
               <h2>입출금 추가</h2>
 
               <div class="form-grid-2">
@@ -1262,6 +1593,22 @@
                     placeholder="예: 스타벅스 / 회사 / 김철수"
                   />
                 </div>
+              </div>
+
+              <div
+                id="financeIncomeAssetLinkGroup"
+                class="form-group hidden"
+              >
+                <label for="financeIncomeAssetTargetSelect">
+                  자산 반영 대상
+                </label>
+                <select id="financeIncomeAssetTargetSelect">
+                  <option value="">새 자산으로 등록</option>
+                </select>
+                <p class="small-text">
+                  OCR로 인식한 입금을 기존 자산에 합산하거나 새 자산으로 등록할
+                  수 있습니다.
+                </p>
               </div>
 
               <div class="form-grid-2">
@@ -1368,7 +1715,7 @@
                 </button>
               </div>
             </section>
-            <section id="financeExpenseListCard" class="card">
+            <section id="financeExpenseListCard" class="card finance-ledger-list-card">
               <div class="filter-row">
                 <div>
                   <h2>지출 내역 목록</h2>
@@ -1447,7 +1794,7 @@
               </div>
             </section>
 
-            <section id="financeCategoryCard" class="card">
+            <section id="financeCategoryCard" class="card finance-ledger-category-card">
               <h2>지출 카테고리별 합계</h2>
               <div id="financeCategorySummaryList" class="item-list"></div>
             </section>
@@ -1461,7 +1808,7 @@
                   class="secondary-btn"
                   type="button"
                 >
-                  뒤로가기
+                  유틸 홈으로
                 </button>
               </div>
             </section>
@@ -1546,15 +1893,16 @@
           </section>
         </section>
         <div id="financeEditPopupOverlay" class="popup-overlay hidden">
-          <div class="popup-panel finance-edit-popup-panel">
+          <div class="popup-panel popup-shell finance-edit-popup-panel">
             <div class="popup-header">
               <div>
                 <h2 class="popup-title">수익 / 지출 추가</h2>
+                <p class="popup-subtext">필수 항목만 빠르게 확인하고 저장할 수 있습니다.</p>
               </div>
 
               <button
                 id="closeFinanceEditPopupBtn"
-                class="secondary-btn"
+                class="secondary-btn popup-close-btn"
                 type="button"
               >
                 닫기
@@ -1600,13 +1948,13 @@
     </div>
 
     <div id="summaryPopupOverlay" class="popup-overlay hidden">
-      <div class="popup-panel">
+      <div class="popup-panel popup-shell summary-popup-panel">
         <div class="popup-header">
           <div>
             <h3 class="popup-title">요약 항목</h3>
             <p id="summaryPopupLabel" class="popup-subtext">목록</p>
           </div>
-          <button id="closeSummaryPopupBtn" class="secondary-btn" type="button">
+          <button id="closeSummaryPopupBtn" class="secondary-btn popup-close-btn" type="button">
             닫기
           </button>
         </div>
@@ -1615,7 +1963,7 @@
     </div>
 
     <div id="calendarPopupOverlay" class="popup-overlay hidden">
-      <div class="popup-panel">
+      <div class="popup-panel popup-shell calendar-popup-panel">
         <div class="popup-header">
           <div>
             <h3 class="popup-title">선택한 날짜 항목</h3>
@@ -1623,7 +1971,7 @@
               날짜를 선택하세요.
             </p>
           </div>
-          <button id="clearSelectedDateBtn" class="secondary-btn" type="button">
+          <button id="clearSelectedDateBtn" class="secondary-btn popup-close-btn" type="button">
             닫기
           </button>
         </div>
@@ -2154,13 +2502,13 @@
     </div>
 
     <div id="editPopupOverlay" class="popup-overlay hidden">
-      <div class="popup-panel">
+      <div class="popup-panel popup-shell planner-edit-popup-panel">
         <div class="popup-header">
           <div>
             <h3 class="popup-title">항목 수정</h3>
             <p class="popup-subtext">현재 항목을 바로 수정할 수 있습니다.</p>
           </div>
-          <button id="closeEditPopupBtn" class="secondary-btn" type="button">
+          <button id="closeEditPopupBtn" class="secondary-btn popup-close-btn" type="button">
             닫기
           </button>
         </div>
@@ -2169,7 +2517,7 @@
       </div>
     </div>
     <div id="recurringEditScopeOverlay" class="popup-overlay hidden">
-      <div class="popup-panel" style="max-width: 560px">
+      <div class="popup-panel popup-shell compact-popup-panel" style="max-width: 560px">
         <div class="popup-header">
           <div>
             <h3 class="popup-title">반복 일정 적용 범위</h3>
@@ -2179,7 +2527,7 @@
           </div>
           <button
             id="closeRecurringEditScopeBtn"
-            class="secondary-btn"
+            class="secondary-btn popup-close-btn"
             type="button"
           >
             닫기
@@ -2209,7 +2557,7 @@
       </div>
     </div>
     <div id="placeSearchModalOverlay" class="popup-overlay hidden">
-      <div class="popup-panel">
+      <div class="popup-panel popup-shell place-search-popup-panel">
         <div class="popup-header">
           <div>
             <h3 id="placeSearchModalTitle" class="popup-title">
@@ -2222,7 +2570,7 @@
 
           <button
             id="closePlaceSearchModalBtn"
-            class="secondary-btn"
+            class="secondary-btn popup-close-btn"
             type="button"
           >
             닫기

@@ -96,6 +96,9 @@ import {
   openFinanceExpenseForm,
   openFinanceAssetForm,
   closeFinanceEditPopup,
+  openFinanceExpenseFormForAsset,
+  openFinanceAssetSummaryPopup,
+  openFinanceOverviewSummaryPopup,
 } from "./finance.js";
 
 import {
@@ -150,6 +153,11 @@ let selectedFilterYear = "";
 let selectedFilterMonth = "";
 let currentTab = "home";
 let currentHubGroup = "";
+let financeDashboardView = "dashboardHome";
+let financeUtilityView = "utilityHome";
+let plannerWorkspaceView = "home";
+let financeDashboardHistory = [];
+let financeUtilityHistory = [];
 let editingId = null;
 let selectedDate = "";
 let isAppInitialized = false;
@@ -344,6 +352,40 @@ const monthFilter = document.getElementById("monthFilter");
 
 const dashboardItemList = document.getElementById("dashboardItemList");
 const todayList = document.getElementById("todayList");
+const plannerWorkspaceHubSection = document.getElementById(
+  "plannerWorkspaceHubSection",
+);
+const plannerInboxSection = document.getElementById("plannerInboxSection");
+const plannerProjectSection = document.getElementById("plannerProjectSection");
+const openPlannerInboxViewBtn = document.getElementById("openPlannerInboxViewBtn");
+const openPlannerProjectViewBtn = document.getElementById(
+  "openPlannerProjectViewBtn",
+);
+const plannerBackToHomeFromInboxBtn = document.getElementById(
+  "plannerBackToHomeFromInboxBtn",
+);
+const plannerBackToHomeFromProjectBtn = document.getElementById(
+  "plannerBackToHomeFromProjectBtn",
+);
+const plannerInboxTitleInput = document.getElementById("plannerInboxTitleInput");
+const plannerInboxProjectSelect = document.getElementById(
+  "plannerInboxProjectSelect",
+);
+const plannerInboxNoteInput = document.getElementById("plannerInboxNoteInput");
+const plannerInboxAddBtn = document.getElementById("plannerInboxAddBtn");
+const plannerInboxList = document.getElementById("plannerInboxList");
+const plannerProjectNameInput = document.getElementById(
+  "plannerProjectNameInput",
+);
+const plannerProjectColorSelect = document.getElementById(
+  "plannerProjectColorSelect",
+);
+const plannerProjectDescriptionInput = document.getElementById(
+  "plannerProjectDescriptionInput",
+);
+const plannerProjectAddBtn = document.getElementById("plannerProjectAddBtn");
+const plannerProjectList = document.getElementById("plannerProjectList");
+const itemProjectId = document.getElementById("itemProjectId");
 
 const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
@@ -459,6 +501,12 @@ const deleteEditingItemBtn = document.getElementById("deleteEditingItemBtn");
 const FINANCE_STORAGE_KEY = "planner_finance_local_v1";
 
 let financeData = {
+  budgetVersion: 2,
+  budgetSettings: {
+    defaultStartDay: 1,
+    autoApplyPreviousBudget: true,
+  },
+  budgetEntries: {},
   monthlyBudgets: {},
   expenses: [],
   assets: [],
@@ -560,6 +608,12 @@ const financeExpensePaymentMethod = document.getElementById(
 const financeExpenseMerchant = document.getElementById(
   "financeExpenseMerchant",
 );
+const financeIncomeAssetLinkGroup = document.getElementById(
+  "financeIncomeAssetLinkGroup",
+);
+const financeIncomeAssetTargetSelect = document.getElementById(
+  "financeIncomeAssetTargetSelect",
+);
 const financeExpenseTag = document.getElementById("financeExpenseTag");
 const financeExpenseColor = document.getElementById("financeExpenseColor");
 const financeExpenseRepeat = document.getElementById("financeExpenseRepeat");
@@ -611,7 +665,39 @@ const financeCancelAssetEditBtn = document.getElementById(
   "financeCancelAssetEditBtn",
 );
 const financeDeleteAssetBtn = document.getElementById("financeDeleteAssetBtn");
-const financeTotalAssetText = document.getElementById("financeTotalAssetText");
+const financeDashboardTotalAssetText = document.getElementById(
+  "financeDashboardTotalAssetText",
+);
+const financeManageTotalAssetText = document.getElementById(
+  "financeManageTotalAssetText",
+);
+const financeAssetRegisteredTotalText = document.getElementById(
+  "financeAssetRegisteredTotalText",
+);
+const financeAssetTransactionNetText = document.getElementById(
+  "financeAssetTransactionNetText",
+);
+const financeAssetRecurringMonthlyText = document.getElementById(
+  "financeAssetRecurringMonthlyText",
+);
+const financeAssetLargestText = document.getElementById(
+  "financeAssetLargestText",
+);
+const financeAssetLargestMetaText = document.getElementById(
+  "financeAssetLargestMetaText",
+);
+const financeAssetSearchInput = document.getElementById(
+  "financeAssetSearchInput",
+);
+const financeAssetCategoryFilter = document.getElementById(
+  "financeAssetCategoryFilter",
+);
+const financeAssetSortFilter = document.getElementById(
+  "financeAssetSortFilter",
+);
+const financeAssetCategorySummaryList = document.getElementById(
+  "financeAssetCategorySummaryList",
+);
 const financeAssetList = document.getElementById("financeAssetList");
 const financeAssetTransactionList = document.getElementById(
   "financeAssetTransactionList",
@@ -774,6 +860,8 @@ const financeOpenAssetManageSectionBtn = document.getElementById(
 
 let currentUser = null;
 let items = [];
+let projects = [];
+let inboxItems = [];
 let isRemoteLoading = false;
 let saveTimer = null;
 let editingOccurrenceDateKey = "";
@@ -795,6 +883,20 @@ window.AppState = {
   },
   set items(value) {
     items = value;
+  },
+
+  get projects() {
+    return projects;
+  },
+  set projects(value) {
+    projects = Array.isArray(value) ? value : [];
+  },
+
+  get inboxItems() {
+    return inboxItems;
+  },
+  set inboxItems(value) {
+    inboxItems = Array.isArray(value) ? value : [];
   },
 
   get financeData() {
@@ -1021,6 +1123,8 @@ configureFinanceModule({
     financeExpenseSubCategory,
     financeExpensePaymentMethod,
     financeExpenseMerchant,
+    financeIncomeAssetLinkGroup,
+    financeIncomeAssetTargetSelect,
     financeExpenseTag,
     financeExpenseColor,
     financeExpenseRepeat,
@@ -1042,7 +1146,20 @@ configureFinanceModule({
     financeSaveAssetBtn,
     financeCancelAssetEditBtn,
     financeDeleteAssetBtn,
-    financeTotalAssetText,
+    financeDashboardTotalAssetText,
+    financeManageTotalAssetText,
+    financeAssetRegisteredTotalText,
+    financeAssetTransactionNetText,
+    financeAssetRecurringMonthlyText,
+    financeAssetLargestText,
+    financeAssetLargestMetaText,
+    financeAssetSearchInput,
+    financeAssetCategoryFilter,
+    financeAssetSortFilter,
+    financeAssetCategorySummaryList,
+    summaryPopupLabel,
+    summaryPopupList,
+    summaryPopupOverlay,
     financeAssetList,
     financeAssetTransactionList,
 
@@ -1097,6 +1214,7 @@ configureFinanceOcrModule({
     financeAnalyzeReceiptBtn,
     financeReceiptImageInput,
 
+    financeExpenseFormCard,
     financeExpenseDate,
     financeExpenseTime: document.getElementById("financeExpenseTime"),
     financeExpenseTitle,
@@ -1109,6 +1227,8 @@ configureFinanceOcrModule({
       "financeExpensePaymentMethod",
     ),
     financeExpenseMerchant: document.getElementById("financeExpenseMerchant"),
+    financeExpenseTag,
+    financeIncomeAssetTargetSelect,
   },
 
   getFinanceData: () => financeData,
@@ -1118,6 +1238,7 @@ configureFinanceOcrModule({
 
   renderFinance,
   syncFinanceSubCategoryOptions,
+  syncFinanceExpenseFormButtons,
 });
 
 configurePlannerUiModule({
@@ -1129,6 +1250,7 @@ configurePlannerUiModule({
     titleInput,
     itemColor,
     itemTag,
+    itemProjectId,
     itemLocation,
     itemLocationAddress,
     itemLocationPlaceId,
@@ -1321,6 +1443,30 @@ async function initAppOnce() {
     syncScheduleLocationMode("popup");
   });
 
+  titleInput?.addEventListener("blur", () => {
+    applyTitleShortcuts({
+      titleInput,
+      colorInput: itemColor,
+      tagInput: itemTag,
+      locationInput: itemLocation,
+      locationAddressInput: itemLocationAddress,
+      locationPlaceIdInput: itemLocationPlaceId,
+      mode: "main",
+    });
+  });
+
+  popupTitleInput?.addEventListener("blur", () => {
+    applyTitleShortcuts({
+      titleInput: popupTitleInput,
+      colorInput: popupItemColor,
+      tagInput: popupItemTag,
+      locationInput: popupItemLocation,
+      locationAddressInput: popupItemLocationAddress,
+      locationPlaceIdInput: popupItemLocationPlaceId,
+      mode: "popup",
+    });
+  });
+
   saveItemBtn?.addEventListener("click", saveCurrentItem);
 
   openPlannerFormBtn?.addEventListener("click", () => {
@@ -1401,6 +1547,31 @@ async function initAppOnce() {
     renderDashboard();
   });
 
+  plannerInboxAddBtn?.addEventListener("click", addPlannerInboxItem);
+  plannerProjectAddBtn?.addEventListener("click", addPlannerProject);
+  openPlannerInboxViewBtn?.addEventListener("click", showPlannerInboxView);
+  openPlannerProjectViewBtn?.addEventListener("click", showPlannerProjectView);
+  plannerBackToHomeFromInboxBtn?.addEventListener(
+    "click",
+    showPlannerWorkspaceHome,
+  );
+  plannerBackToHomeFromProjectBtn?.addEventListener(
+    "click",
+    showPlannerWorkspaceHome,
+  );
+  plannerInboxTitleInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addPlannerInboxItem();
+    }
+  });
+  plannerProjectNameInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addPlannerProject();
+    }
+  });
+
   prevMonthBtn?.addEventListener("click", () => {
     calendarMonth -= 1;
     if (calendarMonth < 0) {
@@ -1452,34 +1623,34 @@ async function initAppOnce() {
   financeSaveBudgetBtn?.addEventListener("click", saveFinanceBudget);
   financeOpenExpenseFormBtn?.addEventListener("click", openFinanceExpenseForm);
   financeOpenExpenseFormFromAssetBtn?.addEventListener("click", () => {
-    showFinanceAssetManagePage();
+    showFinanceAssetManagePage({ record: true });
     openFinanceExpenseForm();
   });
   financeOpenAssetFormBtn?.addEventListener("click", openFinanceAssetForm);
   financeSaveAssetBtn?.addEventListener("click", saveFinanceAsset);
 
   financeOpenAssetManageTabBtn?.addEventListener("click", () => {
-    showFinanceAssetManagePage();
+    showFinanceAssetManagePage({ record: true });
   });
 
   financeBackToDashboardBtn?.addEventListener("click", () => {
-    showFinanceDashboardHome();
+    goBackFinanceDashboard();
   });
 
   financeOpenLedgerSectionBtn?.addEventListener("click", () => {
-    showFinanceLedgerSection();
+    showFinanceLedgerSection({ record: true });
   });
 
   financeOpenSalarySectionBtn?.addEventListener("click", () => {
-    showFinanceSalarySection();
+    showFinanceSalarySection({ record: true });
   });
 
   financeBackToUtilityHomeFromLedgerBtn?.addEventListener("click", () => {
-    showFinanceUtilityHome();
+    goBackFinanceUtility();
   });
 
   financeBackToUtilityHomeFromSalaryBtn?.addEventListener("click", () => {
-    showFinanceUtilityHome();
+    goBackFinanceUtility();
   });
 
   financeMonthKey?.addEventListener("change", renderFinance);
@@ -1586,6 +1757,9 @@ async function initAppOnce() {
   financeListPaymentFilter?.addEventListener("change", renderFinance);
   financeListSortFilter?.addEventListener("change", renderFinance);
   financeListSearchInput?.addEventListener("input", renderFinance);
+  financeAssetSearchInput?.addEventListener("input", renderFinance);
+  financeAssetCategoryFilter?.addEventListener("change", renderFinance);
+  financeAssetSortFilter?.addEventListener("change", renderFinance);
 
   financePrevPageBtn?.addEventListener("click", () => {
     handleFinancePageChange(-1);
@@ -1598,9 +1772,8 @@ async function initAppOnce() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeAllTimePickerMenus();
-      closeDatePopup();
-      closeSummaryPopup();
-      closeFinanceEditPopup();
+      const closed = closeTopMostPopup();
+      if (closed) return;
     }
   });
 
@@ -1621,11 +1794,368 @@ function renderAll() {
   renderDashboard();
   renderTodayList();
   renderCalendar();
+  renderPlannerWorkspace();
   renderFinance();
+}
+
+function hideAllPlannerWorkspaceSections() {
+  plannerWorkspaceHubSection?.classList.add("hidden");
+  plannerInboxSection?.classList.add("hidden");
+  plannerProjectSection?.classList.add("hidden");
+}
+
+function showPlannerWorkspaceHome() {
+  hideAllPlannerWorkspaceSections();
+  plannerWorkspaceView = "home";
+  plannerWorkspaceHubSection?.classList.remove("hidden");
+}
+
+function showPlannerInboxView() {
+  hideAllPlannerWorkspaceSections();
+  plannerWorkspaceView = "inbox";
+  plannerInboxSection?.classList.remove("hidden");
+}
+
+function showPlannerProjectView() {
+  hideAllPlannerWorkspaceSections();
+  plannerWorkspaceView = "project";
+  plannerProjectSection?.classList.remove("hidden");
+}
+
+function getProjectById(projectId) {
+  return projects.find((project) => project.id === projectId) || null;
+}
+
+function getProjectLabel(projectId) {
+  return getProjectById(projectId)?.name || "프로젝트 없음";
+}
+
+function renderPlannerProjectSelectOptions() {
+  [itemProjectId, plannerInboxProjectSelect].forEach((select) => {
+    if (!select) return;
+
+    const currentValue = select.value || "";
+    select.innerHTML = '<option value="">프로젝트 없음</option>';
+
+    projects
+      .slice()
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ko"))
+      .forEach((project) => {
+        const option = document.createElement("option");
+        option.value = project.id;
+        option.textContent = project.name || "이름 없는 프로젝트";
+        select.appendChild(option);
+      });
+
+    select.value = projects.some((project) => project.id === currentValue)
+      ? currentValue
+      : "";
+  });
+}
+
+function renderPlannerInbox() {
+  if (!plannerInboxList) return;
+
+  const sortedInbox = inboxItems
+    .slice()
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+
+  if (!sortedInbox.length) {
+    plannerInboxList.innerHTML =
+      '<div class="empty-message">아직 Inbox에 쌓인 메모가 없습니다.</div>';
+    return;
+  }
+
+  plannerInboxList.innerHTML = sortedInbox
+    .map((item) => {
+      const converted = Boolean(item.convertedAt);
+      const projectName = item.projectId ? getProjectLabel(item.projectId) : "";
+
+      return `
+        <div class="planner-inbox-entry ${converted ? "converted" : ""}">
+          <div class="planner-inbox-entry-top">
+            <div>
+              <strong>${escapeHtml(item.title || "")}</strong>
+              ${item.note ? `<p class="planner-inbox-note">${escapeHtml(item.note)}</p>` : ""}
+            </div>
+            <span class="meta-badge">${converted ? "전환 완료" : "수집됨"}</span>
+          </div>
+          <div class="item-meta compact-meta">
+            ${projectName ? `<span class="tag-badge">${escapeHtml(projectName)}</span>` : ""}
+            <span class="meta-badge compact">${formatKoreanDate(formatDateKey(new Date(item.createdAt || Date.now())))}</span>
+          </div>
+          <div class="planner-inbox-actions">
+            ${
+              converted
+                ? `<span class="meta-badge">완료 ${item.convertedToType === "schedule" ? "일정" : "할일"}</span>`
+                : `
+                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">할일로 전환</button>
+                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">일정으로 전환</button>
+                `
+            }
+            <button class="secondary-btn" type="button" data-action="delete-inbox-item" data-id="${item.id}">삭제</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderPlannerProjects() {
+  if (!plannerProjectList) return;
+
+  if (!projects.length) {
+    plannerProjectList.innerHTML =
+      '<div class="empty-message">프로젝트를 추가하면 일정과 Inbox를 묶어서 볼 수 있습니다.</div>';
+    return;
+  }
+
+  plannerProjectList.innerHTML = projects
+    .slice()
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+    .map((project) => {
+      const linkedItems = sortItems(
+        items.filter((item) => (item.projectId || "") === project.id),
+      );
+      const openCount = linkedItems.filter(
+        (item) => item.status !== "success" && item.status !== "fail",
+      ).length;
+      const projectInboxCount = inboxItems.filter(
+        (item) => (item.projectId || "") === project.id && !item.convertedAt,
+      ).length;
+
+      return `
+        <div class="planner-project-entry" style="--project-accent: ${escapeHtml(project.color || "#2563eb")}">
+          <div class="planner-project-entry-top">
+            <div>
+              <strong>${escapeHtml(project.name || "")}</strong>
+              ${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}
+            </div>
+            <span class="meta-badge">${linkedItems.length}개 연결</span>
+          </div>
+          <div class="item-meta compact-meta">
+            <span class="tag-badge">열린 항목 ${openCount}개</span>
+            <span class="tag-badge">Inbox ${projectInboxCount}개</span>
+          </div>
+          <div class="planner-project-item-list">
+            ${
+              linkedItems.length
+                ? linkedItems
+                    .slice(0, 4)
+                    .map(
+                      (item) =>
+                        `<span class="planner-project-item-chip">${escapeHtml(item.type === "schedule" ? "일정" : "할일")} ${escapeHtml(item.title || "")}</span>`,
+                    )
+                    .join("")
+                : '<span class="meta-badge">아직 연결된 일정이 없습니다.</span>'
+            }
+          </div>
+          <div class="planner-project-actions">
+            <button class="secondary-btn" type="button" data-action="apply-project-filter" data-id="${project.id}">이 프로젝트로 폼 채우기</button>
+            <button class="secondary-btn" type="button" data-action="delete-project" data-id="${project.id}">삭제</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderPlannerWorkspace() {
+  renderPlannerProjectSelectOptions();
+  renderPlannerInbox();
+  renderPlannerProjects();
+}
+
+function getPlannerProjectAccent(colorKey) {
+  const map = {
+    blue: "#2563eb",
+    teal: "#0f766e",
+    green: "#16a34a",
+    orange: "#ea580c",
+    red: "#dc2626",
+    slate: "#475569",
+  };
+
+  return map[colorKey] || map.blue;
+}
+
+function addPlannerProject() {
+  const name = plannerProjectNameInput?.value.trim() || "";
+  const description = plannerProjectDescriptionInput?.value.trim() || "";
+  const colorKey = plannerProjectColorSelect?.value || "blue";
+
+  if (!name) {
+    alert("프로젝트 이름을 입력해 주세요.");
+    plannerProjectNameInput?.focus();
+    return;
+  }
+
+  projects = [
+    {
+      id: makeId(),
+      name,
+      description,
+      color: getPlannerProjectAccent(colorKey),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    },
+    ...projects,
+  ];
+
+  if (plannerProjectNameInput) plannerProjectNameInput.value = "";
+  if (plannerProjectDescriptionInput) plannerProjectDescriptionInput.value = "";
+  if (plannerProjectColorSelect) plannerProjectColorSelect.value = "blue";
+
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+}
+
+function addPlannerInboxItem() {
+  const title = plannerInboxTitleInput?.value.trim() || "";
+  const note = plannerInboxNoteInput?.value.trim() || "";
+  const projectId = plannerInboxProjectSelect?.value || "";
+
+  if (!title) {
+    alert("Inbox에 넣을 내용을 입력해 주세요.");
+    plannerInboxTitleInput?.focus();
+    return;
+  }
+
+  inboxItems = [
+    {
+      id: makeId(),
+      title,
+      note,
+      projectId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      convertedAt: null,
+      convertedToType: "",
+    },
+    ...inboxItems,
+  ];
+
+  if (plannerInboxTitleInput) plannerInboxTitleInput.value = "";
+  if (plannerInboxNoteInput) plannerInboxNoteInput.value = "";
+  if (plannerInboxProjectSelect) plannerInboxProjectSelect.value = "";
+
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+}
+
+function deletePlannerInboxItem(id) {
+  inboxItems = inboxItems.filter((item) => item.id !== id);
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+}
+
+function deletePlannerProject(id) {
+  const shouldDelete = confirm("이 프로젝트를 삭제할까요? 연결된 일정의 프로젝트 지정은 해제됩니다.");
+  if (!shouldDelete) return;
+
+  projects = projects.filter((project) => project.id !== id);
+  inboxItems = inboxItems.map((item) =>
+    item.projectId === id ? { ...item, projectId: "" } : item,
+  );
+  items = items.map((item) =>
+    item.projectId === id ? { ...item, projectId: "" } : item,
+  );
+
+  if ((itemProjectId?.value || "") === id) {
+    itemProjectId.value = "";
+  }
+
+  if ((plannerInboxProjectSelect?.value || "") === id) {
+    plannerInboxProjectSelect.value = "";
+  }
+
+  queueSavePlannerData();
+  renderAll();
+}
+
+function applyProjectToPlannerForm(projectId) {
+  if (!getProjectById(projectId)) return;
+  if (itemProjectId) itemProjectId.value = projectId;
+  openPlannerFormCard();
+  titleInput?.focus();
+}
+
+function convertInboxItemToPlanner(id, targetType) {
+  const inboxItem = inboxItems.find((item) => item.id === id);
+  if (!inboxItem || inboxItem.convertedAt) return;
+
+  resetPlannerForm();
+  if (itemType) itemType.value = targetType === "schedule" ? "schedule" : "todo";
+  if (titleInput) titleInput.value = inboxItem.title || "";
+  if (itemProjectId) itemProjectId.value = inboxItem.projectId || "";
+  if (itemTag && !itemTag.value && inboxItem.note) {
+    itemTag.value = inboxItem.note;
+  }
+
+  updatePlannerFields();
+  openPlannerFormCard();
+  titleInput?.focus();
+
+  inboxItems = inboxItems.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          convertedAt: Date.now(),
+          convertedToType: targetType,
+          updatedAt: Date.now(),
+        }
+      : item,
+  );
+
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+}
+
+function closeTopMostPopup() {
+  if (!placeSearchModalOverlay?.classList.contains("hidden")) {
+    closePlaceSearchModal();
+    return true;
+  }
+
+  if (!recurringEditScopeOverlay?.classList.contains("hidden")) {
+    closeRecurringEditScopePopup();
+    return true;
+  }
+
+  if (!financeEditPopupOverlay?.classList.contains("hidden")) {
+    closeFinanceEditPopup();
+    return true;
+  }
+
+  if (!editPopupOverlay?.classList.contains("hidden")) {
+    closeEditPopup();
+    return true;
+  }
+
+  if (!popupQuickAddForm?.classList.contains("hidden")) {
+    closePopupQuickAddForm();
+    return true;
+  }
+
+  if (!calendarPopupOverlay?.classList.contains("hidden")) {
+    closeDatePopup();
+    return true;
+  }
+
+  if (!summaryPopupOverlay?.classList.contains("hidden")) {
+    closeSummaryPopup();
+    return true;
+  }
+
+  return false;
 }
 
 function enterHomeTab() {
   currentHubGroup = "";
+  financeDashboardHistory = [];
+  financeUtilityHistory = [];
+  financeDashboardView = "dashboardHome";
+  financeUtilityView = "utilityHome";
 
   if (dynamicLeftTabBtn) {
     dynamicLeftTabBtn.dataset.tab = "";
@@ -1653,13 +2183,39 @@ function hideAllFinanceDashboardSections() {
   financeAssetManagePageSection?.classList.add("hidden");
 }
 
-function showFinanceDashboardHome() {
+function pushFinanceDashboardHistory(viewKey) {
+  if (!viewKey) return;
+  if (financeDashboardHistory[financeDashboardHistory.length - 1] === viewKey) {
+    return;
+  }
+  financeDashboardHistory.push(viewKey);
+}
+
+function pushFinanceUtilityHistory(viewKey) {
+  if (!viewKey) return;
+  if (financeUtilityHistory[financeUtilityHistory.length - 1] === viewKey) {
+    return;
+  }
+  financeUtilityHistory.push(viewKey);
+}
+
+function showFinanceDashboardHome(options = {}) {
+  const { record = false } = options;
+  if (record && financeDashboardView !== "dashboardHome") {
+    pushFinanceDashboardHistory(financeDashboardView);
+  }
   hideAllFinanceDashboardSections();
+  financeDashboardView = "dashboardHome";
   financeDashboardHomeSection?.classList.remove("hidden");
 }
 
-function showFinanceAssetManagePage() {
+function showFinanceAssetManagePage(options = {}) {
+  const { record = false } = options;
+  if (record && financeDashboardView !== "assetManage") {
+    pushFinanceDashboardHistory(financeDashboardView);
+  }
   hideAllFinanceDashboardSections();
+  financeDashboardView = "assetManage";
   financeAssetManagePageSection?.classList.remove("hidden");
 }
 
@@ -1669,19 +2225,61 @@ function hideAllFinanceUtilitySections() {
   financeSalarySection?.classList.add("hidden");
 }
 
-function showFinanceUtilityHome() {
+function showFinanceUtilityHome(options = {}) {
+  const { record = false } = options;
+  if (record && financeUtilityView !== "utilityHome") {
+    pushFinanceUtilityHistory(financeUtilityView);
+  }
   hideAllFinanceUtilitySections();
+  financeUtilityView = "utilityHome";
   financeUtilityHomeSection?.classList.remove("hidden");
 }
 
-function showFinanceLedgerSection() {
+function showFinanceLedgerSection(options = {}) {
+  const { record = false } = options;
+  if (record && financeUtilityView !== "ledger") {
+    pushFinanceUtilityHistory(financeUtilityView);
+  }
   hideAllFinanceUtilitySections();
+  financeUtilityView = "ledger";
   financeLedgerSection?.classList.remove("hidden");
 }
 
-function showFinanceSalarySection() {
+function showFinanceSalarySection(options = {}) {
+  const { record = false } = options;
+  if (record && financeUtilityView !== "salaryCalc") {
+    pushFinanceUtilityHistory(financeUtilityView);
+  }
   hideAllFinanceUtilitySections();
+  financeUtilityView = "salaryCalc";
   financeSalarySection?.classList.remove("hidden");
+}
+
+function goBackFinanceDashboard() {
+  const previousView = financeDashboardHistory.pop();
+
+  if (previousView === "assetManage") {
+    showFinanceAssetManagePage();
+    return;
+  }
+
+  showFinanceDashboardHome();
+}
+
+function goBackFinanceUtility() {
+  const previousView = financeUtilityHistory.pop();
+
+  if (previousView === "ledger") {
+    showFinanceLedgerSection();
+    return;
+  }
+
+  if (previousView === "salaryCalc") {
+    showFinanceSalarySection();
+    return;
+  }
+
+  showFinanceUtilityHome();
 }
 
 function resetNestedTabState(tabName) {
@@ -1697,6 +2295,7 @@ function resetNestedTabState(tabName) {
 
   if (tabName === "planner") {
     closePlannerFormCard();
+    showPlannerWorkspaceHome();
   }
 }
 
@@ -1705,6 +2304,8 @@ function openHubGroup(groupName) {
   if (!group) return;
 
   currentHubGroup = groupName;
+  financeDashboardHistory = [];
+  financeUtilityHistory = [];
 
   if (dynamicLeftTabBtn) {
     dynamicLeftTabBtn.dataset.tab = group.left.tab;
@@ -1760,7 +2361,17 @@ function calculateSalaryPreview() {
 
 function saveCurrentItem() {
   const type = itemType?.value;
-  const title = titleInput?.value.trim();
+  const parsed = applyTitleShortcuts({
+    titleInput,
+    colorInput: itemColor,
+    tagInput: itemTag,
+    locationInput: itemLocation,
+    locationAddressInput: itemLocationAddress,
+    locationPlaceIdInput: itemLocationPlaceId,
+    mode: "main",
+    overwriteExisting: true,
+  });
+  const title = parsed.title;
 
   if (!title) {
     alert("제목을 입력하세요.");
@@ -1882,6 +2493,35 @@ function handleDocumentClick(e) {
     return;
   }
 
+  if (action === "convert-inbox-item") {
+    const id = actionTarget.dataset.id;
+    const targetType = actionTarget.dataset.targetType || "todo";
+    if (!id) return;
+    convertInboxItemToPlanner(id, targetType);
+    return;
+  }
+
+  if (action === "delete-inbox-item") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    deletePlannerInboxItem(id);
+    return;
+  }
+
+  if (action === "delete-project") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    deletePlannerProject(id);
+    return;
+  }
+
+  if (action === "apply-project-filter") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    applyProjectToPlannerForm(id);
+    return;
+  }
+
   if (action === "open-edit-finance-expense") {
     const id = actionTarget.dataset.id;
     if (!id) return;
@@ -1893,6 +2533,26 @@ function handleDocumentClick(e) {
     const id = actionTarget.dataset.id;
     if (!id) return;
     startEditFinanceAsset(id);
+    return;
+  }
+
+  if (action === "quick-asset-cashflow") {
+    const id = actionTarget.dataset.id;
+    const flowType = actionTarget.dataset.flowType || "expense";
+    if (!id) return;
+    openFinanceExpenseFormForAsset(id, flowType);
+    return;
+  }
+
+  if (action === "open-finance-asset-summary") {
+    const summaryType = actionTarget.dataset.summaryType || "assets";
+    openFinanceAssetSummaryPopup(summaryType);
+    return;
+  }
+
+  if (action === "open-finance-overview-summary") {
+    const summaryType = actionTarget.dataset.summaryType || "dashboard_assets";
+    openFinanceOverviewSummaryPopup(summaryType);
     return;
   }
 
@@ -1921,6 +2581,17 @@ function handleDocumentClick(e) {
 }
 
 function addItemFromSelectedDate() {
+  applyTitleShortcuts({
+    titleInput: popupTitleInput,
+    colorInput: popupItemColor,
+    tagInput: popupItemTag,
+    locationInput: popupItemLocation,
+    locationAddressInput: popupItemLocationAddress,
+    locationPlaceIdInput: popupItemLocationPlaceId,
+    mode: "popup",
+    overwriteExisting: true,
+  });
+
   const popupIsMultiDaySchedule =
     popupItemType?.value === "schedule" &&
     isMultiDayScheduleRange(
@@ -1982,6 +2653,7 @@ function addItemFromSelectedDate() {
 function saveEditedSingleItem(type, title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
+  const projectId = itemProjectId?.value || "";
 
   const isMultiDaySchedule =
     type === "schedule" &&
@@ -2013,6 +2685,7 @@ function saveEditedSingleItem(type, title) {
     title,
     color,
     tag,
+    projectId,
     location: primaryLocation.location || "",
     locationAddress: primaryLocation.locationAddress || "",
     locationPlaceId: primaryLocation.locationPlaceId || "",
@@ -2060,6 +2733,7 @@ function saveEditedSingleItem(type, title) {
 function saveTodoSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
+  const projectId = itemProjectId?.value || "";
   const { location, locationAddress, locationPlaceId } = getLocationPayload(
     itemLocation,
     itemLocationAddress,
@@ -2071,6 +2745,7 @@ function saveTodoSeries(title) {
     title,
     color,
     tag,
+    projectId,
     location,
     locationAddress,
     locationPlaceId,
@@ -2094,6 +2769,7 @@ function saveTodoSeries(title) {
 function saveScheduleSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
+  const projectId = itemProjectId?.value || "";
 
   const isMultiDaySchedule = isMultiDayScheduleRange(
     scheduleStartDate?.value || "",
@@ -2121,6 +2797,7 @@ function saveScheduleSeries(title) {
     title,
     color,
     tag,
+    projectId,
     location: primaryLocation.location || "",
     locationAddress: primaryLocation.locationAddress || "",
     locationPlaceId: primaryLocation.locationPlaceId || "",
@@ -2141,6 +2818,452 @@ function saveScheduleSeries(title) {
   resetPlannerForm();
   renderAll();
   closePlannerFormCard();
+}
+
+function parseTitleShortcuts(rawTitle) {
+  const source = String(rawTitle || "").trim();
+
+  if (!source) {
+    return {
+      title: "",
+      location: "",
+      tag: "",
+      color: "",
+      repeat: null,
+      time: null,
+      matched: false,
+    };
+  }
+
+  const tokens = {
+    "@": "",
+    "#": "",
+    "!": "",
+    "~": "",
+    "^": "",
+  };
+
+  const shortcutPattern =
+    /(^|\s)([@#!~^])(?:"([^"]+)"|'([^']+)'|([^\s@#!~^]+))/g;
+
+  const cleanTitle = source
+    .replace(
+      shortcutPattern,
+      (match, spacing, prefix, doubleQuoted, singleQuoted, plain) => {
+        const value = String(doubleQuoted || singleQuoted || plain || "").trim();
+
+        if (value) {
+          tokens[prefix] = value;
+        }
+
+        return spacing || "";
+      },
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const color = parseShortcutColor(tokens["!"]);
+  const repeat = parseShortcutRepeat(tokens["~"]);
+  const time = parseShortcutTime(tokens["^"]);
+
+  return {
+    title: cleanTitle,
+    location: tokens["@"] || "",
+    tag: tokens["#"] || "",
+    color,
+    repeat,
+    time,
+    matched: Boolean(
+      tokens["@"] ||
+        tokens["#"] ||
+        tokens["!"] ||
+        tokens["~"] ||
+        tokens["^"],
+    ),
+  };
+}
+
+function applyTitleShortcuts({
+  titleInput,
+  colorInput,
+  tagInput,
+  locationInput,
+  locationAddressInput,
+  locationPlaceIdInput,
+  mode = "main",
+  overwriteExisting = false,
+}) {
+  const parsed = parseTitleShortcuts(titleInput?.value || "");
+
+  if (!parsed.matched) {
+    return parsed;
+  }
+
+  if (titleInput) {
+    titleInput.value = parsed.title;
+  }
+
+  if (parsed.color && colorInput) {
+    const hasColorValue = Boolean(colorInput.value);
+
+    if (overwriteExisting || !hasColorValue) {
+      colorInput.value = parsed.color;
+    }
+  }
+
+  if (parsed.tag && tagInput) {
+    const hasTagValue = Boolean(tagInput.value.trim());
+
+    if (overwriteExisting || !hasTagValue) {
+      tagInput.value = parsed.tag;
+    }
+  }
+
+  if (parsed.location && locationInput) {
+    const hasLocationValue = Boolean(locationInput.value.trim());
+
+    if (overwriteExisting || !hasLocationValue) {
+      locationInput.value = parsed.location;
+
+      if (locationAddressInput) {
+        locationAddressInput.value = "";
+      }
+
+      if (locationPlaceIdInput) {
+        locationPlaceIdInput.value = "";
+      }
+    }
+  }
+
+  applyShortcutRepeat(parsed.repeat, mode);
+  applyShortcutTime(parsed.time, mode);
+  syncPlaceUi(mode);
+
+  return parsed;
+}
+
+function parseShortcutColor(rawValue) {
+  const normalized = normalizeShortcutValue(rawValue);
+
+  if (!normalized) return "";
+
+  const colorMap = {
+    blue: "blue",
+    bluee: "blue",
+    blues: "blue",
+    bluecolor: "blue",
+    파랑: "blue",
+    파란색: "blue",
+    블루: "blue",
+    purple: "purple",
+    violet: "purple",
+    보라: "purple",
+    보라색: "purple",
+    퍼플: "purple",
+    green: "green",
+    greencolor: "green",
+    초록: "green",
+    초록색: "green",
+    초록빛: "green",
+    그린: "green",
+    orange: "orange",
+    주황: "orange",
+    주황색: "orange",
+    오렌지: "orange",
+    red: "red",
+    빨강: "red",
+    빨간색: "red",
+    레드: "red",
+    gray: "gray",
+    grey: "gray",
+    회색: "gray",
+    그레이: "gray",
+  };
+
+  return colorMap[normalized] || "";
+}
+
+function parseShortcutRepeat(rawValue) {
+  const source = String(rawValue || "").trim();
+  const normalized = normalizeShortcutValue(source);
+
+  if (!normalized) return null;
+
+  const intervalMatch =
+    normalized.match(/^(\d+)일마다$/) || normalized.match(/^every(\d+)days$/);
+
+  if (intervalMatch) {
+    return {
+      type: "interval_days",
+      intervalDays: Math.max(1, Number(intervalMatch[1]) || 1),
+    };
+  }
+
+  if (["없음", "반복없음", "none", "off"].includes(normalized)) {
+    return { type: "none" };
+  }
+
+  if (["매일", "daily", "everyday"].includes(normalized)) {
+    return { type: "daily" };
+  }
+
+  if (["매주", "weekly", "everyweek"].includes(normalized)) {
+    return { type: "weekly" };
+  }
+
+  if (["매월", "monthly", "everymonth"].includes(normalized)) {
+    return { type: "monthly" };
+  }
+
+  const weekdaySet = parseShortcutWeekdays(normalized);
+
+  if (weekdaySet.length > 0) {
+    return {
+      type: "weekly_days",
+      weeklyDays: weekdaySet,
+    };
+  }
+
+  return null;
+}
+
+function parseShortcutWeekdays(normalized) {
+  const compact = String(normalized || "")
+    .replaceAll("주중", "평일")
+    .replaceAll("월요일", "월")
+    .replaceAll("화요일", "화")
+    .replaceAll("수요일", "수")
+    .replaceAll("목요일", "목")
+    .replaceAll("금요일", "금")
+    .replaceAll("토요일", "토")
+    .replaceAll("일요일", "일");
+
+  const namedPresets = {
+    평일: [1, 2, 3, 4, 5],
+    주말: [0, 6],
+    매일: [0, 1, 2, 3, 4, 5, 6],
+  };
+
+  if (namedPresets[compact]) {
+    return namedPresets[compact];
+  }
+
+  const dayMap = {
+    월: 1,
+    화: 2,
+    수: 3,
+    목: 4,
+    금: 5,
+    토: 6,
+    일: 0,
+  };
+
+  const values = [];
+
+  for (const char of compact) {
+    if (Object.hasOwn(dayMap, char) && !values.includes(dayMap[char])) {
+      values.push(dayMap[char]);
+    }
+  }
+
+  return values;
+}
+
+function parseShortcutTime(rawValue) {
+  const source = String(rawValue || "").trim();
+
+  if (!source) return null;
+
+  const [startRaw, endRaw] = source.split("-").map((value) => value.trim());
+  const start = normalizeShortcutTimeValue(startRaw);
+  const end = normalizeShortcutTimeValue(endRaw);
+
+  if (!start && !end) return null;
+
+  return {
+    start: start || "",
+    end: end || "",
+  };
+}
+
+function normalizeShortcutTimeValue(rawValue) {
+  const source = String(rawValue || "").trim().toLowerCase();
+
+  if (!source) return "";
+
+  const compact = source.replace(/\s+/g, "");
+  const periodMatch = compact.match(/^(오전|오후|am|pm)(\d{1,2})(?::?(\d{2}))?시?$/);
+
+  if (periodMatch) {
+    const [, period, hourText, minuteText] = periodMatch;
+    let hour = Number(hourText);
+    const minute = Number(minuteText || "0");
+
+    if (Number.isNaN(hour) || Number.isNaN(minute) || minute > 59 || hour > 12) {
+      return "";
+    }
+
+    const isPm = period === "오후" || period === "pm";
+
+    if (hour === 12) {
+      hour = isPm ? 12 : 0;
+    } else if (isPm) {
+      hour += 12;
+    }
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  const koreanMatch = compact.match(/^(\d{1,2})(?::?(\d{2}))?시$/);
+
+  if (koreanMatch) {
+    const hour = Number(koreanMatch[1]);
+    const minute = Number(koreanMatch[2] || "0");
+
+    if (Number.isNaN(hour) || Number.isNaN(minute) || hour > 23 || minute > 59) {
+      return "";
+    }
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  if (/^\d{1,2}$/.test(compact)) {
+    const hour = Number(compact);
+
+    if (hour > 23) return "";
+
+    return `${String(hour).padStart(2, "0")}:00`;
+  }
+
+  if (/^\d{3,4}$/.test(compact)) {
+    const padded = compact.padStart(4, "0");
+    const hour = Number(padded.slice(0, 2));
+    const minute = Number(padded.slice(2));
+
+    if (hour > 23 || minute > 59) return "";
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  const standardMatch = compact.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (standardMatch) {
+    const hour = Number(standardMatch[1]);
+    const minute = Number(standardMatch[2]);
+
+    if (hour > 23 || minute > 59) return "";
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function normalizeShortcutValue(rawValue) {
+  return String(rawValue || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function applyShortcutRepeat(parsedRepeat, mode) {
+  if (!parsedRepeat?.type) return;
+
+  const isPopup = mode === "popup";
+  const currentType =
+    (isPopup ? popupItemType?.value : itemType?.value) || "todo";
+
+  const repeatSelect =
+    currentType === "schedule"
+      ? isPopup
+        ? popupScheduleRepeat
+        : scheduleRepeat
+      : isPopup
+        ? popupTodoRepeat
+        : todoRepeat;
+
+  const intervalInput =
+    currentType === "schedule"
+      ? isPopup
+        ? popupScheduleRepeatInterval
+        : scheduleRepeatInterval
+      : isPopup
+        ? popupTodoRepeatInterval
+        : todoRepeatInterval;
+
+  const weekdayInputs =
+    currentType === "schedule"
+      ? isPopup
+        ? popupScheduleWeekdayInputs
+        : scheduleWeekdayInputs
+      : isPopup
+        ? popupTodoWeekdayInputs
+        : todoWeekdayInputs;
+
+  if (repeatSelect) {
+    repeatSelect.value = parsedRepeat.type;
+  }
+
+  if (intervalInput && parsedRepeat.type === "interval_days") {
+    intervalInput.value = String(Math.max(1, parsedRepeat.intervalDays || 1));
+  }
+
+  if (weekdayInputs?.forEach) {
+    const selectedDays = Array.isArray(parsedRepeat.weeklyDays)
+      ? parsedRepeat.weeklyDays
+      : [];
+
+    weekdayInputs.forEach((input) => {
+      input.checked =
+        parsedRepeat.type === "weekly_days" &&
+        selectedDays.includes(Number(input.value));
+    });
+  }
+
+  if (isPopup) {
+    if (currentType === "schedule") {
+      updatePopupScheduleRepeatUI();
+    } else {
+      updatePopupTodoRepeatUI();
+    }
+    return;
+  }
+
+  if (currentType === "schedule") {
+    updateScheduleRepeatUI();
+  } else {
+    updateTodoRepeatUI();
+  }
+}
+
+function applyShortcutTime(parsedTime, mode) {
+  if (!parsedTime || (!parsedTime.start && !parsedTime.end)) return;
+
+  const isPopup = mode === "popup";
+  const currentType =
+    (isPopup ? popupItemType?.value : itemType?.value) || "todo";
+
+  if (currentType === "schedule") {
+    if (parsedTime.start) {
+      applyTimeValue(
+        isPopup ? "popupScheduleStart" : "scheduleStart",
+        parsedTime.start,
+      );
+    }
+
+    if (parsedTime.end) {
+      applyTimeValue(
+        isPopup ? "popupScheduleEnd" : "scheduleEnd",
+        parsedTime.end,
+      );
+    }
+
+    return;
+  }
+
+  if (parsedTime.start) {
+    applyTimeValue(isPopup ? "popupTodo" : "todoDue", parsedTime.start);
+  }
 }
 
 function toggleStatus(id) {
@@ -3339,6 +4462,7 @@ function getEditedSchedulePayload(title) {
     title,
     color: itemColor?.value || "blue",
     tag: itemTag?.value.trim() || "",
+    projectId: itemProjectId?.value || "",
     location: itemLocation?.value || "",
     locationAddress: itemLocationAddress?.value || "",
     locationPlaceId: itemLocationPlaceId?.value || "",

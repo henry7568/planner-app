@@ -2,6 +2,12 @@
 import { formatKoreanDate, escapeHtml } from "./utils.js";
 import { getRepeatText } from "./repeat.js";
 
+function getProjectName(projectId) {
+  const projects = window.AppState?.projects;
+  if (!projectId || !Array.isArray(projects)) return "";
+  return projects.find((project) => project.id === projectId)?.name || "";
+}
+
 export function renderCard(item, getStatusSymbol) {
   const repeatIcon =
     item.repeat && item.repeat !== "none"
@@ -26,12 +32,18 @@ export function renderCard(item, getStatusSymbol) {
     ? `<span class="tag-badge">📍 ${escapeHtml(locationText)}</span>`
     : "";
 
+  const projectName = getProjectName(item.projectId);
+  const projectBadge = projectName
+    ? `<span class="tag-badge">${escapeHtml(projectName)}</span>`
+    : "";
+
   let detailMeta = "";
 
   if (item.type === "todo") {
     detailMeta = `
       <span class="meta-icon" title="할일">📝</span>
       <span class="meta-badge compact">${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
+      ${projectBadge}
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
       ${locationBadge}
       ${repeatIcon}
@@ -41,6 +53,7 @@ export function renderCard(item, getStatusSymbol) {
       <span class="meta-icon" title="일정">🗓️</span>
       <span class="meta-badge compact">${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</span>
       <span class="meta-badge compact">~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
+      ${projectBadge}
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
       ${locationBadge}
       ${repeatIcon}
@@ -94,6 +107,11 @@ export function renderSelectedCard(item, getStatusSymbol) {
 
   const locationLine = locationText
     ? `<div><strong>📍 장소</strong> : ${escapeHtml(locationText)}</div>`
+    : "";
+
+  const projectName = getProjectName(item.projectId);
+  const projectLine = projectName
+    ? `<div><strong>프로젝트</strong> : ${escapeHtml(projectName)}</div>`
     : "";
 
   const timeBlock =

@@ -427,6 +427,7 @@ export function resetPlannerForm() {
     titleInput,
     itemColor,
     itemTag,
+    itemProjectId,
     itemLocation,
     itemLocationAddress,
     itemLocationPlaceId,
@@ -461,6 +462,7 @@ export function resetPlannerForm() {
   if (titleInput) titleInput.value = "";
   if (itemColor) itemColor.value = "blue";
   if (itemTag) itemTag.value = "";
+  if (itemProjectId) itemProjectId.value = "";
   if (itemLocation) itemLocation.value = "";
   if (itemLocationAddress) itemLocationAddress.value = "";
   if (itemLocationPlaceId) itemLocationPlaceId.value = "";
@@ -578,6 +580,7 @@ export function startEdit(id) {
     titleInput,
     itemColor,
     itemTag,
+    itemProjectId,
     itemLocation,
     itemLocationAddress,
     itemLocationPlaceId,
@@ -617,6 +620,7 @@ export function startEdit(id) {
   if (titleInput) titleInput.value = item.title || "";
   if (itemColor) itemColor.value = item.color || "blue";
   if (itemTag) itemTag.value = item.tag || "";
+  if (itemProjectId) itemProjectId.value = item.projectId || "";
   if (itemLocation) itemLocation.value = item.location || "";
   if (itemLocationAddress) itemLocationAddress.value = item.locationAddress || "";
   if (itemLocationPlaceId) itemLocationPlaceId.value = item.locationPlaceId || "";

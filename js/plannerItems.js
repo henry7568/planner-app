@@ -14,6 +14,7 @@ export function saveEditedSingleItem({
   title,
   color,
   tag,
+  projectId = "",
   location,
   locationAddress,
   locationPlaceId,
@@ -72,6 +73,7 @@ export function saveEditedSingleItem({
             title,
             color,
             tag,
+            projectId,
             location,
             locationAddress,
             locationPlaceId,
@@ -133,6 +135,7 @@ export function saveEditedSingleItem({
           title,
           color,
           tag,
+          projectId,
           location,
           locationAddress,
           locationPlaceId,
@@ -156,6 +159,7 @@ export function saveTodoSeriesFromForm({
   title,
   color,
   tag,
+  projectId = "",
   location,
   locationAddress,
   locationPlaceId,
@@ -201,6 +205,7 @@ export function saveTodoSeriesFromForm({
     title,
     color,
     tag,
+    projectId,
     location,
     locationAddress,
     locationPlaceId,
@@ -224,6 +229,7 @@ export function saveScheduleSeriesFromForm({
   title,
   color,
   tag,
+  projectId = "",
   location,
   locationAddress,
   locationPlaceId,
@@ -280,6 +286,7 @@ export function saveScheduleSeriesFromForm({
     title,
     color,
     tag,
+    projectId,
     location,
     locationAddress,
     locationPlaceId,
@@ -314,6 +321,7 @@ export function addItemFromSelectedDateData({
   popupTitleInput,
   popupItemColor,
   popupItemTag,
+  popupItemProjectId,
   popupItemLocation,
   popupItemLocationAddress,
   popupItemLocationPlaceId,
@@ -340,6 +348,7 @@ export function addItemFromSelectedDateData({
   const title = popupTitleInput?.value.trim();
   const color = popupItemColor?.value || "blue";
   const tag = popupItemTag?.value.trim() || "";
+  const projectId = popupItemProjectId?.value || "";
   const location = popupItemLocation?.value || "";
   const locationAddress = popupItemLocationAddress?.value || "";
   const locationPlaceId = popupItemLocationPlaceId?.value || "";
@@ -388,6 +397,7 @@ export function addItemFromSelectedDateData({
         title,
         color,
         tag,
+        projectId,
         location,
         locationAddress,
         locationPlaceId,
@@ -451,6 +461,7 @@ export function addItemFromSelectedDateData({
       title,
       color,
       tag,
+      projectId,
       location,
       locationAddress,
       locationPlaceId,

@@ -2,11 +2,28 @@
   box-sizing: border-box;
 }
 
+:root {
+  --surface-0: #f5f7fb;
+  --surface-1: #ffffff;
+  --surface-2: #f8fbff;
+  --surface-3: #eef4fb;
+  --line-soft: #dbe7f3;
+  --line-default: #d4deea;
+  --text-strong: #0f172a;
+  --text-muted: #64748b;
+  --brand-primary: #0f766e;
+  --brand-secondary: #2563eb;
+  --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 18px 36px rgba(15, 23, 42, 0.12);
+}
+
 html,
 body {
   margin: 0;
   font-family: "맑은 고딕", "Malgun Gothic", Arial, sans-serif;
-  background: #f5f7fb;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 100%);
   color: #222;
 }
 
@@ -162,17 +179,20 @@ button {
 }
 
 .card {
-  background: #fff;
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
   padding: 20px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(6px);
 }
 
 .card h2 {
   margin-top: 0;
   margin-bottom: 14px;
   font-size: 22px;
+  color: var(--text-strong);
 }
 
 .form-group {
@@ -189,14 +209,16 @@ button {
 
 .form-group input,
 .form-group select,
-.filter-box select {
+.filter-box select,
+.filter-box input {
   width: 100%;
   min-width: 0;
   padding: 12px 12px;
-  border: 1px solid #cfd6e4;
-  border-radius: 10px;
+  border: 1px solid var(--line-default);
+  border-radius: 12px;
   font-size: 16px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .form-grid-2 {
@@ -217,29 +239,39 @@ button {
 .edit-btn,
 .delete-btn {
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 15px;
+  font-weight: 700;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .primary-btn {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: white;
   padding: 12px 16px;
+  box-shadow: 0 12px 20px rgba(37, 99, 235, 0.22);
 }
 
 .primary-btn:hover {
-  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 24px rgba(37, 99, 235, 0.28);
 }
 
 .secondary-btn {
-  background: #e5e7eb;
-  color: #222;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e293b;
   padding: 12px 16px;
+  border: 1px solid var(--line-default);
 }
 
 .secondary-btn:hover {
-  background: #d1d5db;
+  transform: translateY(-1px);
+  background: #f8fbff;
 }
 
 .filter-row {
@@ -262,7 +294,7 @@ button {
 
 .small-text {
   margin: 6px 0 0;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .summary {
@@ -280,17 +312,20 @@ button {
 
 .summary-item,
 .home-card {
-  background: #f8fafc;
-  border: 1px solid #e5eaf3;
-  border-radius: 12px;
-  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 16px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 96px;
+  min-height: 112px;
   width: 100%;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
 .summary-btn,
@@ -303,8 +338,8 @@ button {
 
 .summary-btn:hover,
 .home-card-btn:hover {
-  transform: translateY(-1px);
-  background: #eef4ff;
+  transform: translateY(-2px);
+  background: #f7fbff;
 }
 
 .summary-item strong,
@@ -337,10 +372,11 @@ button {
 
 .achievement-card {
   margin-top: 16px;
-  background: #f8fafc;
-  border: 1px solid #e5eaf3;
-  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
   padding: 16px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
 .achievement-header {
@@ -395,10 +431,11 @@ button {
   display: flex;
   gap: 14px;
   align-items: flex-start;
-  border: 1px solid #e5eaf3;
-  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
   padding: 14px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
 }
 
 .status-btn {
@@ -534,7 +571,7 @@ button {
   align-items: end;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 .calendar-nav {
@@ -547,7 +584,9 @@ button {
 .calendar-title-text {
   min-width: 120px;
   text-align: center;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-strong);
 }
 
 .calendar-weekdays {
@@ -560,8 +599,10 @@ button {
 .calendar-weekdays div {
   text-align: center;
   font-weight: 700;
-  color: #475569;
+  color: #334155;
   padding: 8px 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.66);
 }
 
 .calendar-grid {
@@ -571,20 +612,22 @@ button {
 }
 
 .calendar-cell {
-  min-height: 140px;
-  border: 1px solid #e5eaf3;
-  border-radius: 12px;
-  background: #fcfdff;
-  padding: 10px;
+  min-height: 152px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.96) 100%);
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   cursor: pointer;
   transition: 0.15s ease;
   overflow: hidden;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
 
 .calendar-cell:hover {
+  transform: translateY(-1px);
   background: #f8fbff;
 }
 
@@ -755,7 +798,9 @@ body.modal-open {
 .popup-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.38);
+  background:
+    radial-gradient(circle at top, rgba(37, 99, 235, 0.12), transparent 24%),
+    rgba(15, 23, 42, 0.44);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -774,31 +819,59 @@ body.modal-open {
   max-height: calc(100dvh - 24px);
   margin: auto;
   overflow-y: auto;
-  background: #ffffff;
-  border: 2px solid #f59e0b;
-  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(219, 231, 243, 0.96);
+  border-radius: 24px;
   padding: clamp(18px, 2vw, 24px);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.24);
+}
+
+.popup-shell {
+  backdrop-filter: blur(12px);
 }
 
 .popup-header {
+  position: sticky;
+  top: calc(clamp(18px, 2vw, 24px) * -1);
+  z-index: 2;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 18px;
   flex-wrap: wrap;
+  padding: 18px 0 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 76%, rgba(255, 255, 255, 0));
+  backdrop-filter: blur(8px);
 }
 
 .popup-title {
   margin: 0;
   font-size: 28px;
+  color: var(--text-strong);
 }
 
 .popup-subtext {
   margin: 8px 0 0;
-  color: #666;
+  color: var(--text-muted);
   font-size: 16px;
+  line-height: 1.6;
+}
+
+.popup-close-btn {
+  min-width: 88px;
+  align-self: flex-start;
+}
+
+.summary-popup-panel,
+.planner-edit-popup-panel,
+.calendar-popup-panel,
+.place-search-popup-panel {
+  width: min(980px, calc(100vw - 24px));
+}
+
+.compact-popup-panel {
+  width: min(560px, calc(100vw - 24px));
 }
 
 .calendar-popup-list {
@@ -808,11 +881,12 @@ body.modal-open {
 }
 
 .quick-add-box {
-  border: 1px solid #e5eaf3;
-  background: #f8fafc;
-  border-radius: 14px;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 18px;
   padding: 16px;
   margin-bottom: 18px;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
 }
 
 .quick-add-header-row {
@@ -1016,6 +1090,11 @@ body.modal-open {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .planner-overview-grid,
+  .finance-home-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
   .calendar-grid {
     gap: 6px;
   }
@@ -1033,6 +1112,12 @@ body.modal-open {
 @media (max-width: 768px) {
   .hub-grid {
     grid-template-columns: 1fr;
+  }
+
+  .planner-hero-card,
+  .finance-home-hero-card,
+  .planner-today-card {
+    min-height: 0;
   }
 
   .form-grid-2 {
@@ -1054,6 +1139,17 @@ body.modal-open {
   .home-card {
     min-height: 82px;
     padding: 12px 10px;
+  }
+
+  .planner-hero-card,
+  .finance-home-hero-card,
+  .planner-calendar-card,
+  .finance-summary-card,
+  .finance-utility-home-card,
+  .finance-ledger-hero-card,
+  .finance-ledger-list-card,
+  .finance-ledger-category-card {
+    padding: 18px;
   }
 
   .summary-icon,
@@ -2174,6 +2270,325 @@ body.modal-open {
   border: 1px solid #e5eaf3;
 }
 
+.planner-overview-grid,
+.finance-home-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+
+.planner-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.planner-section-eyebrow,
+.finance-home-eyebrow {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.planner-section-eyebrow {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.finance-home-eyebrow {
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+}
+
+.planner-hero-card,
+.finance-home-hero-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  border: none;
+  color: #fff;
+  box-shadow: var(--shadow-strong);
+}
+
+.planner-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.24), transparent 34%),
+    linear-gradient(145deg, #2563eb 0%, #1d4ed8 45%, #0f172a 100%);
+}
+
+.finance-home-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(145deg, #0f766e 0%, #115e59 40%, #0f172a 100%);
+}
+
+.planner-hero-card::after,
+.finance-home-hero-card::after {
+  content: "";
+  position: absolute;
+  right: -48px;
+  bottom: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.planner-hero-card > *,
+.finance-home-hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.planner-hero-card h2,
+.finance-home-hero-card h2 {
+  margin: 0;
+  font-size: clamp(28px, 3.5vw, 36px);
+  line-height: 1.1;
+  color: #fff;
+}
+
+.planner-hero-card .small-text,
+.finance-home-hero-card .small-text {
+  margin: 0;
+  max-width: 34ch;
+  color: rgba(255, 255, 255, 0.76);
+  line-height: 1.7;
+}
+
+.planner-hero-card .primary-btn,
+.finance-home-hero-card .primary-btn {
+  align-self: flex-start;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.planner-today-card,
+.finance-summary-card,
+.finance-utility-home-card,
+.finance-ledger-hero-card,
+.finance-ledger-list-card,
+.finance-ledger-category-card,
+.planner-form-card,
+.planner-calendar-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
+}
+
+.planner-today-card {
+  min-height: 220px;
+}
+
+.planner-today-card .item-list {
+  margin-top: 14px;
+}
+
+.planner-workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+.planner-workspace-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 210px;
+  padding: 24px;
+  text-align: left;
+  border: 1px solid #d9e5ef;
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.98) 100%);
+}
+
+.planner-workspace-entry h2,
+.planner-workspace-entry p {
+  margin: 0;
+}
+
+.planner-workspace-entry-btn {
+  width: 100%;
+  cursor: pointer;
+}
+
+.planner-workspace-entry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.planner-inbox-card,
+.planner-project-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
+}
+
+.planner-view-back-row {
+  margin-bottom: 14px;
+}
+
+.planner-inbox-capture {
+  margin-top: 12px;
+}
+
+.planner-stack-list,
+.planner-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.planner-inbox-entry,
+.planner-project-entry {
+  border: 1px solid #d9e5ef;
+  border-radius: 18px;
+  padding: 16px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.planner-inbox-entry.converted {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.planner-inbox-entry-top,
+.planner-project-entry-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.planner-inbox-entry strong,
+.planner-project-entry strong {
+  display: block;
+  color: #0f172a;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.planner-inbox-note,
+.planner-project-entry p {
+  margin: 8px 0 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.planner-inbox-actions,
+.planner-project-actions,
+.planner-project-item-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.planner-project-entry {
+  border-top: 4px solid var(--project-accent, #2563eb);
+}
+
+.planner-project-item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.planner-inline-row .form-group {
+  flex: 1;
+}
+
+.planner-form-card {
+  border-radius: 20px;
+}
+
+.planner-calendar-card {
+  padding: 22px;
+}
+
+.finance-summary-card {
+  padding: 22px;
+}
+
+.finance-summary-grid {
+  margin-bottom: 0;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+}
+
+.finance-summary-item {
+  min-height: 118px;
+  min-width: 0;
+  padding: 18px 14px;
+}
+
+.finance-summary-item .summary-label {
+  margin-bottom: 10px;
+}
+
+.finance-summary-item strong {
+  width: 100%;
+  margin: 0;
+  font-size: clamp(21px, 3vw, 32px);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  text-align: center;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.finance-summary-meta {
+  margin-top: 14px;
+}
+
+.finance-utility-home-card {
+  padding: 22px;
+}
+
+.finance-utility-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.finance-utility-entry {
+  min-height: 132px;
+}
+
+.finance-ledger-hero-card .item-meta,
+.finance-ledger-list-card .form-group {
+  margin-top: 16px;
+}
+
+.finance-ledger-form-card,
+.finance-ledger-list-card,
+.finance-ledger-category-card {
+  border-radius: 20px;
+}
+
+.finance-ledger-category-card .item-list,
+.finance-ledger-list-card .item-list {
+  margin-top: 14px;
+}
+
 .hub-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2181,16 +2596,30 @@ body.modal-open {
 }
 
 .hub-card {
-  border: 1px solid #dbe3ef;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 22px 18px;
-  text-align: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 20px;
+  padding: 24px 20px;
+  text-align: left;
   cursor: pointer;
   transition: 0.16s ease;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  box-shadow: var(--shadow-soft);
+}
+
+.hub-card::after {
+  content: "";
+  position: absolute;
+  right: -28px;
+  top: -36px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .hub-card:hover {
@@ -2200,20 +2629,22 @@ body.modal-open {
 }
 
 .hub-icon {
-  font-size: 28px;
-  text-align: center;
+  font-size: 32px;
+  text-align: left;
   line-height: 1;
 }
 
 .hub-card h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
+  color: var(--text-strong);
 }
 
 .hub-card p {
   margin: 0;
-  color: #64748b;
+  color: var(--text-muted);
   line-height: 1.5;
+  max-width: 26ch;
 }
 
 .bottom-tab-btn.is-home {
@@ -2293,6 +2724,84 @@ body.modal-open {
   align-items: flex-start;
 }
 
+.finance-asset-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  margin: 16px 0 18px;
+  align-items: stretch;
+}
+
+.finance-asset-hero-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 176px;
+  padding: 22px;
+  border-radius: 20px;
+  color: #fff;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), transparent 34%),
+    linear-gradient(145deg, #0f766e 0%, #115e59 42%, #0f172a 100%);
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.18);
+}
+
+.finance-asset-hero-card::after {
+  content: "";
+  position: absolute;
+  right: -36px;
+  bottom: -56px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.finance-asset-eyebrow {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.finance-asset-hero-card h3,
+.finance-asset-hero-card strong,
+.finance-asset-hero-card p {
+  position: relative;
+  z-index: 1;
+}
+
+.finance-asset-hero-card h3 {
+  margin: 18px 0 10px;
+  font-size: 20px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.finance-asset-hero-card strong {
+  display: block;
+  font-size: clamp(32px, 4vw, 42px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.finance-asset-hero-card p {
+  margin: 16px 0 0;
+  max-width: 28ch;
+  color: rgba(255, 255, 255, 0.76);
+  line-height: 1.6;
+}
+
 .finance-asset-action-group {
   display: flex;
   flex-direction: column;
@@ -2305,6 +2814,311 @@ body.modal-open {
   margin-top: 0;
 }
 
+.finance-asset-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.finance-asset-insight-card {
+  min-height: 176px;
+  margin-top: 0;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.finance-asset-insight-card .achievement-header {
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.finance-asset-insight-card .achievement-header h3 {
+  font-size: 16px;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.finance-asset-insight-card .achievement-header strong {
+  font-size: 26px;
+  line-height: 1.1;
+  text-align: right;
+  letter-spacing: -0.02em;
+}
+
+.finance-asset-insight-card .small-text {
+  margin-top: auto;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.finance-asset-tool-card {
+  margin-bottom: 16px;
+  border: 1px solid #dbe7f3;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+.finance-asset-tool-card .filter-row {
+  align-items: stretch;
+}
+
+.finance-asset-tool-card .filter-controls {
+  gap: 10px;
+}
+
+.finance-asset-tool-card .filter-box {
+  min-width: 170px;
+}
+
+.finance-asset-tool-card .filter-box label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.finance-asset-tool-card input,
+.finance-asset-tool-card select {
+  min-height: 46px;
+  border-color: #d4deea;
+  background: #fff;
+}
+
+.finance-asset-body-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.finance-asset-summary-card,
+.finance-asset-list-panel {
+  margin-bottom: 0;
+}
+
+.finance-asset-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.finance-asset-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finance-asset-section-heading h2 {
+  margin-bottom: 6px;
+}
+
+.finance-asset-section-heading .small-text {
+  margin: 0;
+}
+
+.finance-asset-category-list {
+  gap: 10px;
+}
+
+.finance-asset-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #d9e5ef;
+  border-left: none;
+  border-radius: 18px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.finance-asset-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--asset-accent, #0f766e) 0%, var(--asset-accent-soft, #2dd4bf) 100%);
+}
+
+.finance-asset-card[data-category="stock"] {
+  --asset-accent: #2563eb;
+  --asset-accent-soft: #60a5fa;
+}
+
+.finance-asset-card[data-category="savings"] {
+  --asset-accent: #0891b2;
+  --asset-accent-soft: #22d3ee;
+}
+
+.finance-asset-card[data-category="deposit"] {
+  --asset-accent: #0f766e;
+  --asset-accent-soft: #2dd4bf;
+}
+
+.finance-asset-card .item-content {
+  width: 100%;
+}
+
+.finance-asset-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.finance-asset-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.finance-asset-subtext {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.finance-asset-amount-block {
+  text-align: right;
+  min-width: 120px;
+}
+
+.finance-amount-strong {
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.finance-asset-share {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.finance-asset-progress {
+  margin-top: 14px;
+  height: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.finance-asset-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--asset-accent, #0f766e) 0%, var(--asset-accent-soft, #14b8a6) 100%);
+}
+
+.finance-asset-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.finance-asset-metric {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.finance-asset-metric-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.finance-asset-metric-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.finance-asset-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.finance-asset-card-actions .secondary-btn {
+  border: 1px solid #d6e2ec;
+  background: #fff;
+}
+
+.finance-asset-category-card {
+  border-left: none;
+  border-radius: 16px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.finance-asset-category-card[data-category="stock"] {
+  border-color: rgba(37, 99, 235, 0.16);
+}
+
+.finance-asset-category-card[data-category="savings"] {
+  border-color: rgba(8, 145, 178, 0.16);
+}
+
+.finance-asset-category-card[data-category="deposit"] {
+  border-color: rgba(15, 118, 110, 0.16);
+}
+
+.finance-asset-category-card .item-title {
+  margin-bottom: 0;
+}
+
+.finance-asset-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.finance-asset-category-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.finance-asset-category-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--asset-accent, #0f766e) 0%, var(--asset-accent-soft, #14b8a6) 100%);
+}
+
+.finance-asset-category-card[data-category="stock"] .finance-asset-category-progress-fill {
+  --asset-accent: #2563eb;
+  --asset-accent-soft: #60a5fa;
+}
+
+.finance-asset-category-card[data-category="savings"] .finance-asset-category-progress-fill {
+  --asset-accent: #0891b2;
+  --asset-accent-soft: #22d3ee;
+}
+
+.finance-asset-category-card[data-category="deposit"] .finance-asset-category-progress-fill {
+  --asset-accent: #0f766e;
+  --asset-accent-soft: #2dd4bf;
+}
+
+.finance-asset-category-total {
+  color: #0f172a;
+  font-weight: 700;
+}
+
 .finance-ocr-actions {
   margin-top: 0;
 }
@@ -2314,6 +3128,30 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  .finance-asset-overview-grid,
+  .finance-asset-body-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-asset-hero-card {
+    min-height: 0;
+  }
+
+  .finance-asset-card-top {
+    flex-direction: column;
+  }
+
+  .finance-asset-amount-block {
+    text-align: left;
+    min-width: 0;
+  }
+
+  .finance-asset-metrics {
+    grid-template-columns: 1fr;
+  }
 }
 
 .finance-expense-ocr-row {

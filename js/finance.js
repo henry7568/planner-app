@@ -7,7 +7,11 @@ import {
   escapeHtml,
 } from "./utils.js";
 
-import { loadFinanceLocal, saveFinanceLocal } from "./storage.js";
+import {
+  loadFinanceLocal,
+  saveFinanceLocal,
+  normalizeFinanceData,
+} from "./storage.js";
 
 let deps = {};
 
@@ -20,12 +24,7 @@ function getRefs() {
 }
 
 function getFinanceData() {
-  return (
-    deps.getFinanceData?.() || {
-      monthlyBudgets: {},
-      expenses: [],
-    }
-  );
+  return normalizeFinanceData(deps.getFinanceData?.());
 }
 
 function setFinanceData(value) {
@@ -48,6 +47,34 @@ function setFinanceEditingExpenseId(value) {
   deps.setFinanceEditingExpenseId?.(value);
 }
 
+function formatFinanceSummaryTotalAsset(value) {
+  const safeValue = Number(value) || 0;
+  const absValue = Math.abs(safeValue);
+
+  if (absValue < 10000) {
+    return formatMoney(safeValue);
+  }
+
+  const manwonValue = Math.round(safeValue / 10000);
+  return `${manwonValue.toLocaleString("ko-KR")}만 원`;
+}
+
+function isFinanceOcrIncomeAssetMode() {
+  return getRefs().financeExpenseFormCard?.dataset.ocrIncomeAssetMode === "true";
+}
+
+function setFinanceOcrIncomeAssetMode(value) {
+  const formCard = getRefs().financeExpenseFormCard;
+  if (!formCard) return;
+
+  if (value) {
+    formCard.dataset.ocrIncomeAssetMode = "true";
+    return;
+  }
+
+  delete formCard.dataset.ocrIncomeAssetMode;
+}
+
 function getFinancePage() {
   return deps.getFinancePage?.() || 1;
 }
@@ -63,43 +90,40 @@ function getFinancePageSize() {
 function cloneFinanceData() {
   const current = getFinanceData();
 
-  return {
-    monthlyBudgets: { ...(current.monthlyBudgets || {}) },
-
+  return normalizeFinanceData({
+    ...current,
+    budgetSettings: { ...(current.budgetSettings || {}) },
+    budgetEntries: Object.entries(current.budgetEntries || {}).reduce(
+      (acc, [monthKey, entry]) => {
+        acc[monthKey] = {
+          ...entry,
+          categoryBudgets:
+            entry?.categoryBudgets && typeof entry.categoryBudgets === "object"
+              ? { ...entry.categoryBudgets }
+              : {},
+        };
+        return acc;
+      },
+      {},
+    ),
     expenses: Array.isArray(current.expenses)
       ? current.expenses.map((item) => ({
           ...item,
           flowType: item.flowType || "expense",
         }))
       : [],
-
     assets: Array.isArray(current.assets)
       ? current.assets.map((item) => ({
           ...item,
         }))
       : [],
-  };
+  });
 }
 
 export function initFinance() {
   const refs = getRefs();
   const loaded = loadFinanceLocal();
-
-  const normalized = {
-    monthlyBudgets:
-      loaded && typeof loaded.monthlyBudgets === "object"
-        ? loaded.monthlyBudgets
-        : {},
-
-    expenses: Array.isArray(loaded?.expenses)
-      ? loaded.expenses.map((item) => ({
-          ...item,
-          flowType: item.flowType || "expense",
-        }))
-      : [],
-
-    assets: Array.isArray(loaded?.assets) ? loaded.assets : [],
-  };
+  const normalized = normalizeFinanceData(loaded);
 
   setFinanceData(normalized);
 
@@ -117,7 +141,7 @@ export function initFinance() {
   }
 
   if (refs.financeBudgetAmount && !refs.financeBudgetAmount.value) {
-    refs.financeBudgetAmount.value = currentBudget?.budget || "";
+    refs.financeBudgetAmount.value = currentBudget?.totalBudget || "";
   }
 
   if (refs.financeExpenseDate && !refs.financeExpenseDate.value) {
@@ -137,18 +161,60 @@ export function initFinance() {
   renderFinance();
 }
 
-export function getFinanceBudgetByMonth(monthKey) {
+function findPreviousBudgetEntry(monthKey) {
   if (!monthKey) return null;
-  return getFinanceData().monthlyBudgets?.[monthKey] || null;
+
+  const entries = Object.values(getFinanceData().budgetEntries || {})
+    .filter((entry) => entry?.monthKey && entry.monthKey < monthKey)
+    .sort((a, b) => String(b.monthKey).localeCompare(String(a.monthKey), "ko"));
+
+  return entries[0] || null;
+}
+
+export function getFinanceBudgetByMonth(monthKey, options = {}) {
+  if (!monthKey) return null;
+
+  const { includeInherited = true } = options;
+  const financeData = getFinanceData();
+  const exactEntry = financeData.budgetEntries?.[monthKey] || null;
+
+  if (exactEntry) {
+    return {
+      ...exactEntry,
+      isInherited: false,
+    };
+  }
+
+  if (!includeInherited || financeData.budgetSettings?.autoApplyPreviousBudget === false) {
+    return null;
+  }
+
+  const inheritedEntry = findPreviousBudgetEntry(monthKey);
+  if (!inheritedEntry) return null;
+
+  return {
+    ...inheritedEntry,
+    monthKey,
+    sourceMonthKey: inheritedEntry.monthKey,
+    isInherited: true,
+  };
 }
 
 export function saveFinanceBudget() {
   const refs = getRefs();
 
   const monthKey = refs.financeMonthKey?.value || "";
+  const financeData = getFinanceData();
   const startDay = Math.max(
     1,
-    Math.min(31, Number(refs.financePeriodStartDay?.value) || 1),
+    Math.min(
+      31,
+      Number(
+        refs.financePeriodStartDay?.value ||
+          financeData.budgetSettings?.defaultStartDay ||
+          1,
+      ) || 1,
+    ),
   );
   const budget = Math.max(0, Number(refs.financeBudgetAmount?.value) || 0);
 
@@ -159,16 +225,30 @@ export function saveFinanceBudget() {
   }
 
   const nextData = cloneFinanceData();
+  const existingEntry = nextData.budgetEntries?.[monthKey] || null;
 
-  nextData.monthlyBudgets[monthKey] = {
+  nextData.budgetSettings = {
+    ...(nextData.budgetSettings || {}),
+    defaultStartDay: startDay,
+  };
+
+  nextData.budgetEntries[monthKey] = {
+    ...(existingEntry || {}),
     monthKey,
     startDay,
-    budget,
+    totalBudget: budget,
+    categoryBudgets:
+      existingEntry?.categoryBudgets && typeof existingEntry.categoryBudgets === "object"
+        ? { ...existingEntry.categoryBudgets }
+        : {},
+    note: existingEntry?.note || "",
+    createdAt: Number(existingEntry?.createdAt) || Date.now(),
     updatedAt: Date.now(),
   };
 
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
+  const normalized = normalizeFinanceData(nextData);
+  setFinanceData(normalized);
+  saveFinanceLocal(normalized);
   renderFinance();
   alert("예산이 저장되었습니다.");
 }
@@ -180,18 +260,26 @@ export function renderFinance() {
   if (!monthKey) return;
 
   const savedBudget = getFinanceBudgetByMonth(monthKey);
+  const exactBudget = getFinanceBudgetByMonth(monthKey, {
+    includeInherited: false,
+  });
 
   const startDay = Math.max(
     1,
     Math.min(
       31,
-      Number(refs.financePeriodStartDay?.value || savedBudget?.startDay || 1),
+      Number(
+        refs.financePeriodStartDay?.value ||
+          savedBudget?.startDay ||
+          getFinanceData().budgetSettings?.defaultStartDay ||
+          1,
+      ),
     ),
   );
 
   const budget = Math.max(
     0,
-    Number(refs.financeBudgetAmount?.value || savedBudget?.budget || 0),
+    Number(refs.financeBudgetAmount?.value || savedBudget?.totalBudget || 0),
   );
 
   if (refs.financePeriodStartDay) {
@@ -203,7 +291,7 @@ export function renderFinance() {
     refs.financeBudgetAmount &&
     !refs.financeBudgetAmount.matches(":focus")
   ) {
-    refs.financeBudgetAmount.value = savedBudget.budget || "";
+    refs.financeBudgetAmount.value = savedBudget.totalBudget || "";
   }
 
   const period = getFinancePeriodRange(monthKey, startDay);
@@ -286,7 +374,9 @@ export function renderFinance() {
 
   renderFinanceExpenseList(expenseOnlyList);
   renderFinanceCategorySummary(expenseOnlyList);
-  renderFinanceAssetSummary(filteredTransactions);
+  renderFinanceAssetFilters();
+  renderFinanceAssetDashboard();
+  renderFinanceAssetCategorySummary();
   renderFinanceAssetTransactionList(filteredTransactions);
 
   if (refs.financeSummaryTopCategoryText) {
@@ -308,7 +398,11 @@ export function renderFinance() {
   }
 
   if (refs.financeSummaryExpenseCountText) {
-    refs.financeSummaryExpenseCountText.textContent = `${filteredTransactions.length}건`;
+    const inheritedLabel =
+      savedBudget?.isInherited && !exactBudget?.monthKey
+        ? ` · ${savedBudget.sourceMonthKey} 예산 적용`
+        : "";
+    refs.financeSummaryExpenseCountText.textContent = `${filteredTransactions.length}건${inheritedLabel}`;
   }
 }
 
@@ -352,6 +446,8 @@ export function saveFinanceExpense() {
 
   const repeat = refs.financeExpenseRepeat?.value || "none";
   const repeatUntil = refs.financeExpenseRepeatUntil?.value || "";
+  const isOcrIncomeAssetMode =
+    flowType === "income" && isFinanceOcrIncomeAssetMode();
 
   if (!date) {
     alert("날짜를 입력하세요.");
@@ -371,7 +467,7 @@ export function saveFinanceExpense() {
     return { ok: false };
   }
 
-  if (!category) {
+  if (!isOcrIncomeAssetMode && !category) {
     alert(
       flowType === "income"
         ? "입금 카테고리를 선택하세요."
@@ -382,7 +478,7 @@ export function saveFinanceExpense() {
   }
 
   const subCategoryOptions = getFinanceSubCategoryMap()[category] || [];
-  if (subCategoryOptions.length > 0 && !subCategory) {
+  if (!isOcrIncomeAssetMode && subCategoryOptions.length > 0 && !subCategory) {
     alert("서브카테고리를 선택하세요.");
     refs.financeExpenseSubCategory?.focus();
     return { ok: false };
@@ -400,6 +496,82 @@ export function saveFinanceExpense() {
 
   const editingId = String(getFinanceEditingExpenseId() || "").split("__")[0];
   const nextData = cloneFinanceData();
+
+  if (isOcrIncomeAssetMode) {
+    const targetAssetId = refs.financeIncomeAssetTargetSelect?.value || "";
+    const targetId = String(targetAssetId || "").split("__")[0];
+    const assetBaseDate = date || formatDateKey(new Date());
+    const normalizedTitle = title.trim();
+
+    if (targetId) {
+      const existingIndex = nextData.assets.findIndex((item) => item.id === targetId);
+
+      if (existingIndex < 0) {
+        alert("선택한 자산을 찾지 못했습니다.");
+        refs.financeIncomeAssetTargetSelect?.focus();
+        return { ok: false };
+      }
+
+      const currentAmount = Number(nextData.assets[existingIndex].amount) || 0;
+      nextData.assets[existingIndex] = {
+        ...nextData.assets[existingIndex],
+        amount: currentAmount + amount,
+        baseDate:
+          nextData.assets[existingIndex].baseDate ||
+          nextData.assets[existingIndex].displayDate ||
+          assetBaseDate,
+        updatedAt: Date.now(),
+      };
+    } else {
+      const existingIndex = nextData.assets.findIndex((asset) => {
+        return (
+          String(asset.category || "") === "deposit" &&
+          String(asset.title || "").trim() === normalizedTitle &&
+          String(asset.repeat || "none") === "none"
+        );
+      });
+
+      if (existingIndex >= 0) {
+        const currentAmount = Number(nextData.assets[existingIndex].amount) || 0;
+        nextData.assets[existingIndex] = {
+          ...nextData.assets[existingIndex],
+          amount: currentAmount + amount,
+          baseDate:
+            nextData.assets[existingIndex].baseDate ||
+            nextData.assets[existingIndex].displayDate ||
+            assetBaseDate,
+          updatedAt: Date.now(),
+        };
+      } else {
+        nextData.assets.push({
+          id: makeId(),
+          category: "deposit",
+          title: normalizedTitle,
+          amount,
+          baseDate: assetBaseDate,
+          repeat: "none",
+          repeatUntil: "",
+          isRecurring: false,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    setFinanceData(nextData);
+    saveFinanceLocal(nextData);
+    resetFinanceExpenseForm();
+    renderFinance();
+
+    alert("입금 항목을 자산에 반영했습니다.");
+
+    return {
+      ok: true,
+      mode: "create",
+      flowType,
+      assetLinked: true,
+    };
+  }
 
   if (editingId) {
     nextData.expenses = nextData.expenses.map((item) =>
@@ -488,6 +660,7 @@ export function resetFinanceExpenseForm() {
   const refs = getRefs();
 
   setFinanceEditingExpenseId(null);
+  setFinanceOcrIncomeAssetMode(false);
 
   if (refs.financeTransactionType) {
     refs.financeTransactionType.value = "expense";
@@ -525,6 +698,10 @@ export function resetFinanceExpenseForm() {
 
   if (refs.financeExpenseMerchant) {
     refs.financeExpenseMerchant.value = "";
+  }
+
+  if (refs.financeIncomeAssetTargetSelect) {
+    refs.financeIncomeAssetTargetSelect.value = "";
   }
 
   if (refs.financeExpenseTag) {
@@ -1046,6 +1223,7 @@ export function startEditFinanceExpense(id) {
   const item = getFinanceData().expenses.find((x) => x.id === targetId);
   if (!item) return;
 
+  setFinanceOcrIncomeAssetMode(false);
   setFinanceEditingExpenseId(targetId);
 
   if (refs.financeTransactionType) {
@@ -1133,21 +1311,65 @@ export function syncFinanceExpenseFormButtons() {
   const refs = getRefs();
   const isEditing = !!getFinanceEditingExpenseId();
   const flowType = refs.financeTransactionType?.value || "expense";
+  const isOcrIncomeAssetMode =
+    flowType === "income" && isFinanceOcrIncomeAssetMode();
   const noun = flowType === "income" ? "수익" : "지출";
 
+  renderFinanceIncomeAssetTargetOptions();
+
+  refs.financeIncomeAssetLinkGroup?.classList.toggle(
+    "hidden",
+    !isOcrIncomeAssetMode,
+  );
+
   if (refs.financeSaveExpenseBtn) {
-    refs.financeSaveExpenseBtn.textContent = isEditing
+    refs.financeSaveExpenseBtn.textContent = isOcrIncomeAssetMode
+      ? "자산 반영"
+      : isEditing
       ? `${noun} 수정`
       : `${noun} 저장`;
   }
 
   const formTitle = refs.financeExpenseFormCard?.querySelector("h2");
   if (formTitle) {
-    formTitle.textContent = isEditing ? `${noun} 수정` : `${noun} 추가`;
+    formTitle.textContent = isOcrIncomeAssetMode
+      ? "OCR 입금 자산 반영"
+      : isEditing
+        ? `${noun} 수정`
+        : `${noun} 추가`;
   }
 
   refs.financeCancelExpenseEditBtn?.classList.toggle("hidden", !isEditing);
   refs.financeDeleteExpenseBtn?.classList.toggle("hidden", !isEditing);
+}
+
+export function renderFinanceIncomeAssetTargetOptions(preferredAssetId = "") {
+  const refs = getRefs();
+  if (!refs.financeIncomeAssetTargetSelect) return;
+
+  const currentValue =
+    preferredAssetId || refs.financeIncomeAssetTargetSelect.value || "";
+  const assets = Array.isArray(getFinanceData().assets)
+    ? [...getFinanceData().assets]
+    : [];
+
+  const options = assets.sort((a, b) =>
+    String(a.title || "").localeCompare(String(b.title || ""), "ko"),
+  );
+
+  refs.financeIncomeAssetTargetSelect.innerHTML =
+    `<option value="">새 자산으로 등록</option>`;
+
+  options.forEach((asset) => {
+    const option = document.createElement("option");
+    option.value = asset.id || "";
+    option.textContent = `${asset.title || "자산"} · ${formatMoney(
+      asset.amount,
+    )}`;
+    refs.financeIncomeAssetTargetSelect.appendChild(option);
+  });
+
+  refs.financeIncomeAssetTargetSelect.value = currentValue;
 }
 
 export function getFinancePagedExpenses(sortedExpenses) {
@@ -1255,6 +1477,65 @@ export function toggleFinanceExpenseForm(forceOpen = null) {
 export function openFinanceExpenseForm() {
   resetFinanceExpenseForm();
   openFinanceEditPopup("expense");
+}
+
+export function openFinanceExpenseFormForAsset(assetId, flowType = "expense") {
+  const targetId = String(assetId || "").split("__")[0];
+  const asset = getFinanceData().assets.find((item) => item.id === targetId);
+
+  if (!asset) return;
+
+  resetFinanceExpenseForm();
+
+  const refs = getRefs();
+
+  if (refs.financeTransactionType) {
+    refs.financeTransactionType.value =
+      flowType === "income" ? "income" : "expense";
+  }
+
+  if (refs.financeExpenseDate) {
+    refs.financeExpenseDate.value = formatDateKey(new Date());
+  }
+
+  if (refs.financeExpenseTitle) {
+    refs.financeExpenseTitle.value = `${asset.title || "자산"} ${
+      flowType === "income" ? "입금" : "출금"
+    }`;
+  }
+
+  if (refs.financeExpenseMerchant) {
+    refs.financeExpenseMerchant.value = asset.title || "";
+  }
+
+  if (flowType === "income") {
+    renderFinanceIncomeAssetTargetOptions(targetId);
+    if (refs.financeIncomeAssetTargetSelect) {
+      refs.financeIncomeAssetTargetSelect.value = targetId;
+    }
+  }
+
+  if (refs.financeExpenseTag) {
+    refs.financeExpenseTag.value = "자산";
+  }
+
+  if (refs.financeExpenseCategory) {
+    refs.financeExpenseCategory.value =
+      flowType === "income" ? "기타수익" : "기타";
+  }
+
+  syncFinanceSubCategoryOptions(refs.financeExpenseCategory?.value || "");
+
+  if (refs.financeExpensePaymentMethod) {
+    refs.financeExpensePaymentMethod.value = "transfer";
+  }
+
+  syncFinanceExpenseFormButtons();
+  openFinanceEditPopup("expense");
+
+  setTimeout(() => {
+    refs.financeExpenseAmount?.focus();
+  }, 100);
 }
 
 export function resetFinanceAssetForm() {
@@ -1526,9 +1807,11 @@ export function renderFinanceAssetSummary(transactionList = []) {
 
   const totalAssetAmount = assetBaseAmount + transactionNetAmount;
 
-  if (refs.financeTotalAssetText) {
-    refs.financeTotalAssetText.textContent = formatMoney(totalAssetAmount);
-  }
+  [refs.financeDashboardTotalAssetText, refs.financeManageTotalAssetText]
+    .filter(Boolean)
+    .forEach((node) => {
+      node.textContent = formatFinanceSummaryTotalAsset(totalAssetAmount);
+    });
 
   if (!refs.financeAssetList) return;
 
@@ -1580,6 +1863,601 @@ export function renderFinanceAssetSummary(transactionList = []) {
               <span class="tag-badge">${escapeHtml(categoryText)}</span>
               ${dateText ? `<span class="meta-badge compact">${escapeHtml(dateText)}</span>` : ""}
               ${repeatText}
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function getExpandedFinanceAssetsToToday() {
+  const todayKey = formatDateKey(new Date());
+
+  return expandRecurringAssetsInRange(
+    getFinanceData().assets,
+    "1900-01-01",
+    todayKey,
+  ).filter((item) => {
+    const targetDate = item.displayDate || item.baseDate || "";
+    return !!targetDate && targetDate <= todayKey;
+  });
+}
+
+function getExpandedFinanceTransactionsToToday() {
+  const todayKey = formatDateKey(new Date());
+
+  return expandRecurringFinanceExpensesInRange(
+    getFinanceData().expenses,
+    "1900-01-01",
+    todayKey,
+  ).filter((item) => {
+    const itemDate = item.date || "";
+    return !!itemDate && itemDate <= todayKey;
+  });
+}
+
+function getAssetCategoryText(category) {
+  const categoryTextMap = {
+    stock: "주식",
+    savings: "적금",
+    deposit: "예금",
+  };
+
+  return categoryTextMap[category] || category || "기타";
+}
+
+function getRecurringAssetOccurrenceCount(item, todayKey) {
+  if (!item?.baseDate || item.baseDate > todayKey) return 0;
+  if (item.repeat !== "monthly") return 1;
+
+  let count = 0;
+  let cursor = item.baseDate;
+
+  while (cursor && cursor <= todayKey) {
+    if (item.repeatUntil && cursor > item.repeatUntil) {
+      break;
+    }
+
+    count += 1;
+    cursor = moveFinanceMonth(cursor, 1);
+  }
+
+  return count;
+}
+
+function getNextAssetOccurrenceDate(item, todayKey) {
+  if (!item?.baseDate || item.repeat !== "monthly") return "";
+
+  let cursor = item.baseDate;
+
+  while (cursor && cursor <= todayKey) {
+    cursor = moveFinanceMonth(cursor, 1);
+  }
+
+  if (!cursor) return "";
+  if (item.repeatUntil && cursor > item.repeatUntil) return "";
+  return cursor;
+}
+
+function buildFinanceAssetSnapshots() {
+  const todayKey = formatDateKey(new Date());
+
+  return (Array.isArray(getFinanceData().assets) ? getFinanceData().assets : [])
+    .map((item) => {
+      const occurrenceCount = getRecurringAssetOccurrenceCount(item, todayKey);
+      const currentAmount = (Number(item.amount) || 0) * occurrenceCount;
+      const nextDate = getNextAssetOccurrenceDate(item, todayKey);
+      const lastAppliedDate =
+        occurrenceCount > 0
+          ? item.repeat === "monthly"
+            ? moveFinanceMonth(item.baseDate, occurrenceCount - 1)
+            : item.baseDate || ""
+          : "";
+
+      return {
+        ...item,
+        currentAmount,
+        occurrenceCount,
+        categoryText: getAssetCategoryText(item.category),
+        lastAppliedDate,
+        nextDate,
+      };
+    })
+    .filter((item) => item.currentAmount > 0 || item.baseDate);
+}
+
+function renderFinanceAssetPopupCard(item) {
+  const repeatText =
+    item.repeat === "monthly" ? `<span class="tag-badge">매월 반복</span>` : "";
+  const dateText = item.lastAppliedDate
+    ? `최근 반영 ${formatKoreanDate(item.lastAppliedDate)}`
+    : item.baseDate
+      ? `기준일 ${formatKoreanDate(item.baseDate)}`
+      : "";
+  const nextDateText = item.nextDate
+    ? `다음 반영 ${formatKoreanDate(item.nextDate)}`
+    : item.repeat === "monthly"
+      ? "반복 종료됨"
+      : "추가 반복 없음";
+
+  return `
+    <div
+      class="selected-item-card clickable-item-card"
+      data-action="open-edit-finance-asset"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
+      <div class="selected-item-content">
+        <div class="selected-item-title">${escapeHtml(item.title || "")}</div>
+        <div class="selected-item-meta">
+          <span class="tag-badge">${escapeHtml(item.categoryText || "")}</span>
+          <span class="meta-badge">${formatMoney(item.currentAmount)}</span>
+          ${dateText ? `<span class="meta-badge">${escapeHtml(dateText)}</span>` : ""}
+          <span class="meta-badge">${escapeHtml(nextDateText)}</span>
+          ${repeatText}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function renderFinanceAssetFilters() {
+  const refs = getRefs();
+  const snapshots = buildFinanceAssetSnapshots();
+
+  if (refs.financeAssetCategoryFilter) {
+    const categories = [...new Set(snapshots.map((item) => item.category || ""))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "ko"));
+
+    const currentValue = refs.financeAssetCategoryFilter.value || "";
+    refs.financeAssetCategoryFilter.innerHTML = `<option value="">전체</option>`;
+
+    categories.forEach((category) => {
+      const option = document.createElement("option");
+      option.value = category;
+      option.textContent = getAssetCategoryText(category);
+
+      if (currentValue === category) {
+        option.selected = true;
+      }
+
+      refs.financeAssetCategoryFilter.appendChild(option);
+    });
+
+    if (currentValue && !categories.includes(currentValue)) {
+      refs.financeAssetCategoryFilter.value = "";
+    }
+  }
+
+  if (refs.financeAssetSortFilter && !refs.financeAssetSortFilter.value) {
+    refs.financeAssetSortFilter.value = "current_high";
+  }
+}
+
+function getFilteredFinanceAssetSnapshots() {
+  const refs = getRefs();
+  let list = buildFinanceAssetSnapshots();
+
+  const searchValue = (refs.financeAssetSearchInput?.value || "")
+    .trim()
+    .toLowerCase();
+  const categoryValue = refs.financeAssetCategoryFilter?.value || "";
+  const sortValue = refs.financeAssetSortFilter?.value || "current_high";
+
+  if (categoryValue) {
+    list = list.filter((item) => (item.category || "") === categoryValue);
+  }
+
+  if (searchValue) {
+    list = list.filter((item) => {
+      const target = [item.title, item.categoryText, item.baseDate]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return target.includes(searchValue);
+    });
+  }
+
+  if (sortValue === "latest") {
+    list.sort((a, b) =>
+      String(b.lastAppliedDate || b.baseDate || "").localeCompare(
+        String(a.lastAppliedDate || a.baseDate || ""),
+        "ko",
+      ),
+    );
+    return list;
+  }
+
+  if (sortValue === "title_asc") {
+    list.sort((a, b) =>
+      String(a.title || "").localeCompare(String(b.title || ""), "ko"),
+    );
+    return list;
+  }
+
+  list.sort((a, b) => {
+    const byAmount =
+      (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0);
+
+    if (byAmount !== 0) return byAmount;
+
+    return String(b.lastAppliedDate || b.baseDate || "").localeCompare(
+      String(a.lastAppliedDate || a.baseDate || ""),
+      "ko",
+    );
+  });
+
+  return list;
+}
+
+export function renderFinanceAssetDashboard() {
+  const refs = getRefs();
+  const assetSnapshots = buildFinanceAssetSnapshots().filter((item) =>
+    String(item.title || "").trim(),
+  );
+  const expandedAssets = getExpandedFinanceAssetsToToday();
+  const allTransactions = getExpandedFinanceTransactionsToToday();
+  const filteredAssets = getFilteredFinanceAssetSnapshots();
+
+  const assetBaseAmount = expandedAssets.reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
+
+  const transactionNetAmount = allTransactions.reduce((sum, item) => {
+    const amount = Number(item.amount) || 0;
+    return sum + ((item.flowType || "expense") === "income" ? amount : -amount);
+  }, 0);
+
+  const totalAssetAmount = assetBaseAmount + transactionNetAmount;
+  const assetCount = assetSnapshots.length;
+  const filteredAssetAmount = filteredAssets.reduce(
+    (sum, item) => sum + (Number(item.currentAmount) || 0),
+    0,
+  );
+  const recurringMonthlyAmount = (Array.isArray(getFinanceData().assets)
+    ? getFinanceData().assets
+    : []
+  )
+    .filter((item) => item?.repeat === "monthly")
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+  const largestAsset = [...assetSnapshots].sort(
+    (a, b) => (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0),
+  )[0];
+
+  [refs.financeDashboardTotalAssetText, refs.financeManageTotalAssetText]
+    .filter(Boolean)
+    .forEach((node) => {
+      node.textContent = formatFinanceSummaryTotalAsset(totalAssetAmount);
+    });
+
+  if (refs.financeAssetRegisteredTotalText) {
+    refs.financeAssetRegisteredTotalText.textContent = `${assetCount}개`;
+  }
+
+  if (refs.financeAssetTransactionNetText) {
+    refs.financeAssetTransactionNetText.textContent =
+      formatMoney(filteredAssetAmount);
+  }
+
+  if (refs.financeAssetRecurringMonthlyText) {
+    refs.financeAssetRecurringMonthlyText.textContent = formatMoney(
+      recurringMonthlyAmount,
+    );
+  }
+
+  if (refs.financeAssetLargestText) {
+    refs.financeAssetLargestText.textContent = largestAsset?.title || "-";
+  }
+
+  if (refs.financeAssetLargestMetaText) {
+    refs.financeAssetLargestMetaText.textContent = largestAsset
+      ? `${formatMoney(largestAsset.currentAmount)} · ${largestAsset.categoryText}`
+      : "아직 자산이 없습니다.";
+  }
+
+  if (!refs.financeAssetList) return;
+
+  if (!filteredAssets.length) {
+    refs.financeAssetList.innerHTML =
+      `<div class="empty-message">조건에 맞는 자산이 없습니다.</div>`;
+    return;
+  }
+
+  refs.financeAssetList.innerHTML = filteredAssets
+    .map((item) => {
+      const repeatText =
+        item.repeat === "monthly"
+          ? `<span class="tag-badge">매월 반복</span>`
+          : "";
+      const share =
+        assetBaseAmount > 0
+          ? Math.round(
+              ((Number(item.currentAmount) || 0) / assetBaseAmount) * 100,
+            )
+          : 0;
+      const appliedText =
+        item.repeat === "monthly"
+          ? `누적 ${item.occurrenceCount}회 적용`
+          : "1회 등록 자산";
+      const dateText = item.lastAppliedDate
+        ? `최근 반영 ${formatKoreanDate(item.lastAppliedDate)}`
+        : item.baseDate
+          ? `기준일 ${formatKoreanDate(item.baseDate)}`
+          : "";
+      const nextDateText = item.nextDate
+        ? `다음 반영 ${formatKoreanDate(item.nextDate)}`
+        : item.repeat === "monthly"
+          ? "반복 종료됨"
+          : "추가 반복 없음";
+
+      return `
+        <div
+          class="item-card clickable-item-card finance-asset-card"
+          data-action="open-edit-finance-asset"
+          data-id="${item.id}"
+          data-category="${escapeHtml(item.category || "")}"
+          role="button"
+          tabindex="0"
+          title="클릭해서 수정"
+        >
+          <div class="item-content">
+            <div class="finance-asset-card-top">
+              <div class="finance-asset-main">
+                <div class="item-title">${escapeHtml(item.title || "")}</div>
+                <div class="finance-asset-subtext">
+                  ${escapeHtml(appliedText)} · ${escapeHtml(dateText)}
+                </div>
+              </div>
+              <div class="finance-asset-amount-block">
+                <div class="finance-amount-strong">${formatMoney(item.currentAmount)}</div>
+                <div class="finance-asset-share">총 자산 대비 ${share}%</div>
+              </div>
+            </div>
+            <div class="item-meta compact-meta">
+              <span class="tag-badge">${escapeHtml(item.categoryText)}</span>
+              ${
+                item.baseDate
+                  ? `<span class="meta-badge compact">시작 ${escapeHtml(formatKoreanDate(item.baseDate))}</span>`
+                  : ""
+              }
+              <span class="meta-badge compact">${escapeHtml(nextDateText)}</span>
+              ${repeatText}
+            </div>
+            <div class="finance-asset-progress">
+              <div
+                class="finance-asset-progress-fill"
+                style="width: ${Math.max(2, Math.min(100, share))}%"
+              ></div>
+            </div>
+            <div class="finance-asset-metrics">
+              <div class="finance-asset-metric">
+                <span class="finance-asset-metric-label">누적 적용</span>
+                <span class="finance-asset-metric-value">${escapeHtml(appliedText)}</span>
+              </div>
+              <div class="finance-asset-metric">
+                <span class="finance-asset-metric-label">다음 기준</span>
+                <span class="finance-asset-metric-value">${escapeHtml(nextDateText.replace("다음 반영 ", ""))}</span>
+              </div>
+            </div>
+            <div class="finance-asset-card-actions">
+              <button
+                type="button"
+                class="secondary-btn"
+                data-action="quick-asset-cashflow"
+                data-id="${item.id}"
+                data-flow-type="income"
+              >
+                입금 기록
+              </button>
+              <button
+                type="button"
+                class="secondary-btn"
+                data-action="quick-asset-cashflow"
+                data-id="${item.id}"
+                data-flow-type="expense"
+              >
+                출금 기록
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+export function openFinanceAssetSummaryPopup(type) {
+  const refs = getRefs();
+  const snapshots = buildFinanceAssetSnapshots().filter((item) =>
+    String(item.title || "").trim(),
+  );
+  const filteredAssets = getFilteredFinanceAssetSnapshots();
+  const recurringAssets = snapshots.filter((item) => item.repeat === "monthly");
+  const largestAsset = [...snapshots].sort(
+    (a, b) => (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0),
+  )[0];
+
+  const popupMap = {
+    assets: {
+      label: "등록 자산 목록",
+      list: snapshots,
+      empty: "등록된 자산이 없습니다.",
+    },
+    visible_assets: {
+      label: "필터 자산 목록",
+      list: filteredAssets,
+      empty: "현재 필터 조건에 맞는 자산이 없습니다.",
+    },
+    recurring_assets: {
+      label: "월 반복 자산 목록",
+      list: recurringAssets,
+      empty: "월 반복 자산이 없습니다.",
+    },
+    largest_asset: {
+      label: "가장 큰 자산",
+      list: largestAsset ? [largestAsset] : [],
+      empty: "표시할 자산이 없습니다.",
+    },
+  };
+
+  const target = popupMap[type] || popupMap.assets;
+
+  if (refs.summaryPopupLabel) {
+    refs.summaryPopupLabel.textContent = target.label;
+  }
+
+  if (!refs.summaryPopupList) return;
+
+  refs.summaryPopupList.innerHTML = target.list.length
+    ? target.list.map((item) => renderFinanceAssetPopupCard(item)).join("")
+    : `<div class="empty-message">${target.empty}</div>`;
+
+  refs.summaryPopupOverlay?.classList.remove("hidden");
+}
+
+export function openFinanceOverviewSummaryPopup(type) {
+  const refs = getRefs();
+  const monthKey = refs.financeMonthKey?.value || "";
+  const savedBudget = getFinanceBudgetByMonth(monthKey);
+  const startDay = Math.max(
+    1,
+    Math.min(
+      31,
+      Number(
+        refs.financePeriodStartDay?.value ||
+          savedBudget?.startDay ||
+          getFinanceData().budgetSettings?.defaultStartDay ||
+          1,
+      ),
+    ),
+  );
+
+  const period = monthKey ? getFinancePeriodRange(monthKey, startDay) : null;
+  const monthlyTransactions = period
+    ? getFinanceExpensesForPeriod(period.startKey, period.endKey)
+    : [];
+  const monthlyIncomeList = monthlyTransactions.filter(
+    (item) => item.flowType === "income",
+  );
+  const monthlyExpenseList = monthlyTransactions.filter(
+    (item) => (item.flowType || "expense") === "expense",
+  );
+  const assetSnapshots = buildFinanceAssetSnapshots().filter((item) =>
+    String(item.title || "").trim(),
+  );
+
+  const popupMap = {
+    dashboard_assets: {
+      label: "총 자산 구성 목록",
+      mode: "assets",
+      list: assetSnapshots,
+      empty: "등록된 자산이 없습니다.",
+    },
+    monthly_income: {
+      label: "월 수익 목록",
+      mode: "transactions",
+      list: monthlyIncomeList,
+      empty: "이번 기간 수익 내역이 없습니다.",
+    },
+    monthly_expense: {
+      label: "월 지출 목록",
+      mode: "transactions",
+      list: monthlyExpenseList,
+      empty: "이번 기간 지출 내역이 없습니다.",
+    },
+    monthly_net: {
+      label: "월 순변동 목록",
+      mode: "transactions",
+      list: monthlyTransactions,
+      empty: "이번 기간 입출금 내역이 없습니다.",
+    },
+  };
+
+  const target = popupMap[type] || popupMap.dashboard_assets;
+
+  if (refs.summaryPopupLabel) {
+    refs.summaryPopupLabel.textContent = target.label;
+  }
+
+  if (!refs.summaryPopupList) return;
+
+  if (!target.list.length) {
+    refs.summaryPopupList.innerHTML = `<div class="empty-message">${target.empty}</div>`;
+  } else if (target.mode === "assets") {
+    refs.summaryPopupList.innerHTML = target.list
+      .map((item) => renderFinanceAssetPopupCard(item))
+      .join("");
+  } else {
+    refs.summaryPopupList.innerHTML = target.list
+      .map((item) => renderFinanceExpenseCard(item))
+      .join("");
+  }
+
+  refs.summaryPopupOverlay?.classList.remove("hidden");
+}
+
+export function renderFinanceAssetCategorySummary() {
+  const refs = getRefs();
+  if (!refs.financeAssetCategorySummaryList) return;
+
+  const snapshots = buildFinanceAssetSnapshots().filter(
+    (item) => (Number(item.currentAmount) || 0) > 0,
+  );
+
+  if (!snapshots.length) {
+    refs.financeAssetCategorySummaryList.innerHTML =
+      `<div class="empty-message">아직 자산 분포를 계산할 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const total = snapshots.reduce(
+    (sum, item) => sum + (Number(item.currentAmount) || 0),
+    0,
+  );
+
+  const grouped = snapshots.reduce((acc, item) => {
+    const key = item.category || "other";
+    if (!acc[key]) {
+      acc[key] = {
+        label: item.categoryText || "기타",
+        amount: 0,
+      };
+    }
+    acc[key].amount += Number(item.currentAmount) || 0;
+    return acc;
+  }, {});
+
+  const sorted = Object.entries(grouped).sort(
+    (a, b) => b[1].amount - a[1].amount,
+  );
+
+  refs.financeAssetCategorySummaryList.innerHTML = sorted
+    .map(([categoryKey, entry]) => {
+      const amount = Number(entry.amount) || 0;
+      const share = total > 0 ? Math.round((amount / total) * 100) : 0;
+
+      return `
+        <div class="item-card finance-asset-category-card" data-category="${escapeHtml(categoryKey)}">
+          <div class="item-content">
+            <div class="finance-asset-category-row">
+              <div class="item-title">${escapeHtml(entry.label)}</div>
+              <div class="finance-asset-category-total">${formatMoney(amount)}</div>
+            </div>
+            <div class="finance-asset-category-progress">
+              <div
+                class="finance-asset-category-progress-fill"
+                style="width: ${Math.max(4, Math.min(100, share))}%"
+              ></div>
+            </div>
+            <div class="item-meta compact-meta">
+              <span class="meta-badge compact">비중 ${share}%</span>
             </div>
           </div>
         </div>
