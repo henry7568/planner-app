@@ -1,5 +1,5 @@
 // dashboard.js
-import { formatDateKey } from "./utils.js";
+import { escapeHtml, formatDateKey } from "./utils.js";
 import { renderCard, renderSelectedCard } from "./renderItems.js";
 import { getStatusSymbol } from "./plannerItems.js";
 import {
@@ -9,8 +9,18 @@ import {
   getItemsForDate,
 } from "./calendar.js";
 import { expandRecurringPlannerItemsInRange } from "./repeat.js";
+import { COIN_KRW_VALUE, getCoinBalance } from "./rewards.js";
 
 let deps = {};
+let coinLedgerPage = 1;
+let coinLedgerFilterKey = "";
+const COIN_LEDGER_PAGE_SIZE = 5;
+const STATUS_LEDGER_TYPES = new Set([
+  "earn",
+  "revoke",
+  "fail_penalty",
+  "fail_refund",
+]);
 
 export function configureDashboardModule(config) {
   deps = config;
@@ -18,6 +28,10 @@ export function configureDashboardModule(config) {
 
 function getItems() {
   return deps.getItems?.() || [];
+}
+
+function getRewardsData() {
+  return deps.getRewardsData?.() || {};
 }
 
 function getSelectedFilterType() {
@@ -44,6 +58,10 @@ function getRefs() {
   return deps.refs || {};
 }
 
+function shouldHideCompletedDashboardItems() {
+  return deps.shouldHideCompletedDashboardItems?.() || false;
+}
+
 export function renderDashboard() {
   const {
     totalCount,
@@ -57,6 +75,9 @@ export function renderDashboard() {
     achievementRate,
     achievementBarFill,
     achievementDesc,
+    coinBalanceText,
+    hobbyBudgetText,
+    coinLedgerList,
     dashboardItemList,
   } = getRefs();
 
@@ -127,6 +148,13 @@ export function renderDashboard() {
         : `완료 / (완료 + 미완료) 기준 · ${completedBase}개 반영`;
   }
 
+  renderCoinDashboard({
+    coinBalanceText,
+    hobbyBudgetText,
+    coinLedgerList,
+    filteredItems: filtered,
+  });
+
   if (!dashboardItemList) return;
 
   if (filtered.length === 0) {
@@ -136,7 +164,18 @@ export function renderDashboard() {
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visibleList = shouldHideCompletedDashboardItems()
+    ? filtered.filter((item) => item.status !== "success")
+    : filtered;
+
+  if (visibleList.length === 0) {
+    dashboardItemList.innerHTML = `
+      <div class="empty-message">표시할 항목이 없습니다.</div>
+    `;
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(visibleList.length / pageSize));
 
   if (getDashboardPage() > totalPages) {
     setDashboardPage(totalPages);
@@ -144,7 +183,7 @@ export function renderDashboard() {
 
   const currentPage = getDashboardPage();
   const startIndex = (currentPage - 1) * pageSize;
-  const visibleItems = filtered.slice(startIndex, startIndex + pageSize);
+  const visibleItems = visibleList.slice(startIndex, startIndex + pageSize);
 
   dashboardItemList.innerHTML = `
     ${visibleItems.map((item) => renderCard(item, getStatusSymbol)).join("")}
@@ -222,6 +261,249 @@ export function renderTodayList() {
   todayList.innerHTML = todayItems
     .map((item) => renderCard(item, getStatusSymbol))
     .join("");
+}
+
+function getLegacyCoinLedgerLabel(type, fallback) {
+  const labelMap = {
+    earn: "획득",
+    revoke: "회수",
+    fail_penalty: "실패 차감",
+    fail_refund: "차감 복구",
+    spend: "사용",
+  };
+
+  return labelMap[type] || fallback || "기록";
+}
+
+function renderLegacyCoinDashboard({ coinBalanceText, hobbyBudgetText, coinLedgerList }) {
+  const rewards = getRewardsData();
+  const balance = getCoinBalance(rewards);
+  const hobbyBudget = balance * COIN_KRW_VALUE;
+
+  if (coinBalanceText) coinBalanceText.textContent = `${balance.toLocaleString()}C`;
+  if (hobbyBudgetText) {
+    hobbyBudgetText.textContent = `${hobbyBudget.toLocaleString()}원`;
+  }
+
+  if (!coinLedgerList) return;
+
+  const ledger = Array.isArray(rewards.ledger) ? rewards.ledger.slice(0, 8) : [];
+  if (ledger.length === 0) {
+    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">아직 코인 기록이 없습니다.</div>`;
+    return;
+  }
+
+  coinLedgerList.innerHTML = ledger
+    .map((entry) => {
+      const amount = Number(entry.amount) || 0;
+      const sign = amount > 0 ? "+" : "";
+      const label =
+        entry.type === "earn"
+          ? "획득"
+          : entry.type === "revoke"
+            ? "회수"
+            : "사용";
+      const title = entry.itemTitle || "취미생활 사용";
+      const date = new Date(Number(entry.createdAt) || Date.now());
+      const krw = Math.abs(amount) * COIN_KRW_VALUE;
+
+      return `
+        <div class="coin-ledger-row">
+          <div>
+            <strong>${getCoinLedgerLabel(entry.type, label)}</strong>
+            <span>${escapeHtml(title)}</span>
+          </div>
+          <div class="coin-ledger-amount ${amount < 0 ? "negative" : "positive"}">
+            ${sign}${amount.toLocaleString()}C
+            <small>${krw.toLocaleString()}원</small>
+          </div>
+          <time>${date.toLocaleDateString("ko-KR")}</time>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function getCoinAmountHtml(amount, sign = "") {
+  return `<span class="coin-amount"><span class="coin-icon" aria-hidden="true"></span>${sign}${amount.toLocaleString()}</span>`;
+}
+
+function getFilteredRewardTargetKeys(filteredItems) {
+  return new Set(
+    (filteredItems || [])
+      .map((item) => item.sourceId || item.id)
+      .filter(Boolean),
+  );
+}
+
+function getCoinFilterKey(targetKeys, isFilterActive) {
+  return JSON.stringify({
+    type: getSelectedFilterType(),
+    year: getSelectedFilterYear(),
+    month: getSelectedFilterMonth(),
+    active: isFilterActive,
+    keys: [...targetKeys].sort(),
+  });
+}
+
+function getDisplayLedgerEntries(ledger, targetKeys, isFilterActive) {
+  const filtered = isFilterActive
+    ? ledger.filter((entry) => entry.targetKey && targetKeys.has(entry.targetKey))
+    : ledger;
+
+  const seenTargets = new Set();
+  const displayEntries = [];
+
+  filtered.forEach((entry) => {
+    if (STATUS_LEDGER_TYPES.has(entry.type)) {
+      if (!entry.targetKey || seenTargets.has(entry.targetKey)) return;
+      seenTargets.add(entry.targetKey);
+      if (entry.type === "earn" || entry.type === "fail_penalty") {
+        displayEntries.push(entry);
+      }
+      return;
+    }
+
+    if (!isFilterActive || entry.targetKey) {
+      displayEntries.push(entry);
+    }
+  });
+
+  return displayEntries.sort(
+    (a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0),
+  );
+}
+
+function getCoinLedgerLabel(type) {
+  const labelMap = {
+    earn: "획득",
+    revoke: "회수",
+    fail_penalty: "실패 차감",
+    fail_refund: "차감 복구",
+    spend: "사용",
+  };
+
+  return labelMap[type] || "기록";
+}
+
+function renderCoinDashboard({
+  coinBalanceText,
+  hobbyBudgetText,
+  coinLedgerList,
+  filteredItems = [],
+}) {
+  const rewards = getRewardsData();
+  const targetKeys = getFilteredRewardTargetKeys(filteredItems);
+  const isFilterActive = Boolean(
+    getSelectedFilterType() || getSelectedFilterYear() || getSelectedFilterMonth(),
+  );
+  const nextFilterKey = getCoinFilterKey(targetKeys, isFilterActive);
+
+  if (nextFilterKey !== coinLedgerFilterKey) {
+    coinLedgerFilterKey = nextFilterKey;
+    coinLedgerPage = 1;
+  }
+
+  const ledger = getDisplayLedgerEntries(
+    Array.isArray(rewards.ledger) ? rewards.ledger : [],
+    targetKeys,
+    isFilterActive,
+  );
+  const balance = ledger.reduce(
+    (sum, entry) => sum + (Number(entry.amount) || 0),
+    0,
+  );
+  const hobbyBudget = balance * COIN_KRW_VALUE;
+
+  if (coinBalanceText) {
+    coinBalanceText.innerHTML = getCoinAmountHtml(balance);
+  }
+  if (hobbyBudgetText) {
+    hobbyBudgetText.textContent = `${hobbyBudget.toLocaleString()}원`;
+  }
+
+  if (!coinLedgerList) return;
+
+  if (ledger.length === 0) {
+    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">아직 코인 기록이 없습니다.</div>`;
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(ledger.length / COIN_LEDGER_PAGE_SIZE));
+  if (coinLedgerPage > totalPages) coinLedgerPage = totalPages;
+
+  const startIndex = (coinLedgerPage - 1) * COIN_LEDGER_PAGE_SIZE;
+  const visibleLedger = ledger.slice(
+    startIndex,
+    startIndex + COIN_LEDGER_PAGE_SIZE,
+  );
+
+  coinLedgerList.innerHTML = `
+    ${visibleLedger
+      .map((entry) => {
+        const amount = Number(entry.amount) || 0;
+        const sign = amount > 0 ? "+" : "";
+        const title = entry.itemTitle || "취미생활 사용";
+        const date = new Date(Number(entry.createdAt) || Date.now());
+        const krw = Math.abs(amount) * COIN_KRW_VALUE;
+
+        return `
+          <div class="coin-ledger-row">
+            <div>
+              <strong>${getCoinLedgerLabel(entry.type)}</strong>
+              <span>${escapeHtml(title)}</span>
+            </div>
+            <div class="coin-ledger-amount ${amount < 0 ? "negative" : "positive"}">
+              ${getCoinAmountHtml(Math.abs(amount), sign)}
+              <small>${krw.toLocaleString()}원</small>
+            </div>
+            ${
+              entry.type === "spend"
+                ? `
+                  <div class="coin-ledger-actions">
+                    <button class="secondary-btn" type="button" data-action="edit-coin-spend" data-id="${entry.id}">수정</button>
+                    <button class="secondary-btn" type="button" data-action="delete-coin-spend" data-id="${entry.id}">삭제</button>
+                  </div>
+                `
+                : ""
+            }
+            <time>${date.toLocaleDateString("ko-KR")}</time>
+          </div>
+        `;
+      })
+      .join("")}
+    <div class="coin-ledger-pagination">
+      <button
+        class="secondary-btn"
+        type="button"
+        id="coinLedgerPrevPageBtn"
+        ${coinLedgerPage === 1 ? "disabled" : ""}
+      >
+        이전
+      </button>
+      <span>${coinLedgerPage} / ${totalPages}</span>
+      <button
+        class="secondary-btn"
+        type="button"
+        id="coinLedgerNextPageBtn"
+        ${coinLedgerPage === totalPages ? "disabled" : ""}
+      >
+        다음
+      </button>
+    </div>
+  `;
+
+  document.getElementById("coinLedgerPrevPageBtn")?.addEventListener("click", () => {
+    if (coinLedgerPage <= 1) return;
+    coinLedgerPage -= 1;
+    renderDashboard();
+  });
+
+  document.getElementById("coinLedgerNextPageBtn")?.addEventListener("click", () => {
+    if (coinLedgerPage >= totalPages) return;
+    coinLedgerPage += 1;
+    renderDashboard();
+  });
 }
 
 export function getSummaryList(type, filtered) {

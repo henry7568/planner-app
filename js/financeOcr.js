@@ -34,6 +34,14 @@ function syncFinanceExpenseFormButtons() {
   deps.syncFinanceExpenseFormButtons?.();
 }
 
+function resetFinanceExpenseReviewForm() {
+  deps.resetFinanceExpenseForm?.();
+}
+
+function openFinanceExpenseReviewPopup() {
+  deps.openFinanceEditPopup?.("expense");
+}
+
 function addIncomeTransactionsToAssets(parsedTransactions) {
   if (!Array.isArray(parsedTransactions) || !parsedTransactions.length) {
     return 0;
@@ -799,13 +807,60 @@ export function shouldSkipFinanceListTitleLine(line) {
   return blockedPatterns.some((pattern) => pattern.test(text));
 }
 
+function normalizeFinanceOcrMemoryKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getFinanceOcrRememberedEntry(item) {
+  const data = getFinanceData();
+  const flowType = item?.sign === "+" ? "income" : "expense";
+  const titleKey = normalizeFinanceOcrMemoryKey(item?.title || "");
+
+  if (!titleKey) return null;
+
+  return (
+    (Array.isArray(data.expenses) ? data.expenses : [])
+      .filter((entry) => (entry.flowType || "expense") === flowType)
+      .map((entry) => {
+        const keys = [
+          normalizeFinanceOcrMemoryKey(entry.title || ""),
+          normalizeFinanceOcrMemoryKey(entry.merchant || ""),
+        ].filter(Boolean);
+        const exact = keys.some((key) => key === titleKey);
+        const contained = keys.some(
+          (key) =>
+            key.length >= 2 &&
+            titleKey.length >= 2 &&
+            (key.includes(titleKey) || titleKey.includes(key)),
+        );
+
+        if (!exact && !contained) return null;
+
+        return {
+          entry,
+          score: (exact ? 100 : 60) + (Number(entry.updatedAt) || 0) / 1e13,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)[0]?.entry || null
+  );
+}
+
 function applyFinanceTransactionToForm(item, index, total) {
-  const refs = getRefs();
   if (!item) return;
 
+  resetFinanceExpenseReviewForm();
+
+  const refs = getRefs();
   const transactionTypeEl = document.getElementById("financeTransactionType");
   const formCardEl = refs.financeExpenseFormCard;
   const isIncome = item.sign === "+";
+  const rememberedEntry = getFinanceOcrRememberedEntry(item);
 
   if (transactionTypeEl) {
     transactionTypeEl.value = isIncome ? "income" : "expense";
@@ -865,6 +920,49 @@ function applyFinanceTransactionToForm(item, index, total) {
     refs.financeExpenseTag.value = isIncome ? "OCR자산반영" : "OCR자동추가";
   }
 
+  if (rememberedEntry) {
+    const rememberedCategory =
+      rememberedEntry.category || categoryResult.category || "기타";
+    const rememberedSubCategory =
+      rememberedEntry.subCategory || categoryResult.subCategory || "기타";
+
+    if (refs.financeExpenseCategory) {
+      refs.financeExpenseCategory.value = rememberedCategory;
+      syncFinanceSubCategoryOptions(rememberedCategory, rememberedSubCategory);
+    }
+
+    if (refs.financeExpenseSubCategory) {
+      refs.financeExpenseSubCategory.value = rememberedSubCategory;
+    }
+
+    if (refs.financeExpensePaymentMethod) {
+      refs.financeExpensePaymentMethod.value =
+        rememberedEntry.paymentMethod || item.paymentMethod || "";
+    }
+
+    if (refs.financeExpenseMerchant) {
+      refs.financeExpenseMerchant.value = rememberedEntry.merchant || item.title || "";
+    }
+
+    if (refs.financeExpenseTag) {
+      refs.financeExpenseTag.value = rememberedEntry.tag || refs.financeExpenseTag.value;
+    }
+
+    if (refs.financeExpenseColor) {
+      refs.financeExpenseColor.value = rememberedEntry.color || "blue";
+    }
+  } else if (refs.financeExpenseColor) {
+    refs.financeExpenseColor.value = "blue";
+  }
+
+  if (refs.financeExpenseRepeat) {
+    refs.financeExpenseRepeat.value = "none";
+  }
+
+  if (refs.financeExpenseRepeatUntil) {
+    refs.financeExpenseRepeatUntil.value = "";
+  }
+
   if (refs.financeIncomeAssetTargetSelect) {
     const matchedAsset = (Array.isArray(getFinanceData().assets)
       ? getFinanceData().assets
@@ -882,6 +980,8 @@ function applyFinanceTransactionToForm(item, index, total) {
   if (refs.financeExpenseMemo) {
     refs.financeExpenseMemo.value = financeOcrReviewRawText || "";
   }
+
+  openFinanceExpenseReviewPopup();
 
   setTimeout(() => {
     refs.financeExpenseTitle?.focus();
@@ -910,6 +1010,20 @@ function startFinanceOcrReview(parsedTransactions, rawText = "") {
     0,
     financeOcrReviewQueue.length,
   );
+}
+
+export function isFinanceOcrReviewActive() {
+  return financeOcrReviewQueue.length > 0;
+}
+
+export function cancelFinanceOcrReview() {
+  financeOcrReviewQueue = [];
+  financeOcrReviewRawText = "";
+
+  const refs = getRefs();
+  if (refs.financeReceiptImageInput) {
+    refs.financeReceiptImageInput.value = "";
+  }
 }
 
 export function advanceFinanceOcrReviewQueue() {

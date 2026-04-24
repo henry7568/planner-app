@@ -93,6 +93,7 @@ import {
   startEditFinanceExpense,
   startEditFinanceAsset,
   handleFinancePageChange,
+  openFinanceEditPopup,
   openFinanceExpenseForm,
   openFinanceAssetForm,
   closeFinanceEditPopup,
@@ -105,7 +106,17 @@ import {
   configureFinanceOcrModule,
   analyzeFinanceReceiptImage,
   advanceFinanceOcrReviewQueue,
+  cancelFinanceOcrReview,
+  isFinanceOcrReviewActive,
 } from "./financeOcr.js";
+
+import {
+  normalizeRewardsData,
+  applyStatusRewardTransition,
+  deleteCoinSpendEntry,
+  spendCoins,
+  updateCoinSpendEntry,
+} from "./rewards.js";
 
 import {
   configurePlannerUiModule,
@@ -147,6 +158,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const STORAGE_KEY = "planner_items_tabs_local_backup_v1";
+const DASHBOARD_HIDE_COMPLETED_KEY = "planner_dashboard_hide_completed_v1";
 
 let selectedFilterType = "";
 let selectedFilterYear = "";
@@ -172,6 +184,7 @@ let calendarYear = now.getFullYear();
 let calendarMonth = now.getMonth();
 
 let dashboardPage = 1;
+let hideCompletedDashboardItems = false;
 const DASHBOARD_PAGE_SIZE = 5;
 
 const authLoadingScreen = document.getElementById("authLoadingScreen");
@@ -266,6 +279,12 @@ const dashboardUrgentTodoCount = document.getElementById(
 const achievementRate = document.getElementById("achievementRate");
 const achievementBarFill = document.getElementById("achievementBarFill");
 const achievementDesc = document.getElementById("achievementDesc");
+const coinBalanceText = document.getElementById("coinBalanceText");
+const hobbyBudgetText = document.getElementById("hobbyBudgetText");
+const coinLedgerList = document.getElementById("coinLedgerList");
+const coinSpendAmount = document.getElementById("coinSpendAmount");
+const coinSpendMemo = document.getElementById("coinSpendMemo");
+const coinSpendBtn = document.getElementById("coinSpendBtn");
 
 const itemType = document.getElementById("itemType");
 const titleInput = document.getElementById("titleInput");
@@ -352,6 +371,9 @@ const monthFilter = document.getElementById("monthFilter");
 
 const dashboardItemList = document.getElementById("dashboardItemList");
 const todayList = document.getElementById("todayList");
+const dashboardHideCompletedCheckbox = document.getElementById(
+  "dashboardHideCompletedCheckbox",
+);
 const plannerWorkspaceHubSection = document.getElementById(
   "plannerWorkspaceHubSection",
 );
@@ -647,6 +669,7 @@ const financeOpenExpenseFormFromAssetBtn = document.getElementById(
 );
 
 const financeAssetCategory = document.getElementById("financeAssetCategory");
+const financeAssetPurpose = document.getElementById("financeAssetPurpose");
 const financeAssetTitle = document.getElementById("financeAssetTitle");
 const financeAssetAmount = document.getElementById("financeAssetAmount");
 const financeAssetBaseDate = document.getElementById("financeAssetBaseDate");
@@ -701,6 +724,22 @@ const financeAssetCategorySummaryList = document.getElementById(
 const financeAssetList = document.getElementById("financeAssetList");
 const financeAssetTransactionList = document.getElementById(
   "financeAssetTransactionList",
+);
+const financeAccountSplitCard = document.getElementById("financeAccountSplitCard");
+const financeAccountLivingText = document.getElementById(
+  "financeAccountLivingText",
+);
+const financeAccountLeisureText = document.getElementById(
+  "financeAccountLeisureText",
+);
+const financeAccountLeisureTargetText = document.getElementById(
+  "financeAccountLeisureTargetText",
+);
+const financeAccountLeisureGapText = document.getElementById(
+  "financeAccountLeisureGapText",
+);
+const financeAccountSplitDesc = document.getElementById(
+  "financeAccountSplitDesc",
 );
 
 let financeEditingExpenseId = null;
@@ -862,6 +901,8 @@ let currentUser = null;
 let items = [];
 let projects = [];
 let inboxItems = [];
+let rewardsData = normalizeRewardsData();
+let editingCoinSpendId = null;
 let isRemoteLoading = false;
 let saveTimer = null;
 let editingOccurrenceDateKey = "";
@@ -897,6 +938,13 @@ window.AppState = {
   },
   set inboxItems(value) {
     inboxItems = Array.isArray(value) ? value : [];
+  },
+
+  get rewardsData() {
+    return rewardsData;
+  },
+  set rewardsData(value) {
+    rewardsData = normalizeRewardsData(value);
   },
 
   get financeData() {
@@ -1060,6 +1108,9 @@ configureDashboardModule({
     achievementRate,
     achievementBarFill,
     achievementDesc,
+    coinBalanceText,
+    hobbyBudgetText,
+    coinLedgerList,
     dashboardItemList,
     todayList,
     summaryPopupLabel,
@@ -1072,6 +1123,7 @@ configureDashboardModule({
   dashboardPageSize: DASHBOARD_PAGE_SIZE,
 
   getItems: () => items,
+  getRewardsData: () => rewardsData,
 
   getSelectedFilterType: () => selectedFilterType,
   getSelectedFilterYear: () => selectedFilterYear,
@@ -1088,6 +1140,7 @@ configureDashboardModule({
   setDashboardPage: (value) => {
     dashboardPage = value;
   },
+  shouldHideCompletedDashboardItems: () => hideCompletedDashboardItems,
 });
 
 configureFinanceModule({
@@ -1136,6 +1189,7 @@ configureFinanceModule({
     financeAssetFormCard,
     financeOpenAssetFormBtn,
     financeAssetCategory,
+    financeAssetPurpose,
     financeAssetTitle,
     financeAssetAmount,
     financeAssetBaseDate,
@@ -1162,6 +1216,12 @@ configureFinanceModule({
     summaryPopupOverlay,
     financeAssetList,
     financeAssetTransactionList,
+    financeAccountSplitCard,
+    financeAccountLivingText,
+    financeAccountLeisureText,
+    financeAccountLeisureTargetText,
+    financeAccountLeisureGapText,
+    financeAccountSplitDesc,
 
     financeEditPopupOverlay,
     financeEditPopupMount,
@@ -1187,6 +1247,7 @@ configureFinanceModule({
   },
 
   getFinanceData: () => financeData,
+  getRewardsData: () => rewardsData,
   setFinanceData: (value) => {
     financeData = value;
   },
@@ -1228,6 +1289,9 @@ configureFinanceOcrModule({
     ),
     financeExpenseMerchant: document.getElementById("financeExpenseMerchant"),
     financeExpenseTag,
+    financeExpenseColor,
+    financeExpenseRepeat,
+    financeExpenseRepeatUntil,
     financeIncomeAssetTargetSelect,
   },
 
@@ -1237,6 +1301,8 @@ configureFinanceOcrModule({
   },
 
   renderFinance,
+  resetFinanceExpenseForm,
+  openFinanceEditPopup,
   syncFinanceSubCategoryOptions,
   syncFinanceExpenseFormButtons,
 });
@@ -1357,7 +1423,22 @@ configurePlannerUiModule({
 });
 
 initAuth({ renderAll });
+registerPlannerServiceWorker();
 initAppOnce();
+
+function registerPlannerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  window.addEventListener("load", () => {
+    const serviceWorkerUrl = new URL("../service-worker.js", import.meta.url);
+
+    navigator.serviceWorker
+      .register(serviceWorkerUrl, { scope: "../" })
+      .catch((error) => {
+        console.error("서비스 워커 등록 오류:", error);
+      });
+  });
+}
 
 async function initAppOnce() {
   if (isAppInitialized) return;
@@ -1549,6 +1630,7 @@ async function initAppOnce() {
 
   plannerInboxAddBtn?.addEventListener("click", addPlannerInboxItem);
   plannerProjectAddBtn?.addEventListener("click", addPlannerProject);
+  coinSpendBtn?.addEventListener("click", handleCoinSpend);
   openPlannerInboxViewBtn?.addEventListener("click", showPlannerInboxView);
   openPlannerProjectViewBtn?.addEventListener("click", showPlannerProjectView);
   plannerBackToHomeFromInboxBtn?.addEventListener(
@@ -1570,6 +1652,14 @@ async function initAppOnce() {
       e.preventDefault();
       addPlannerProject();
     }
+  });
+  dashboardHideCompletedCheckbox?.addEventListener("change", () => {
+    hideCompletedDashboardItems = Boolean(
+      dashboardHideCompletedCheckbox.checked,
+    );
+    saveDashboardHideCompletedPreference(hideCompletedDashboardItems);
+    dashboardPage = 1;
+    renderDashboard();
   });
 
   prevMonthBtn?.addEventListener("click", () => {
@@ -1705,9 +1795,10 @@ async function initAppOnce() {
   });
 
   financeSaveExpenseBtn?.addEventListener("click", () => {
+    const wasOcrReviewActive = isFinanceOcrReviewActive();
     const result = saveFinanceExpense();
 
-    if (result?.ok && result.mode === "create") {
+    if (result?.ok && wasOcrReviewActive) {
       advanceFinanceOcrReviewQueue();
     }
   });
@@ -1721,6 +1812,7 @@ async function initAppOnce() {
   });
 
   financeCancelExpenseEditBtn?.addEventListener("click", () => {
+    cancelFinanceOcrReview();
     resetFinanceExpenseForm();
   });
 
@@ -1737,11 +1829,13 @@ async function initAppOnce() {
   });
 
   closeFinanceEditPopupBtn?.addEventListener("click", () => {
+    cancelFinanceOcrReview();
     closeFinanceEditPopup();
   });
 
   financeEditPopupOverlay?.addEventListener("click", (e) => {
     if (e.target === financeEditPopupOverlay) {
+      cancelFinanceOcrReview();
       closeFinanceEditPopup();
     }
   });
@@ -1782,6 +1876,10 @@ async function initAppOnce() {
   renderYearOptions();
   renderMonthOptions();
   calculateSalaryPreview();
+  hideCompletedDashboardItems = loadDashboardHideCompletedPreference();
+  if (dashboardHideCompletedCheckbox) {
+    dashboardHideCompletedCheckbox.checked = hideCompletedDashboardItems;
+  }
   renderAll();
   closePlannerFormCard();
   enterHomeTab();
@@ -1796,6 +1894,74 @@ function renderAll() {
   renderCalendar();
   renderPlannerWorkspace();
   renderFinance();
+}
+
+function loadDashboardHideCompletedPreference() {
+  try {
+    return localStorage.getItem(DASHBOARD_HIDE_COMPLETED_KEY) === "true";
+  } catch (error) {
+    console.error("완료 숨기기 설정을 불러오지 못했습니다:", error);
+    return false;
+  }
+}
+
+function saveDashboardHideCompletedPreference(value) {
+  try {
+    localStorage.setItem(DASHBOARD_HIDE_COMPLETED_KEY, value ? "true" : "false");
+  } catch (error) {
+    console.error("완료 숨기기 설정을 저장하지 못했습니다:", error);
+  }
+}
+
+function handleCoinSpend() {
+  const amount = Number(coinSpendAmount?.value || 0);
+  const memo = coinSpendMemo?.value.trim() || "취미생활 사용";
+
+  try {
+    rewardsData = editingCoinSpendId
+      ? updateCoinSpendEntry(rewardsData, editingCoinSpendId, amount, memo)
+      : spendCoins(rewardsData, amount, memo);
+  } catch (error) {
+    alert(error.message || "코인을 사용할 수 없습니다.");
+    return;
+  }
+
+  editingCoinSpendId = null;
+  if (coinSpendAmount) coinSpendAmount.value = "";
+  if (coinSpendMemo) coinSpendMemo.value = "";
+  if (coinSpendBtn) coinSpendBtn.textContent = "사용 기록";
+
+  queueSavePlannerData();
+  renderDashboard();
+}
+
+function startEditCoinSpend(id) {
+  const entry = normalizeRewardsData(rewardsData).ledger.find(
+    (item) => item.id === id && item.type === "spend",
+  );
+  if (!entry) return;
+
+  editingCoinSpendId = id;
+  if (coinSpendAmount) coinSpendAmount.value = Math.abs(Number(entry.amount) || 0);
+  if (coinSpendMemo) coinSpendMemo.value = entry.itemTitle || "";
+  if (coinSpendBtn) coinSpendBtn.textContent = "사용 수정";
+  coinSpendAmount?.focus();
+}
+
+function deleteCoinSpend(id) {
+  const ok = confirm("이 코인 사용 기록을 삭제할까요?");
+  if (!ok) return;
+
+  rewardsData = deleteCoinSpendEntry(rewardsData, id);
+  if (editingCoinSpendId === id) {
+    editingCoinSpendId = null;
+    if (coinSpendAmount) coinSpendAmount.value = "";
+    if (coinSpendMemo) coinSpendMemo.value = "";
+    if (coinSpendBtn) coinSpendBtn.textContent = "사용 기록";
+  }
+
+  queueSavePlannerData();
+  renderDashboard();
 }
 
 function hideAllPlannerWorkspaceSections() {
@@ -2123,6 +2289,7 @@ function closeTopMostPopup() {
   }
 
   if (!financeEditPopupOverlay?.classList.contains("hidden")) {
+    cancelFinanceOcrReview();
     closeFinanceEditPopup();
     return true;
   }
@@ -2466,6 +2633,20 @@ function handleDocumentClick(e) {
     const id = actionTarget.dataset.id;
     if (!id) return;
     toggleStatus(id);
+    return;
+  }
+
+  if (action === "edit-coin-spend") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    startEditCoinSpend(id);
+    return;
+  }
+
+  if (action === "delete-coin-spend") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    deleteCoinSpend(id);
     return;
   }
 
@@ -3269,6 +3450,10 @@ function applyShortcutTime(parsedTime, mode) {
 function toggleStatus(id) {
   const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
   const baseItem = items.find((item) => item.id === targetId);
+  if (!baseItem) return;
+  const targetKey = occurrenceDateKey ? id : targetId;
+  let previousStatus = baseItem.status || "pending";
+  let nextStatus = getNextStatus(previousStatus);
 
   if (
     baseItem &&
@@ -3276,10 +3461,21 @@ function toggleStatus(id) {
     baseItem.repeat === "weekly_days" &&
     occurrenceDateKey
   ) {
+    const weekday = String(new Date(`${occurrenceDateKey}T00:00`).getDay());
+    previousStatus = baseItem.repeatSlotStatuses?.[weekday] || "pending";
+    nextStatus = getNextStatus(previousStatus);
     items = toggleRecurringScheduleSlotStatus(items, id);
   } else {
     items = toggleItemStatus(items, targetId);
   }
+
+  rewardsData = applyStatusRewardTransition({
+    rewardsData,
+    item: baseItem,
+    targetKey,
+    previousStatus,
+    nextStatus,
+  });
 
   queueSavePlannerData();
   renderAll();

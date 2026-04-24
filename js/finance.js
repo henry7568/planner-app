@@ -13,6 +13,8 @@ import {
   normalizeFinanceData,
 } from "./storage.js";
 
+import { COIN_KRW_VALUE, getCoinBalance } from "./rewards.js";
+
 let deps = {};
 
 export function configureFinanceModule(config) {
@@ -25,6 +27,10 @@ function getRefs() {
 
 function getFinanceData() {
   return normalizeFinanceData(deps.getFinanceData?.());
+}
+
+function getRewardsData() {
+  return deps.getRewardsData?.() || {};
 }
 
 function setFinanceData(value) {
@@ -1547,6 +1553,10 @@ export function resetFinanceAssetForm() {
     refs.financeAssetCategory.value = "stock";
   }
 
+  if (refs.financeAssetPurpose) {
+    refs.financeAssetPurpose.value = "general";
+  }
+
   if (refs.financeAssetTitle) {
     refs.financeAssetTitle.value = "";
   }
@@ -1620,6 +1630,10 @@ export function startEditFinanceAsset(id) {
     refs.financeAssetCategory.value = item.category || "stock";
   }
 
+  if (refs.financeAssetPurpose) {
+    refs.financeAssetPurpose.value = item.accountPurpose || "general";
+  }
+
   if (refs.financeAssetTitle) {
     refs.financeAssetTitle.value = item.title || "";
   }
@@ -1677,6 +1691,7 @@ export function saveFinanceAsset() {
   const refs = getRefs();
 
   const category = refs.financeAssetCategory?.value || "";
+  const accountPurpose = refs.financeAssetPurpose?.value || "general";
   const title = refs.financeAssetTitle?.value.trim() || "";
   const amount = Math.max(0, Number(refs.financeAssetAmount?.value) || 0);
   const baseDate = refs.financeAssetBaseDate?.value || "";
@@ -1731,6 +1746,7 @@ export function saveFinanceAsset() {
         ? {
             ...item,
             category,
+            accountPurpose,
             title,
             amount,
             baseDate,
@@ -1757,6 +1773,7 @@ export function saveFinanceAsset() {
   nextData.assets.push({
     id: makeId(),
     category,
+    accountPurpose,
     title,
     amount,
     baseDate,
@@ -1898,6 +1915,7 @@ function getExpandedFinanceTransactionsToToday() {
 }
 
 function getAssetCategoryText(category) {
+  if (category === "bank") return "통장";
   const categoryTextMap = {
     stock: "주식",
     savings: "적금",
@@ -1905,6 +1923,68 @@ function getAssetCategoryText(category) {
   };
 
   return categoryTextMap[category] || category || "기타";
+}
+
+function getAssetPurposeText(purpose) {
+  const purposeTextMap = {
+    living: "생활비 통장",
+    leisure: "여유자금 통장",
+    general: "일반 자산",
+  };
+
+  return purposeTextMap[purpose] || purposeTextMap.general;
+}
+
+function getFinanceAccountSplitSummary(assetSnapshots = buildFinanceAssetSnapshots()) {
+  const livingAssets = assetSnapshots.filter(
+    (item) => (item.accountPurpose || "general") === "living",
+  );
+  const leisureAssets = assetSnapshots.filter(
+    (item) => (item.accountPurpose || "general") === "leisure",
+  );
+  const livingTotal = livingAssets.reduce(
+    (sum, item) => sum + (Number(item.currentAmount) || 0),
+    0,
+  );
+  const leisureTotal = leisureAssets.reduce(
+    (sum, item) => sum + (Number(item.currentAmount) || 0),
+    0,
+  );
+  const leisureTarget = getCoinBalance(getRewardsData()) * COIN_KRW_VALUE;
+
+  return {
+    livingTotal,
+    leisureTotal,
+    leisureTarget,
+    leisureGap: leisureTarget - leisureTotal,
+    livingCount: livingAssets.length,
+    leisureCount: leisureAssets.length,
+  };
+}
+
+function renderFinanceAccountSplit(assetSnapshots) {
+  const refs = getRefs();
+  if (!refs.financeAccountSplitCard) return;
+
+  const summary = getFinanceAccountSplitSummary(assetSnapshots);
+  const gapText =
+    summary.leisureGap > 0
+      ? `${formatMoney(summary.leisureGap)} 더 옮기기`
+      : summary.leisureGap < 0
+        ? `${formatMoney(Math.abs(summary.leisureGap))} 초과`
+        : "목표 금액 일치";
+
+  refs.financeAccountLivingText &&
+    (refs.financeAccountLivingText.textContent = formatMoney(summary.livingTotal));
+  refs.financeAccountLeisureText &&
+    (refs.financeAccountLeisureText.textContent = formatMoney(summary.leisureTotal));
+  refs.financeAccountLeisureTargetText &&
+    (refs.financeAccountLeisureTargetText.textContent = formatMoney(summary.leisureTarget));
+  refs.financeAccountLeisureGapText &&
+    (refs.financeAccountLeisureGapText.textContent = gapText);
+  refs.financeAccountSplitDesc &&
+    (refs.financeAccountSplitDesc.textContent =
+      `생활비 통장 ${summary.livingCount}개 · 여유자금 통장 ${summary.leisureCount}개 · AI 코인 기준`);
 }
 
 function getRecurringAssetOccurrenceCount(item, todayKey) {
@@ -1957,9 +2037,11 @@ function buildFinanceAssetSnapshots() {
 
       return {
         ...item,
+        accountPurpose: item.accountPurpose || "general",
         currentAmount,
         occurrenceCount,
         categoryText: getAssetCategoryText(item.category),
+        purposeText: getAssetPurposeText(item.accountPurpose || "general"),
         lastAppliedDate,
         nextDate,
       };
@@ -2100,6 +2182,7 @@ export function renderFinanceAssetDashboard() {
   const assetSnapshots = buildFinanceAssetSnapshots().filter((item) =>
     String(item.title || "").trim(),
   );
+  renderFinanceAccountSplit(assetSnapshots);
   const expandedAssets = getExpandedFinanceAssetsToToday();
   const allTransactions = getExpandedFinanceTransactionsToToday();
   const filteredAssets = getFilteredFinanceAssetSnapshots();
@@ -2222,6 +2305,7 @@ export function renderFinanceAssetDashboard() {
             </div>
             <div class="item-meta compact-meta">
               <span class="tag-badge">${escapeHtml(item.categoryText)}</span>
+              <span class="tag-badge">${escapeHtml(item.purposeText)}</span>
               ${
                 item.baseDate
                   ? `<span class="meta-badge compact">시작 ${escapeHtml(formatKoreanDate(item.baseDate))}</span>`

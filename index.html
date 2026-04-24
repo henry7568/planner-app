@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Life-Planner</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./app-icon.svg" />
+    <link rel="stylesheet" href="style.css?v=12" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -184,6 +191,46 @@
                 </div>
               </div>
             </div>
+            <div class="coin-panel">
+              <div class="coin-wallet">
+                <div class="coin-wallet-main">
+                  <span class="coin-wallet-kicker">AI 보상 지갑</span>
+                  <div class="coin-wallet-balance">
+                    <strong id="coinBalanceText"><span class="coin-icon" aria-hidden="true"></span>0</strong>
+                    <span id="hobbyBudgetText">0원</span>
+                  </div>
+                  <p>1코인 = 1,000원 기준으로 취미 예산을 계산합니다.</p>
+                </div>
+
+                <div class="coin-wallet-side">
+                  <span>보상 방식</span>
+                  <strong>완료할 때 지급</strong>
+                  <small>되돌리면 자동 회수</small>
+                </div>
+              </div>
+
+              <div class="coin-spend-row">
+                <label>
+                  <span>사용 코인</span>
+                  <input
+                    id="coinSpendAmount"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="예: 5"
+                  />
+                </label>
+                <label>
+                  <span>사용처</span>
+                  <input id="coinSpendMemo" type="text" placeholder="영화, 게임, 카페" />
+                </label>
+                <button id="coinSpendBtn" class="primary-btn coin-spend-btn" type="button">
+                  사용 기록
+                </button>
+              </div>
+
+              <div id="coinLedgerList" class="coin-ledger-list"></div>
+            </div>
           </section>
 
           <section class="card">
@@ -288,7 +335,19 @@
           </section>
 
           <section class="card">
-            <h2>전체 목록</h2>
+            <div class="planner-section-heading planner-list-heading">
+              <div>
+                <h2>전체 목록</h2>
+              </div>
+              <label
+                class="planner-view-toggle planner-view-toggle-chip"
+                for="dashboardHideCompletedCheckbox"
+              >
+                <input type="checkbox" id="dashboardHideCompletedCheckbox" />
+                <span class="planner-view-toggle-ui" aria-hidden="true"></span>
+                <span class="planner-view-toggle-text">완료 숨기기</span>
+              </label>
+            </div>
             <div id="dashboardItemList" class="item-list"></div>
           </section>
         </section>
@@ -1122,6 +1181,7 @@
                   <div class="form-group">
                     <label for="financeAssetCategory">자산 종류</label>
                     <select id="financeAssetCategory">
+                      <option value="bank">통장</option>
                       <option value="stock">주식</option>
                       <option value="savings">적금</option>
                       <option value="deposit">예금</option>
@@ -1139,6 +1199,15 @@
                 </div>
 
                 <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="financeAssetPurpose">자금 용도</label>
+                    <select id="financeAssetPurpose">
+                      <option value="general">일반 자산</option>
+                      <option value="living">생활비 통장</option>
+                      <option value="leisure">여유자금 통장</option>
+                    </select>
+                  </div>
+
                   <div class="form-group">
                     <label for="financeAssetAmount">금액</label>
                     <input
@@ -1293,6 +1362,34 @@
                   </div>
                 </div>
               </div>
+
+              <section id="financeAccountSplitCard" class="card finance-account-split-card">
+                <div class="finance-asset-section-heading">
+                  <div>
+                    <h2>통장 분리 관리</h2>
+                    <p id="financeAccountSplitDesc" class="small-text">
+                      생활비 통장과 AI 보상 기준 여유자금 통장을 분리해 확인합니다.
+                    </p>
+                  </div>
+                </div>
+                <div class="finance-account-split-grid">
+                  <div class="finance-account-split-item">
+                    <span>생활비 통장</span>
+                    <strong id="financeAccountLivingText">0 원</strong>
+                    <small>월세, 통신비, 교통비 등 필수 지출용</small>
+                  </div>
+                  <div class="finance-account-split-item">
+                    <span>여유자금 통장</span>
+                    <strong id="financeAccountLeisureText">0 원</strong>
+                    <small>커피, 게임, 취미생활 지출용</small>
+                  </div>
+                  <div class="finance-account-split-item">
+                    <span>AI 보상 목표</span>
+                    <strong id="financeAccountLeisureTargetText">0 원</strong>
+                    <small id="financeAccountLeisureGapText">목표 금액 일치</small>
+                  </div>
+                </div>
+              </section>
 
               <section class="card finance-asset-tool-card">
                 <div class="filter-row">
@@ -2606,6 +2703,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js"></script>
+    <script type="module" src="./js/app.js?v=12"></script>
   </body>
 </html>

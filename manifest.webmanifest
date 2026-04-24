@@ -1,0 +1,19 @@
+{
+  "name": "Life-Planner",
+  "short_name": "Planner",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#0f766e",
+  "lang": "ko",
+  "description": "오프라인에서도 일정, 자산, 가계부를 관리하는 Life-Planner",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

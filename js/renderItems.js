@@ -1,11 +1,50 @@
 // renderItems.js
 import { formatKoreanDate, escapeHtml } from "./utils.js";
 import { getRepeatText } from "./repeat.js";
+import {
+  FAILURE_PENALTY_RATE,
+  assessTaskReward,
+  getEarnedCoinsForTarget,
+} from "./rewards.js";
 
 function getProjectName(projectId) {
   const projects = window.AppState?.projects;
   if (!projectId || !Array.isArray(projects)) return "";
   return projects.find((project) => project.id === projectId)?.name || "";
+}
+
+export function renderCoinBadge(item, statusTargetId) {
+  const reward = assessTaskReward(item, String(statusTargetId).split("__")[1] || "");
+  const earned = getEarnedCoinsForTarget(
+    window.AppState?.rewardsData,
+    statusTargetId,
+  );
+
+  if (item.status === "success" && earned > 0) {
+    return `
+      <span class="coin-badge earned" title="완료로 획득한 취미 코인">
+        <span class="coin-badge-label">획득</span>
+        <strong><span class="coin-icon" aria-hidden="true"></span>+${earned.toLocaleString()}</strong>
+      </span>
+    `;
+  }
+
+  if (item.status === "fail") {
+    const penalty = Math.max(1, Math.ceil(reward.coins * FAILURE_PENALTY_RATE));
+    return `
+      <span class="coin-badge penalty" title="실패 시 차감되는 취미 코인">
+        <span class="coin-badge-label">차감</span>
+        <strong><span class="coin-icon" aria-hidden="true"></span>-${penalty.toLocaleString()}</strong>
+      </span>
+    `;
+  }
+
+  return `
+    <span class="coin-badge" title="AI가 판단한 완료 보상">
+      <span class="coin-badge-label">보상</span>
+      <strong><span class="coin-icon" aria-hidden="true"></span>${reward.coins.toLocaleString()}</strong>
+    </span>
+  `;
 }
 
 export function renderCard(item, getStatusSymbol) {
@@ -62,6 +101,7 @@ export function renderCard(item, getStatusSymbol) {
 
   const editTargetId = item.id;
   const statusTargetId = item.sourceId || item.id;
+  const coinBadge = renderCoinBadge(item, statusTargetId);
 
   return `
     <div
@@ -86,6 +126,7 @@ export function renderCard(item, getStatusSymbol) {
         <div class="item-title">${escapeHtml(item.title)}</div>
         <div class="item-meta compact-meta">
           ${detailMeta}
+          ${coinBadge}
         </div>
       </div>
     </div>
@@ -134,6 +175,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
 
   const editTargetId = item.id;
   const statusTargetId = item.sourceId || item.id;
+  const coinBadge = renderCoinBadge(item, statusTargetId);
 
   return `
     <div
@@ -157,6 +199,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
       <div class="selected-item-content">
         <div class="selected-item-title">${escapeHtml(item.title)}</div>
         ${timeBlock}
+        <div class="selected-item-meta">${coinBadge}</div>
       </div>
     </div>
   `;

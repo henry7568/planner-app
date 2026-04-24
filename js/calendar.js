@@ -5,7 +5,7 @@ import {
   formatKoreanDate,
   escapeHtml,
 } from "./utils.js";
-import { renderSelectedCard } from "./renderItems.js";
+import { renderCoinBadge, renderSelectedCard } from "./renderItems.js";
 import { getStatusSymbol } from "./plannerItems.js";
 import {
   expandRecurringPlannerItemsInRange,
@@ -106,6 +106,8 @@ export function createCalendarCell(dateObj, isOtherMonth) {
           .map((item) => {
             const locationText = getScheduleLocationTextForDate(dateKey, item);
             const timeText = getCalendarItemTime(item);
+            const statusTargetId = item.sourceId || item.id;
+            const coinBadge = renderCoinBadge(item, statusTargetId);
 
             const typeIcon =
               item.type === "todo"
@@ -123,6 +125,7 @@ export function createCalendarCell(dateObj, isOtherMonth) {
                   ${typeIcon}
                   <span class="calendar-title-inline">${escapeHtml(item.title)}</span>
                 </div>
+                <div class="calendar-event-reward">${coinBadge}</div>
 
                 ${
                   timeText || locationText
@@ -574,6 +577,7 @@ export function layoutTimelineBlocks(blocks) {
 export function renderPositionedTimelineBlock(block) {
   const item = block.item;
   const colorClass = `item-color-${item.color || "blue"}`;
+  const coinBadge = renderCoinBadge(item, item.sourceId || item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="timeline-repeat">↻</span>`
@@ -617,6 +621,7 @@ export function renderPositionedTimelineBlock(block) {
           <div class="timeline-point-main">
             <span class="timeline-type todo">할일</span>
             <span class="timeline-title">${escapeHtml(item.title)}</span>
+            ${coinBadge}
             ${repeatIcon}
           </div>
           <div class="timeline-point-sub">
@@ -647,6 +652,7 @@ export function renderPositionedTimelineBlock(block) {
       <div class="timeline-block-main">
         <span class="timeline-type schedule">일정</span>
         <span class="timeline-title">${escapeHtml(item.title)}</span>
+        ${coinBadge}
         ${repeatIcon}
       </div>
 
@@ -716,6 +722,7 @@ export function formatHourLabel(hour) {
 
 export function renderTimelineItem(dateKey, item) {
   const colorClass = `item-color-${item.color || "blue"}`;
+  const coinBadge = renderCoinBadge(item, item.sourceId || item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="timeline-repeat">↻</span>`
@@ -747,6 +754,7 @@ export function renderTimelineItem(dateKey, item) {
       <div class="timeline-item-main">
         <span class="timeline-type">${item.type === "todo" ? "할일" : "일정"}</span>
         <span class="timeline-title">${escapeHtml(item.title)}</span>
+        ${coinBadge}
         ${repeatIcon}
       </div>
       <div class="timeline-item-sub">

@@ -11,6 +11,10 @@ export function normalizePlannerData(data) {
       items: data,
       projects: [],
       inboxItems: [],
+      rewards: {
+        coinVersion: 1,
+        ledger: [],
+      },
     };
   }
 
@@ -20,6 +24,10 @@ export function normalizePlannerData(data) {
     items: Array.isArray(source.items) ? source.items : [],
     projects: Array.isArray(source.projects) ? source.projects : [],
     inboxItems: Array.isArray(source.inboxItems) ? source.inboxItems : [],
+    rewards: {
+      coinVersion: Number(source.rewards?.coinVersion) || 1,
+      ledger: Array.isArray(source.rewards?.ledger) ? source.rewards.ledger : [],
+    },
   };
 }
 
@@ -135,11 +143,13 @@ export async function loadRemotePlannerData(uid) {
       state.items = data.items;
       state.projects = data.projects;
       state.inboxItems = data.inboxItems;
+      state.rewardsData = data.rewards;
     } else {
       const localData = loadLocalBackup();
       state.items = localData.items;
       state.projects = localData.projects;
       state.inboxItems = localData.inboxItems;
+      state.rewardsData = localData.rewards;
       await savePlannerDataToCloud();
     }
   } catch (error) {
@@ -148,6 +158,7 @@ export async function loadRemotePlannerData(uid) {
     state.items = localData.items;
     state.projects = localData.projects;
     state.inboxItems = localData.inboxItems;
+    state.rewardsData = localData.rewards;
   } finally {
     state.isRemoteLoading = false;
     saveLocalBackup();
@@ -248,6 +259,7 @@ export async function savePlannerDataToCloud() {
         items: state.items,
         projects: Array.isArray(state.projects) ? state.projects : [],
         inboxItems: Array.isArray(state.inboxItems) ? state.inboxItems : [],
+        rewards: state.rewardsData || { coinVersion: 1, ledger: [] },
         updatedAt: Date.now(),
       },
       { merge: true },
@@ -269,6 +281,7 @@ export function saveLocalBackup() {
           items: state.items,
           projects: state.projects,
           inboxItems: state.inboxItems,
+          rewards: state.rewardsData,
         }),
       ),
     );
