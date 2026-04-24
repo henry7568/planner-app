@@ -4389,6 +4389,10 @@ body.modal-open {
   overflow-wrap: anywhere;
 }
 
+.settings-email-text {
+  color: #0f172a;
+}
+
 .settings-toggle {
   flex: 0 0 auto;
   margin: 0;
@@ -4456,6 +4460,417 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   min-height: 44px;
+}
+
+@media (max-width: 768px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px 10px 92px;
+  }
+
+  .main-content,
+  .tab-section,
+  .card,
+  .popup-panel {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .card {
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .app-header {
+    margin-bottom: 14px;
+  }
+
+  .app-header-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .app-header h1 {
+    font-size: 25px;
+    line-height: 1.15;
+  }
+
+  .sub-text,
+  .small-text,
+  .popup-subtext {
+    line-height: 1.55;
+  }
+
+  .user-box {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 10px;
+  }
+
+  .app-home-logo-btn {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: visible;
+    font-size: 26px;
+    line-height: 1.15;
+  }
+
+  .app-settings-btn {
+    grid-column: 2;
+    grid-row: 1;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 0;
+  }
+
+  .settings-row #logoutBtn {
+    width: 100%;
+  }
+
+  .user-email-wrap,
+  #userEmailText {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .planner-overview-grid,
+  .finance-home-overview-grid,
+  .finance-asset-overview-grid,
+  .finance-asset-body-grid,
+  .planner-workspace-grid,
+  .finance-account-split-grid,
+  .finance-account-list,
+  .summary,
+  .home-grid,
+  .time-analysis-stats,
+  .productivity-report-metrics,
+  .finance-extra-form-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .planner-hero-card,
+  .finance-home-hero-card,
+  .finance-asset-hero-card {
+    min-height: 0;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .planner-hero-card h2,
+  .finance-home-hero-card h2,
+  .finance-asset-hero-card strong {
+    font-size: 28px;
+    line-height: 1.16;
+  }
+
+  .planner-section-heading,
+  .finance-asset-section-heading,
+  .finance-asset-header-row,
+  .filter-row,
+  .button-row,
+  .finance-asset-card-top,
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .planner-inline-row,
+  .form-row.two-cols,
+  .quick-input-row,
+  .ai-rec-card,
+  .finance-extra-card,
+  .routine-card,
+  .routine-manage-item,
+  .coin-spend-row,
+  .coin-ledger-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .form-group,
+  .filter-box,
+  .planner-field,
+  .finance-asset-tool-card .filter-box {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .primary-btn,
+  .secondary-btn,
+  .edit-btn,
+  .delete-btn,
+  .finance-file-label-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .app-settings-btn,
+  .popup-close-btn,
+  .calendar-nav .secondary-btn,
+  .project-row-actions .secondary-btn,
+  .planner-view-toggle {
+    width: auto;
+  }
+
+  .item-card,
+  .selected-item-card {
+    gap: 10px;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  #todayList .item-card,
+  .selected-item-row,
+  .project-section-row {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .status-btn,
+  #todayList .status-btn,
+  .selected-item-card .status-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 17px;
+  }
+
+  .item-title,
+  .selected-item-title,
+  .project-row-main strong,
+  .finance-asset-card .item-title {
+    font-size: 15px;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .item-meta,
+  .selected-item-meta,
+  .compact-meta,
+  .planner-inbox-actions,
+  .planner-project-actions,
+  .project-row-actions,
+  .finance-asset-card-actions,
+  .ai-rec-actions,
+  .finance-extra-actions {
+    gap: 6px;
+  }
+
+  .meta-badge,
+  .meta-badge.compact,
+  .tag-badge,
+  .coin-badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .calendar-card,
+  .planner-calendar-card {
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .calendar-header {
+    gap: 10px;
+  }
+
+  .calendar-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .calendar-weekdays,
+  .calendar-grid {
+    width: 100%;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .calendar-weekdays div {
+    padding: 5px 0;
+    font-size: 10px;
+  }
+
+  .calendar-cell {
+    min-height: 62px;
+    padding: 3px;
+    border-radius: 8px;
+  }
+
+  .calendar-date {
+    font-size: 10px;
+  }
+
+  .calendar-event {
+    padding: 2px 3px;
+    border-radius: 5px;
+  }
+
+  .calendar-title-inline {
+    font-size: 9px;
+  }
+
+  .calendar-event-bottom,
+  .calendar-event-reward,
+  .calendar-location {
+    display: none;
+  }
+
+  .popup-overlay {
+    padding: 8px;
+    align-items: flex-start;
+  }
+
+  .popup-panel,
+  .summary-popup-panel,
+  .planner-edit-popup-panel,
+  .calendar-popup-panel,
+  .place-search-popup-panel,
+  .finance-edit-popup-panel,
+  .project-detail-popup-panel {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 14px;
+    border-radius: 16px;
+    overflow-y: auto;
+  }
+
+  .popup-header {
+    gap: 10px;
+  }
+
+  .popup-title {
+    font-size: 20px;
+    line-height: 1.25;
+  }
+
+  .project-section-body {
+    padding-left: 0;
+  }
+
+  .project-section-row {
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .project-row-main span,
+  .project-row-main a {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .finance-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-summary-item,
+  .finance-account-card,
+  .finance-account-split-item,
+  .finance-asset-card,
+  .finance-asset-insight-card,
+  .finance-extra-card,
+  .ai-rec-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .finance-asset-amount-block,
+  .finance-extra-amount,
+  .finance-extra-total,
+  .coin-ledger-amount {
+    min-width: 0;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .finance-asset-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .bottom-tabbar {
+    gap: 2px;
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom));
+  }
+
+  .bottom-tab-btn {
+    min-height: 50px;
+    padding: 6px 2px 7px;
+  }
+
+  .tab-icon {
+    font-size: 15px;
+  }
+
+  .tab-text {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app {
+    padding-inline: 8px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .planner-hero-card h2,
+  .finance-home-hero-card h2,
+  .finance-asset-hero-card strong {
+    font-size: 24px;
+  }
+
+  .finance-summary-grid,
+  .summary,
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-cell {
+    min-height: 54px;
+    padding: 2px;
+  }
+
+  .calendar-type-icon {
+    display: none;
+  }
+
+  .calendar-title-inline {
+    font-size: 8px;
+  }
+
+  .routine-day-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .project-section-header {
+    padding: 8px 0;
+  }
+
+  .project-section-count {
+    padding-inline: 6px;
+  }
 }
 
 @media (max-width: 768px) {

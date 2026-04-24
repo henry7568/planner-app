@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=40" />
+    <link rel="stylesheet" href="style.css?v=43" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -121,15 +121,17 @@
             <p class="sub-text">인생을 설계합니다.</p>
           </div>
 
-          <div class="user-box">
-            <div class="user-email-wrap">
-              <span class="user-label">로그인 계정</span>
-              <strong id="userEmailText">-</strong>
-            </div>
-            <button id="logoutBtn" class="secondary-btn" type="button">
-              로그아웃
-            </button>
-          </div>
+          <button
+            id="openSettingsBtn"
+            class="secondary-btn app-settings-btn"
+            type="button"
+            aria-label="&#49444;&#51221;"
+            title="&#49444;&#51221;"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
       </header>
 
@@ -2672,6 +2674,46 @@
         <div id="projectDetailBody" class="project-detail-body"></div>
       </div>
     </div>
+    <div id="settingsPopupOverlay" class="popup-overlay hidden">
+      <div class="popup-panel popup-shell settings-popup-panel">
+        <div class="popup-header">
+          <div>
+            <h3 class="popup-title">&#49444;&#51221;</h3>
+            <p class="popup-subtext">&#50545;&#51032; &#44592;&#48376; &#49444;&#51221;&#51012; &#44288;&#47532;&#54633;&#45768;&#45796;.</p>
+          </div>
+          <button id="closeSettingsBtn" class="secondary-btn popup-close-btn" type="button">
+            &#45803;&#44592;
+          </button>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-row">
+            <div>
+              <strong>&#47196;&#44536;&#51064; &#44228;&#51221;</strong>
+              <span class="small-text">&#54788;&#51116; &#49324;&#50857; &#51473;&#51064; &#44228;&#51221;</span>
+              <strong id="userEmailText" class="settings-email-text">-</strong>
+            </div>
+            <button id="logoutBtn" class="secondary-btn" type="button">
+              &#47196;&#44536;&#50500;&#50883;
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-row">
+            <div>
+              <strong>&#51089;&#50629; &#50508;&#47548;</strong>
+              <p id="settingsNotificationStatus" class="small-text"></p>
+            </div>
+            <label class="planner-view-toggle settings-toggle">
+              <input id="settingsNotificationsToggle" type="checkbox" />
+              <span class="planner-view-toggle-ui"></span>
+              <span class="planner-view-toggle-text">&#50508;&#47548; &#49324;&#50857;</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="recurringEditScopeOverlay" class="popup-overlay hidden">
       <div class="popup-panel popup-shell compact-popup-panel" style="max-width: 560px">
         <div class="popup-header">
@@ -2762,6 +2804,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=40"></script>
+    <script type="module" src="./js/app.js?v=43"></script>
   </body>
 </html>
