@@ -52,6 +52,7 @@ import {
   getStatusSymbol,
   getStatusText,
   toggleItemStatus,
+  toggleRecurringSingleSlotStatus,
   deleteItemById,
   applyRecurringScheduleEditScope,
   toggleRecurringScheduleSlotStatus,
@@ -4952,6 +4953,15 @@ function toggleStatus(id) {
     previousStatus = baseItem.repeatSlotStatuses?.[weekday] || "pending";
     nextStatus = getNextStatus(previousStatus);
     items = toggleRecurringScheduleSlotStatus(items, id);
+  } else if (
+    baseItem &&
+    baseItem.repeat &&
+    baseItem.repeat !== "none" &&
+    occurrenceDateKey
+  ) {
+    previousStatus = baseItem.status || "pending";
+    nextStatus = getNextStatus(previousStatus);
+    items = toggleRecurringSingleSlotStatus(items, id);
   } else {
     items = toggleItemStatus(items, targetId);
   }

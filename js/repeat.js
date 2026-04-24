@@ -383,21 +383,19 @@ export function expandRecurringPlannerItemsInRange(
       return;
     }
 
-    let cursor = new Date(`${rangeStartKey}T00:00`);
-    const end = new Date(`${rangeEndKey}T00:00`);
+    const activeDateKey = getRecurringItemBaseDate(item);
 
-    while (cursor <= end) {
-      const dateKey = formatDateKey(cursor);
-
-      if (matchesRecurringDate(dateKey, item)) {
-        if (item.type === "todo") {
-          expanded.push(buildRecurringTodoOccurrence(item, dateKey));
-        } else if (item.type === "schedule") {
-          expanded.push(buildRecurringScheduleOccurrence(item, dateKey));
-        }
+    if (
+      activeDateKey &&
+      activeDateKey >= rangeStartKey &&
+      activeDateKey <= rangeEndKey &&
+      matchesRecurringDate(activeDateKey, item)
+    ) {
+      if (item.type === "todo") {
+        expanded.push(buildRecurringTodoOccurrence(item, activeDateKey));
+      } else if (item.type === "schedule") {
+        expanded.push(buildRecurringScheduleOccurrence(item, activeDateKey));
       }
-
-      cursor.setDate(cursor.getDate() + 1);
     }
   });
 

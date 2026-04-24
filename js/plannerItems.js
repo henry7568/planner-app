@@ -1,5 +1,5 @@
 // plannerItems.js
-import { makeDateTime, makeId } from "./utils.js";
+import { makeDateTime, makeId, formatDateKey } from "./utils.js";
 
 import {
   getPreviousOccurrenceDateKey,
@@ -530,6 +530,67 @@ export function toggleItemStatus(items, id) {
       ? { ...item, status: getNextStatus(item.status) }
       : item,
   );
+}
+
+export function toggleRecurringSingleSlotStatus(items, id) {
+  const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
+  const targetDate = occurrenceDateKey;
+
+  return items.map((item) => {
+    if (item.id !== targetId) return item;
+    if (!item.repeat || item.repeat === "none") return item;
+    if (item.type !== "todo" && item.type !== "schedule") return item;
+    if (item.repeat === "weekly_days" && item.type === "schedule") return item;
+    if (!targetDate) return item;
+
+    const currentDate = item.type === "todo" ? item.dueDate : item.startDate;
+    if (currentDate !== targetDate) return item;
+
+    const nextStatus = getNextStatus(item.status || "pending");
+
+    if (nextStatus !== "success") {
+      return {
+        ...item,
+        status: nextStatus,
+        updatedAt: Date.now(),
+      };
+    }
+
+    const nextOccurrence = getNextOccurrenceDateKey(item, targetDate);
+
+    if (!nextOccurrence) {
+      return {
+        ...item,
+        status: nextStatus,
+        updatedAt: Date.now(),
+      };
+    }
+
+    if (item.type === "todo") {
+      return {
+        ...item,
+        dueDate: nextOccurrence,
+        status: "pending",
+        updatedAt: Date.now(),
+      };
+    }
+
+    const baseStart = new Date(`${item.startDate}T00:00`);
+    const baseEnd = new Date(`${item.endDate}T00:00`);
+    const nextStart = new Date(`${nextOccurrence}T00:00`);
+    const durationDays = Math.round(
+      (baseEnd - baseStart) / (1000 * 60 * 60 * 24),
+    );
+    nextStart.setDate(nextStart.getDate() + durationDays);
+
+    return {
+      ...item,
+      startDate: nextOccurrence,
+      endDate: formatDateKey(nextStart),
+      status: "pending",
+      updatedAt: Date.now(),
+    };
+  });
 }
 
 export function deleteItemById(items, id) {
