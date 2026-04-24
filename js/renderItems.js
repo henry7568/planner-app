@@ -1,4 +1,4 @@
-// renderItems.js
+﻿// renderItems.js
 import { formatKoreanDate, escapeHtml } from "./utils.js";
 import { getRepeatText } from "./repeat.js";
 import {
@@ -14,7 +14,11 @@ function getProjectName(projectId) {
 }
 
 export function renderCoinBadge(item, statusTargetId) {
-  const reward = assessTaskReward(item, String(statusTargetId).split("__")[1] || "");
+  const reward = assessTaskReward(
+    item,
+    String(statusTargetId).split("__")[1] || "",
+    window.AppState?.rewardsData,
+  );
   const earned = getEarnedCoinsForTarget(
     window.AppState?.rewardsData,
     statusTargetId,
@@ -80,7 +84,7 @@ export function renderCard(item, getStatusSymbol) {
 
   if (item.type === "todo") {
     detailMeta = `
-      <span class="meta-icon" title="할일">📝</span>
+      <span class="meta-icon" title="마감 작업">📝</span>
       <span class="meta-badge compact">${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</span>
       ${projectBadge}
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
@@ -89,7 +93,7 @@ export function renderCard(item, getStatusSymbol) {
     `;
   } else {
     detailMeta = `
-      <span class="meta-icon" title="일정">🗓️</span>
+      <span class="meta-icon" title="시간 작업">🗓️</span>
       <span class="meta-badge compact">${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</span>
       <span class="meta-badge compact">~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
       ${projectBadge}
@@ -134,11 +138,6 @@ export function renderCard(item, getStatusSymbol) {
 }
 
 export function renderSelectedCard(item, getStatusSymbol) {
-  const repeatLine =
-    item.repeat && item.repeat !== "none"
-      ? `<div><strong>↻ 반복</strong> : ${getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays)}</div>`
-      : "";
-
   const locationText =
     Array.isArray(item.dailyLocations) && item.dailyLocations.length > 0
       ? item.dailyLocations
@@ -146,40 +145,18 @@ export function renderSelectedCard(item, getStatusSymbol) {
           .join(" / ")
       : item.location || "";
 
-  const locationLine = locationText
-    ? `<div><strong>📍 장소</strong> : ${escapeHtml(locationText)}</div>`
-    : "";
-
   const projectName = getProjectName(item.projectId);
-  const projectLine = projectName
-    ? `<div><strong>프로젝트</strong> : ${escapeHtml(projectName)}</div>`
-    : "";
-
-  const timeBlock =
-    item.type === "todo"
-      ? `
-      <div class="selected-item-time-block">
-        <div><strong>📝 기한</strong> : ${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}</div>
-        ${locationLine}
-        ${repeatLine}
-      </div>
-    `
-      : `
-      <div class="selected-item-time-block">
-        <div><strong>🗓️ 시작</strong> : ${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</div>
-        <div><strong>🗓️ 종료</strong> : ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</div>
-        ${locationLine}
-        ${repeatLine}
-      </div>
-    `;
-
   const editTargetId = item.id;
   const statusTargetId = item.sourceId || item.id;
-  const coinBadge = renderCoinBadge(item, statusTargetId);
+  const isSchedule = item.type === "schedule";
+  const dateText = isSchedule
+    ? `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`
+    : `${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}`;
+  const typeText = isSchedule ? "일정" : "할일";
 
   return `
     <div
-      class="selected-item-card clickable-item-card"
+      class="selected-item-card selected-item-row project-section-row clickable-item-card"
       data-action="open-edit-item"
       data-id="${editTargetId}"
       role="button"
@@ -196,11 +173,55 @@ export function renderSelectedCard(item, getStatusSymbol) {
         ${getStatusSymbol(item.status)}
       </button>
 
-      <div class="selected-item-content">
+      <div class="selected-item-content project-row-main">
         <div class="selected-item-title">${escapeHtml(item.title)}</div>
-        ${timeBlock}
-        <div class="selected-item-meta">${coinBadge}</div>
+        <div class="selected-item-meta">
+          <span class="timeline-type ${item.type === "todo" ? "todo" : "schedule"}">${typeText}</span>
+          <span>${escapeHtml(dateText)}</span>
+          ${item.repeat && item.repeat !== "none" ? `<span>↻ ${escapeHtml(getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays))}</span>` : ""}
+          ${projectName ? `<span>${escapeHtml(projectName)}</span>` : ""}
+          ${locationText ? `<span>📍 ${escapeHtml(locationText)}</span>` : ""}
+          ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+        </div>
       </div>
+    </div>
+  `;
+}
+
+export function renderProjectTaskRow(item, getStatusSymbol) {
+  const isSchedule = item.type === "schedule";
+  const primaryDate = isSchedule ? item.startDate : item.dueDate;
+  const primaryTime = isSchedule ? item.startTime : item.dueTime;
+  const secondaryDate = isSchedule ? item.endDate : "";
+  const secondaryTime = isSchedule ? item.endTime : "";
+  const dateText = isSchedule
+    ? `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""} ~ ${formatKoreanDate(secondaryDate)}${secondaryTime ? ` ${secondaryTime}` : ""}`
+    : `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""}`;
+  const statusTargetId = item.sourceId || item.id;
+
+  return `
+    <div
+      class="project-section-row project-task-row clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${escapeHtml(item.id)}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
+      <button
+        class="status-btn ${item.status || "pending"} project-row-status"
+        data-action="toggle-status"
+        data-id="${escapeHtml(statusTargetId)}"
+        title="상태 변경"
+        type="button"
+      >
+        ${getStatusSymbol(item.status)}
+      </button>
+      <div class="project-row-main">
+        <strong>${escapeHtml(item.title || "")}</strong>
+        <span>${escapeHtml(dateText)}</span>
+      </div>
+      ${item.tag ? `<span class="tag-badge project-row-tag">${escapeHtml(item.tag)}</span>` : ""}
     </div>
   `;
 }

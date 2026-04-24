@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=12" />
+    <link rel="stylesheet" href="style.css?v=40" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -145,7 +145,7 @@
               <button id="openScheduleHubBtn" class="hub-card" type="button">
                 <span class="hub-icon">🗓️</span>
                 <h3>스케줄</h3>
-                <p>일정/할일을 관리할 수 있습니다.</p>
+                <p>작업을 관리할 수 있습니다.</p>
               </button>
 
               <button id="openFinanceHubBtn" class="hub-card" type="button">
@@ -285,7 +285,7 @@
                 type="button"
               >
                 <span class="home-icon">📝</span>
-                <h3>할일</h3>
+                <h3>마감 작업</h3>
                 <p class="home-number" id="dashboardTodoCount">0</p>
               </button>
 
@@ -295,7 +295,7 @@
                 type="button"
               >
                 <span class="home-icon">🗓️</span>
-                <h3>일정</h3>
+                <h3>시간 작업</h3>
                 <p class="home-number" id="dashboardScheduleCount">0</p>
               </button>
 
@@ -315,7 +315,7 @@
                 type="button"
               >
                 <span class="home-icon">⏰</span>
-                <h3>마감 임박 할일</h3>
+                <h3>마감 임박 작업</h3>
                 <p class="home-number" id="dashboardUrgentTodoCount">0</p>
               </button>
             </div>
@@ -353,12 +353,12 @@
         </section>
 
         <section id="tab-planner" class="tab-section hidden">
-          <div class="planner-overview-grid">
+          <div id="plannerOverviewSection" class="planner-overview-grid">
             <section id="plannerFormLauncher" class="card planner-hero-card">
               <span class="planner-section-eyebrow">Schedule Workspace</span>
-              <h2>오늘의 스케줄과 할일을 바로 관리하세요</h2>
+                <h2>오늘의 작업을 바로 관리하세요</h2>
               <p class="small-text">
-                새 일정 추가부터 오늘 항목 확인, 달력 탐색까지 한 흐름으로
+                새 작업 추가부터 오늘 항목 확인, 달력 탐색까지 한 흐름으로
                 이어집니다.
               </p>
               <div class="button-row">
@@ -367,23 +367,56 @@
                   class="primary-btn"
                   type="button"
                 >
-                  일정/할일 추가
+                  작업 추가
                 </button>
               </div>
+            </section>
+
+            <section class="card quick-input-card">
+              <div class="planner-section-heading">
+                <div>
+                  <span class="planner-section-eyebrow">Quick Add</span>
+                  <h2>작업 빠른 추가</h2>
+                </div>
+              </div>
+              <div class="planner-inline-row">
+                <div class="form-group" style="flex: 1 1 280px">
+                  <label for="quickInputText">빠른 입력</label>
+                  <input
+                    id="quickInputText"
+                    type="text"
+                    placeholder="예: 내일 오후 3시 병원 예약"
+                  />
+                </div>
+                <button id="quickInputParseBtn" class="primary-btn" type="button">
+                  작업으로 채우기
+                </button>
+              </div>
+              <p id="quickInputMessage" class="small-text"></p>
             </section>
 
             <section class="card planner-today-card">
               <div class="planner-section-heading">
                 <div>
                   <span class="planner-section-eyebrow">Today Focus</span>
-                  <h2>오늘 일정</h2>
+                  <h2>오늘 작업</h2>
                 </div>
               </div>
               <div id="todayList" class="item-list"></div>
             </section>
+
+            <section class="card planner-ai-card">
+              <div class="planner-section-heading">
+                <div>
+                  <span class="planner-section-eyebrow">AI Recommend</span>
+                  <h2>AI 작업 추천</h2>
+                </div>
+              </div>
+              <div id="aiRecommendationList" class="item-list"></div>
+            </section>
           </div>
 
-          <div id="plannerWorkspaceHubSection" class="planner-workspace-grid">
+          <div id="plannerWorkspaceHubSection" class="planner-workspace-grid hidden">
             <button
               id="openPlannerInboxViewBtn"
               class="card planner-workspace-entry planner-workspace-entry-btn"
@@ -392,7 +425,7 @@
               <span class="planner-section-eyebrow">Inbox</span>
               <h2>Inbox 창 열기</h2>
               <p class="small-text">
-                빠르게 메모를 쌓고, 할일이나 일정으로 전환할 항목을 모아둡니다.
+                빠르게 메모를 쌓고, 작업으로 전환할 항목을 모아둡니다.
               </p>
             </button>
 
@@ -404,23 +437,13 @@
               <span class="planner-section-eyebrow">Projects</span>
               <h2>프로젝트 창 열기</h2>
               <p class="small-text">
-                프로젝트를 만들고 연결된 일정, 열린 항목, Inbox 흐름을 함께 관리합니다.
+                프로젝트를 만들고 연결된 작업, 열린 항목, Inbox 흐름을 함께 관리합니다.
               </p>
             </button>
           </div>
 
           <section id="plannerInboxSection" class="card planner-inbox-card hidden">
-            <div class="button-row planner-view-back-row">
-              <button
-                id="plannerBackToHomeFromInboxBtn"
-                class="secondary-btn"
-                type="button"
-              >
-                스케줄 홈으로
-              </button>
-            </div>
-
-            <section>
+<section>
               <div class="planner-section-heading">
                 <div>
                   <span class="planner-section-eyebrow">Inbox</span>
@@ -434,7 +457,7 @@
                   <input
                     type="text"
                     id="plannerInboxTitleInput"
-                    placeholder="생각난 일, 확인할 것, 나중에 일정으로 바꿀 메모"
+                    placeholder="생각난 일, 확인할 것, 나중에 작업으로 바꿀 메모"
                   />
                 </div>
 
@@ -462,6 +485,13 @@
                   >
                     Inbox에 넣기
                   </button>
+                  <button
+                    id="plannerInboxCancelEditBtn"
+                    class="secondary-btn hidden"
+                    type="button"
+                  >
+                    수정 취소
+                  </button>
                 </div>
               </div>
 
@@ -470,17 +500,7 @@
           </section>
 
           <section id="plannerProjectSection" class="card planner-project-card hidden">
-            <div class="button-row planner-view-back-row">
-              <button
-                id="plannerBackToHomeFromProjectBtn"
-                class="secondary-btn"
-                type="button"
-              >
-                스케줄 홈으로
-              </button>
-            </div>
-
-            <section>
+<section>
               <div class="planner-section-heading">
                 <div>
                   <span class="planner-section-eyebrow">Projects</span>
@@ -527,6 +547,13 @@
                   type="button"
                 >
                   프로젝트 추가
+                </button>
+                <button
+                  id="plannerProjectCancelEditBtn"
+                  class="secondary-btn hidden"
+                  type="button"
+                >
+                  수정 취소
                 </button>
               </div>
 
@@ -639,7 +666,7 @@
                     </a>
 
                     <div id="locationModeHelperText" class="small-text">
-                      하루 일정은 기본 장소 기능을 사용합니다.
+                      하루 작업은 기본 장소 기능을 사용합니다.
                     </div>
 
                     <input type="hidden" id="itemLocation" />
@@ -963,7 +990,7 @@
                   <label>날짜별 장소</label>
 
                   <div class="small-text" style="margin-bottom: 8px">
-                    여행처럼 여러 날 일정일 경우 날짜마다 다른 장소를 지정할 수
+                    여행처럼 여러 날 작업일 경우 날짜마다 다른 장소를 지정할 수
                     있습니다.
                   </div>
 
@@ -1012,12 +1039,12 @@
               </div>
             </section>
           </div>
-          <section class="card calendar-card planner-calendar-card">
+          <section id="plannerCalendarSection" class="card calendar-card planner-calendar-card">
             <div class="calendar-header">
               <div>
                 <span class="planner-section-eyebrow">Monthly View</span>
                 <h2>달력</h2>
-                <p class="small-text">할일과 일정이 모두 표시됩니다.</p>
+                <p class="small-text">작업이 모두 표시됩니다.</p>
               </div>
 
               <div class="calendar-nav">
@@ -2023,6 +2050,15 @@
         </button>
 
         <button
+          id="plannerInboxTabBtn"
+          class="bottom-tab-btn hidden"
+          type="button"
+        >
+          <span class="tab-icon">📥</span>
+          <span class="tab-text">Inbox</span>
+        </button>
+
+        <button
           id="homeTabBtn"
           class="bottom-tab-btn active is-home"
           type="button"
@@ -2030,6 +2066,15 @@
         >
           <span class="tab-icon">🏠</span>
           <span class="tab-text">홈</span>
+        </button>
+
+        <button
+          id="plannerProjectTabBtn"
+          class="bottom-tab-btn hidden"
+          type="button"
+        >
+          <span class="tab-icon">🗂️</span>
+          <span class="tab-text">프로젝트</span>
         </button>
 
         <button
@@ -2181,7 +2226,7 @@
                   </a>
 
                   <div id="popupLocationModeHelperText" class="small-text">
-                    하루 일정은 기본 장소 기능을 사용합니다.
+                    하루 작업은 기본 장소 기능을 사용합니다.
                   </div>
 
                   <input id="popupItemLocation" type="hidden" />
@@ -2191,7 +2236,7 @@
               </div>
             </div>
 
-            <!-- 할일 필드 -->
+            <!-- 마감 작업 필드 -->
             <div id="popupTodoFields">
               <div class="form-row two-cols">
                 <div class="form-group">
@@ -2345,7 +2390,7 @@
               </div>
             </div>
 
-            <!-- 일정 필드 -->
+            <!-- 시간 작업 필드 -->
             <div id="popupScheduleFields" class="hidden">
               <div class="form-row two-cols">
                 <div class="form-group">
@@ -2557,7 +2602,7 @@
                 <label>날짜별 장소</label>
 
                 <div class="small-text" style="margin-bottom: 8px">
-                  여러 날 일정이면 날짜별로 장소를 다르게 지정할 수 있습니다.
+                  여러 날 작업이면 날짜별로 장소를 다르게 지정할 수 있습니다.
                 </div>
 
                 <div
@@ -2613,11 +2658,25 @@
         <div id="editPopupMount"></div>
       </div>
     </div>
+    <div id="projectDetailOverlay" class="popup-overlay hidden">
+      <div class="popup-panel popup-shell project-detail-popup-panel">
+        <div class="popup-header">
+          <div>
+            <h3 id="projectDetailTitle" class="popup-title">프로젝트</h3>
+            <p id="projectDetailDesc" class="popup-subtext"></p>
+          </div>
+          <button id="closeProjectDetailBtn" class="secondary-btn popup-close-btn" type="button">
+            닫기
+          </button>
+        </div>
+        <div id="projectDetailBody" class="project-detail-body"></div>
+      </div>
+    </div>
     <div id="recurringEditScopeOverlay" class="popup-overlay hidden">
       <div class="popup-panel popup-shell compact-popup-panel" style="max-width: 560px">
         <div class="popup-header">
           <div>
-            <h3 class="popup-title">반복 일정 적용 범위</h3>
+            <h3 class="popup-title">반복 작업 적용 범위</h3>
             <p class="popup-subtext">
               수정 내용을 어느 범위까지 적용할지 선택하세요.
             </p>
@@ -2636,19 +2695,19 @@
           style="flex-direction: column; align-items: stretch"
         >
           <button id="scopeOnlyThisBtn" class="secondary-btn" type="button">
-            해당 일정에만 적용
+            해당 작업에만 적용
           </button>
 
           <button id="scopeFutureBtn" class="secondary-btn" type="button">
-            해당 일정 이후에 적용
+            해당 작업 이후에 적용
           </button>
 
           <button id="scopePastBtn" class="secondary-btn" type="button">
-            해당 일정 이전에 적용
+            해당 작업 이전에 적용
           </button>
 
           <button id="scopeAllBtn" class="primary-btn" type="button">
-            전체 일정에 적용
+            전체 작업에 적용
           </button>
         </div>
       </div>
@@ -2703,6 +2762,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=12"></script>
+    <script type="module" src="./js/app.js?v=40"></script>
   </body>
 </html>

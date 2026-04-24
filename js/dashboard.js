@@ -1,5 +1,5 @@
 // dashboard.js
-import { escapeHtml, formatDateKey } from "./utils.js";
+import { escapeHtml, formatDateKey, makeDateTime } from "./utils.js";
 import { renderCard, renderSelectedCard } from "./renderItems.js";
 import { getStatusSymbol } from "./plannerItems.js";
 import {
@@ -14,7 +14,9 @@ import { COIN_KRW_VALUE, getCoinBalance } from "./rewards.js";
 let deps = {};
 let coinLedgerPage = 1;
 let coinLedgerFilterKey = "";
+let todayPage = 1;
 const COIN_LEDGER_PAGE_SIZE = 5;
+const TODAY_PAGE_SIZE = 3;
 const STATUS_LEDGER_TYPES = new Set([
   "earn",
   "revoke",
@@ -79,6 +81,7 @@ export function renderDashboard() {
     hobbyBudgetText,
     coinLedgerList,
     dashboardItemList,
+    timeAnalysisSummary,
   } = getRefs();
 
   const pageSize = deps.dashboardPageSize || 10;
@@ -154,6 +157,7 @@ export function renderDashboard() {
     coinLedgerList,
     filteredItems: filtered,
   });
+  renderTimeAnalysis(timeAnalysisSummary);
 
   if (!dashboardItemList) return;
 
@@ -247,20 +251,256 @@ export function renderDashboard() {
 }
 
 export function renderTodayList() {
-  const { todayList } = getRefs();
+  const {
+    todayList,
+    todayAchievementRate,
+    todayAchievementBarFill,
+    todayAchievementDesc,
+  } = getRefs();
   if (!todayList) return;
 
   const todayKey = formatDateKey(new Date());
   const todayItems = getItemsForDate(todayKey);
+  const todayRate = getAchievementRate(todayItems);
+  const completedBase = todayItems.filter(
+    (item) => item.status === "success" || item.status === "fail",
+  ).length;
+
+  if (todayAchievementRate) {
+    todayAchievementRate.textContent = `${todayRate}%`;
+  }
+
+  if (todayAchievementBarFill) {
+    todayAchievementBarFill.style.width = `${todayRate}%`;
+  }
+
+  if (todayAchievementDesc) {
+    todayAchievementDesc.textContent =
+      completedBase === 0
+        ? "아직 완료 또는 미완료로 확정된 오늘 항목이 없습니다."
+        : `완료 / (완료 + 미완료) 기준 · ${completedBase}개 반영`;
+  }
 
   if (todayItems.length === 0) {
+    todayPage = 1;
     todayList.innerHTML = `<div class="empty-message">오늘 항목이 없습니다.</div>`;
     return;
   }
 
-  todayList.innerHTML = todayItems
-    .map((item) => renderCard(item, getStatusSymbol))
-    .join("");
+  const totalPages = Math.max(1, Math.ceil(todayItems.length / TODAY_PAGE_SIZE));
+  todayPage = Math.min(Math.max(todayPage, 1), totalPages);
+
+  const startIndex = (todayPage - 1) * TODAY_PAGE_SIZE;
+  const visibleItems = todayItems.slice(startIndex, startIndex + TODAY_PAGE_SIZE);
+
+  todayList.innerHTML = `
+    ${visibleItems.map((item) => renderCard(item, getStatusSymbol)).join("")}
+    ${renderTodayPagination(todayPage, totalPages, todayItems.length)}
+  `;
+
+  todayList
+    .querySelector("[data-action='change-today-page'][data-direction='-1']")
+    ?.addEventListener("click", () => {
+      if (todayPage <= 1) return;
+      todayPage -= 1;
+      renderTodayList();
+    });
+
+  todayList
+    .querySelector("[data-action='change-today-page'][data-direction='1']")
+    ?.addEventListener("click", () => {
+      if (todayPage >= totalPages) return;
+      todayPage += 1;
+      renderTodayList();
+    });
+}
+
+function renderTodayPagination(page, totalPages, totalCount) {
+  if (totalPages <= 1) return "";
+
+  return `
+    <div class="planner-pagination today-pagination">
+      <button
+        class="secondary-btn"
+        type="button"
+        data-action="change-today-page"
+        data-direction="-1"
+        ${page <= 1 ? "disabled" : ""}
+      >
+        \uC774\uC804
+      </button>
+      <span class="planner-pagination-text">${page} / ${totalPages} · \uCD1D ${totalCount}\uAC1C</span>
+      <button
+        class="secondary-btn"
+        type="button"
+        data-action="change-today-page"
+        data-direction="1"
+        ${page >= totalPages ? "disabled" : ""}
+      >
+        \uB2E4\uC74C
+      </button>
+    </div>
+  `;
+}
+
+function renderTimeAnalysis(container) {
+  if (!container) return;
+
+  const analysis = getTimeUsageAnalysis();
+  const totalHours = analysis.totalMinutes / 60;
+
+  container.innerHTML = `
+    <div class="time-analysis-stats">
+      <div>
+        <span>총 계획 시간</span>
+        <strong>${formatHours(totalHours)}</strong>
+      </div>
+      <div>
+        <span>최다 태그/프로젝트</span>
+        <strong>${escapeHtml(analysis.topLabel || "없음")}</strong>
+      </div>
+      <div>
+        <span>종일 일정</span>
+        <strong>${analysis.allDayCount}개</strong>
+      </div>
+    </div>
+    <div class="time-analysis-bars">
+      ${
+        analysis.categories.length
+          ? analysis.categories.map(renderTimeAnalysisBar).join("")
+          : `<div class="empty-message compact-empty">선택한 기간에 시간이 있는 일정이 없습니다.</div>`
+      }
+    </div>
+  `;
+}
+
+function renderTimeAnalysisBar(entry) {
+  return `
+    <div class="time-analysis-row">
+      <div class="time-analysis-label">
+        <span>${escapeHtml(entry.label)}</span>
+        <strong>${formatHours(entry.minutes / 60)}</strong>
+      </div>
+      <div class="time-analysis-track">
+        <div class="time-analysis-fill" style="width: ${entry.ratio}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function getTimeUsageAnalysis() {
+  const { startKey, endKey } = getSelectedAnalysisRange();
+  const schedules = expandRecurringPlannerItemsInRange(
+    getItems(),
+    startKey,
+    endKey,
+  ).filter((item) => item.type === "schedule");
+
+  const tagMinutes = new Map();
+  const projectMinutes = new Map();
+  const categoryMinutes = new Map();
+  let totalMinutes = 0;
+  let allDayCount = 0;
+
+  schedules.forEach((item) => {
+    const duration = getScheduleDurationMinutes(item);
+
+    if (duration <= 0) {
+      allDayCount += 1;
+      return;
+    }
+
+    totalMinutes += duration;
+
+    const tag = item.tag || "태그 없음";
+    tagMinutes.set(tag, (tagMinutes.get(tag) || 0) + duration);
+
+    const projectLabel = item.projectId ? deps.getProjectLabel?.(item.projectId) || "" : "";
+    if (projectLabel) {
+      projectMinutes.set(projectLabel, (projectMinutes.get(projectLabel) || 0) + duration);
+    }
+
+    const category = inferScheduleCategory(item);
+    categoryMinutes.set(category, (categoryMinutes.get(category) || 0) + duration);
+  });
+
+  const topTag = getTopEntry(tagMinutes);
+  const topProject = getTopEntry(projectMinutes);
+  const topLabel =
+    topProject && (!topTag || topProject.minutes > topTag.minutes)
+      ? topProject.label
+      : topTag?.label || "";
+
+  const categories = [...categoryMinutes.entries()]
+    .map(([label, minutes]) => ({
+      label,
+      minutes,
+      ratio: totalMinutes ? Math.round((minutes / totalMinutes) * 100) : 0,
+    }))
+    .sort((a, b) => b.minutes - a.minutes);
+
+  return {
+    totalMinutes,
+    topLabel,
+    allDayCount,
+    categories,
+  };
+}
+
+function getSelectedAnalysisRange() {
+  const year = getSelectedFilterYear() || String(new Date().getFullYear());
+  const month = getSelectedFilterMonth();
+
+  if (month) {
+    const start = new Date(Number(year), Number(month) - 1, 1);
+    const end = new Date(Number(year), Number(month), 0);
+    return {
+      startKey: formatDateKey(start),
+      endKey: formatDateKey(end),
+    };
+  }
+
+  return {
+    startKey: `${year}-01-01`,
+    endKey: `${year}-12-31`,
+  };
+}
+
+function getScheduleDurationMinutes(item) {
+  if (!item.startTime || !item.endTime) return 0;
+
+  const start = new Date(makeDateTime(item.startDate, item.startTime));
+  const end = new Date(makeDateTime(item.endDate || item.startDate, item.endTime));
+  const diff = Math.round((end.getTime() - start.getTime()) / 60000);
+
+  return Number.isFinite(diff) && diff > 0 ? diff : 0;
+}
+
+function inferScheduleCategory(item) {
+  const source = `${item.title || ""} ${item.tag || ""}`.toLowerCase();
+  const categoryHints = [
+    ["업무", ["업무", "회의", "미팅", "보고", "회사", "면접"]],
+    ["공부", ["공부", "강의", "과제", "시험", "수업", "복습"]],
+    ["개인", ["병원", "운동", "청소", "정리", "예약", "개인"]],
+    ["여가", ["여가", "카페", "약속", "친구", "영화", "여행", "게임"]],
+  ];
+
+  return (
+    categoryHints.find(([, words]) => words.some((word) => source.includes(word)))?.[0] ||
+    item.tag ||
+    "기타"
+  );
+}
+
+function getTopEntry(map) {
+  return [...map.entries()]
+    .map(([label, minutes]) => ({ label, minutes }))
+    .sort((a, b) => b.minutes - a.minutes)[0];
+}
+
+function formatHours(value) {
+  if (!value) return "0시간";
+  return `${Number(value.toFixed(value >= 10 ? 0 : 1)).toLocaleString("ko-KR")}시간`;
 }
 
 function getLegacyCoinLedgerLabel(type, fallback) {

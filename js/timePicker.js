@@ -16,11 +16,25 @@ export function createTimeOptions() {
     }
   }
 
-  list.push({ value: "__custom__", label: "직접입력" });
+  list.push({ value: "__custom__", label: "직접 입력" });
   return list;
 }
 
 export function registerTimePicker(key, config) {
+  const requiredRefs = [
+    config.trigger,
+    config.menu,
+    config.search,
+    config.optionsWrap,
+    config.valueInput,
+    config.custom,
+  ];
+
+  if (requiredRefs.some((ref) => !ref)) {
+    console.warn(`Time picker "${key}" skipped because its DOM is incomplete.`);
+    return;
+  }
+
   timePickerRegistry[key] = {
     ...config,
     options: createTimeOptions(),
@@ -104,7 +118,7 @@ export function setupTimePickers() {
 
 export function toggleTimePickerMenu(key) {
   const picker = timePickerRegistry[key];
-  if (!picker) return;
+  if (!picker?.menu || !picker?.search) return;
 
   const isOpen = !picker.menu.classList.contains("hidden");
   closeAllTimePickerMenus();
@@ -119,13 +133,13 @@ export function toggleTimePickerMenu(key) {
 
 export function closeAllTimePickerMenus() {
   Object.values(timePickerRegistry).forEach((picker) => {
-    picker.menu.classList.add("hidden");
+    picker.menu?.classList.add("hidden");
   });
 }
 
 export function filterTimePickerOptions(key, keyword) {
   const picker = timePickerRegistry[key];
-  if (!picker) return;
+  if (!picker?.optionsWrap || !picker?.valueInput) return;
 
   const query = keyword.trim().toLowerCase();
 
@@ -139,7 +153,7 @@ export function filterTimePickerOptions(key, keyword) {
 
 export function renderTimePickerOptions(key) {
   const picker = timePickerRegistry[key];
-  if (!picker) return;
+  if (!picker?.valueInput || !picker?.custom || !picker?.trigger) return;
 
   const currentValue = picker.valueInput.value;
 
@@ -171,7 +185,7 @@ export function updateTimePickerTriggerText(key) {
 
   if (value === "__custom__") {
     picker.custom.classList.remove("hidden");
-    picker.trigger.textContent = customValue || "직접입력";
+    picker.trigger.textContent = customValue || "직접 입력";
     return;
   }
 
@@ -249,3 +263,4 @@ export function applyTimeValue(key, value) {
 export function getTimePickerByKey(key) {
   return timePickerRegistry[key] || null;
 }
+

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "life-planner-v12";
+const CACHE_VERSION = "life-planner-v40";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -10,14 +10,19 @@ const APP_SHELL_ASSETS = [
   "./app-icon.svg",
   "./js/app.js",
   "./js/auth.js",
+  "./js/aiRecommendations.js",
   "./js/calendar.js",
   "./js/dashboard.js",
   "./js/finance.js",
+  "./js/financeExtras.js",
   "./js/financeOcr.js",
   "./js/plannerItems.js",
   "./js/plannerUI.js",
+  "./js/productivityReport.js",
   "./js/renderItems.js",
   "./js/rewards.js",
+  "./js/routines.js",
+  "./js/quickInput.js",
   "./js/repeat.js",
   "./js/storage.js",
   "./js/timePicker.js",

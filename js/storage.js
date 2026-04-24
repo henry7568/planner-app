@@ -4,6 +4,11 @@ import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/
 
 let financeSaveTimer = null;
 const FINANCE_BUDGET_VERSION = 2;
+const DEFAULT_FINANCE_ACCOUNT_TEMPLATES = [
+  { type: "living", name: "생활비 통장", color: "blue" },
+  { type: "leisure", name: "여유자금 통장", color: "green" },
+  { type: "emergency", name: "비상금 통장", color: "orange" },
+];
 
 export function normalizePlannerData(data) {
   if (Array.isArray(data)) {
@@ -11,6 +16,8 @@ export function normalizePlannerData(data) {
       items: data,
       projects: [],
       inboxItems: [],
+      routines: [],
+      ignoredRecommendationIds: [],
       rewards: {
         coinVersion: 1,
         ledger: [],
@@ -24,6 +31,10 @@ export function normalizePlannerData(data) {
     items: Array.isArray(source.items) ? source.items : [],
     projects: Array.isArray(source.projects) ? source.projects : [],
     inboxItems: Array.isArray(source.inboxItems) ? source.inboxItems : [],
+    routines: Array.isArray(source.routines) ? source.routines : [],
+    ignoredRecommendationIds: Array.isArray(source.ignoredRecommendationIds)
+      ? source.ignoredRecommendationIds
+      : [],
     rewards: {
       coinVersion: Number(source.rewards?.coinVersion) || 1,
       ledger: Array.isArray(source.rewards?.ledger) ? source.rewards.ledger : [],
@@ -90,6 +101,127 @@ function normalizeBudgetEntry(monthKey, entry, fallbackStartDay = 1) {
   };
 }
 
+function makeDefaultFinanceAccountId(type) {
+  return `account-${type}`;
+}
+
+function normalizeFinanceAccount(item, fallback = {}) {
+  const now = Date.now();
+  const type = item?.type || fallback.type || "custom";
+  const createdAt = Number(item?.createdAt) || Number(fallback.createdAt) || now;
+
+  return {
+    id: item?.id || fallback.id || makeDefaultFinanceAccountId(type),
+    name: item?.name || fallback.name || "새 통장",
+    type,
+    balance: Number(item?.balance) || 0,
+    color: item?.color || fallback.color || "blue",
+    memo: typeof item?.memo === "string" ? item.memo : "",
+    createdAt,
+    updatedAt: Number(item?.updatedAt) || createdAt,
+  };
+}
+
+function buildDefaultFinanceAccounts() {
+  return DEFAULT_FINANCE_ACCOUNT_TEMPLATES.map((item) =>
+    normalizeFinanceAccount(
+      {},
+      {
+        ...item,
+        id: makeDefaultFinanceAccountId(item.type),
+      },
+    ),
+  );
+}
+
+function ensureDefaultFinanceAccounts(accounts) {
+  const normalized = Array.isArray(accounts)
+    ? accounts.map((item) => normalizeFinanceAccount(item))
+    : [];
+
+  DEFAULT_FINANCE_ACCOUNT_TEMPLATES.forEach((template) => {
+    if (!normalized.some((item) => item.type === template.type)) {
+      normalized.push(
+        normalizeFinanceAccount(
+          {},
+          {
+            ...template,
+            id: makeDefaultFinanceAccountId(template.type),
+          },
+        ),
+      );
+    }
+  });
+
+  return normalized;
+}
+
+function getDefaultFinanceAccountId(accounts, type = "living") {
+  return (
+    accounts.find((item) => item.type === type)?.id ||
+    accounts[0]?.id ||
+    ""
+  );
+}
+
+function normalizeFinanceTransaction(item, accounts) {
+  const now = Date.now();
+  const createdAt = Number(item?.createdAt) || Number(item?.updatedAt) || now;
+  const flowType = ["income", "expense", "transfer"].includes(item?.flowType)
+    ? item.flowType
+    : "expense";
+
+  return {
+    ...(item && typeof item === "object" ? item : {}),
+    id: item?.id || `transaction-${now}-${Math.random().toString(36).slice(2)}`,
+    flowType,
+    title: item?.title || "",
+    amount: Math.max(0, Number(item?.amount) || 0),
+    date: item?.date || "",
+    time: item?.time || "",
+    category: item?.category || "",
+    subCategory: item?.subCategory || "",
+    accountId: item?.accountId || getDefaultFinanceAccountId(accounts, "living"),
+    targetAccountId: item?.targetAccountId || "",
+    assetId: item?.assetId || "",
+    paymentMethod: item?.paymentMethod || "",
+    merchant: item?.merchant || "",
+    tag: item?.tag || "",
+    color: item?.color || "blue",
+    memo: item?.memo || "",
+    repeat: item?.repeat || "none",
+    repeatUntil: item?.repeatUntil || "",
+    isRecurring: Boolean(item?.isRecurring ?? item?.repeat !== "none"),
+    createdAt,
+    updatedAt: Number(item?.updatedAt) || createdAt,
+  };
+}
+
+function normalizeFinanceAsset(item, accounts) {
+  const now = Date.now();
+  const createdAt = Number(item?.createdAt) || Number(item?.updatedAt) || now;
+  const name = item?.name || item?.title || "";
+
+  return {
+    ...(item && typeof item === "object" ? item : {}),
+    id: item?.id || `asset-${now}-${Math.random().toString(36).slice(2)}`,
+    name,
+    title: item?.title || name,
+    category: item?.category || "custom",
+    amount: Math.max(0, Number(item?.amount) || 0),
+    accountId: item?.accountId || getDefaultFinanceAccountId(accounts, "leisure"),
+    purpose: item?.purpose || item?.accountPurpose || "general",
+    accountPurpose: item?.accountPurpose || item?.purpose || "general",
+    memo: item?.memo || "",
+    baseDate: item?.baseDate || item?.createdDate || "",
+    repeat: item?.repeat || "none",
+    repeatUntil: item?.repeatUntil || "",
+    isRecurring: Boolean(item?.isRecurring ?? item?.repeat !== "none"),
+    createdAt,
+    updatedAt: Number(item?.updatedAt) || createdAt,
+  };
+}
+
 export function normalizeFinanceData(data) {
   const source = data && typeof data === "object" ? data : {};
   const rawBudgetEntries =
@@ -113,6 +245,10 @@ export function normalizeFinanceData(data) {
     {},
   );
 
+  const accounts = source.accounts
+    ? ensureDefaultFinanceAccounts(source.accounts)
+    : buildDefaultFinanceAccounts();
+
   return {
     budgetVersion: FINANCE_BUDGET_VERSION,
     budgetSettings: {
@@ -122,8 +258,19 @@ export function normalizeFinanceData(data) {
     },
     budgetEntries,
     monthlyBudgets: buildLegacyMonthlyBudgets(budgetEntries),
-    expenses: Array.isArray(source?.expenses) ? source.expenses : [],
-    assets: Array.isArray(source?.assets) ? source.assets : [],
+    accounts,
+    expenses: Array.isArray(source?.expenses)
+      ? source.expenses.map((item) => normalizeFinanceTransaction(item, accounts))
+      : [],
+    assets: Array.isArray(source?.assets)
+      ? source.assets.map((item) => normalizeFinanceAsset(item, accounts))
+      : [],
+    subscriptions: Array.isArray(source?.subscriptions)
+      ? source.subscriptions
+      : [],
+    assetGoals: Array.isArray(source?.assetGoals) ? source.assetGoals : [],
+    accountsMigratedAt: Number(source?.accountsMigratedAt) || Date.now(),
+    balanceSyncedAt: Number(source?.balanceSyncedAt) || null,
   };
 }
 
@@ -143,12 +290,16 @@ export async function loadRemotePlannerData(uid) {
       state.items = data.items;
       state.projects = data.projects;
       state.inboxItems = data.inboxItems;
+      state.routines = data.routines;
+      state.ignoredRecommendationIds = data.ignoredRecommendationIds;
       state.rewardsData = data.rewards;
     } else {
       const localData = loadLocalBackup();
       state.items = localData.items;
       state.projects = localData.projects;
       state.inboxItems = localData.inboxItems;
+      state.routines = localData.routines;
+      state.ignoredRecommendationIds = localData.ignoredRecommendationIds;
       state.rewardsData = localData.rewards;
       await savePlannerDataToCloud();
     }
@@ -158,6 +309,8 @@ export async function loadRemotePlannerData(uid) {
     state.items = localData.items;
     state.projects = localData.projects;
     state.inboxItems = localData.inboxItems;
+    state.routines = localData.routines;
+    state.ignoredRecommendationIds = localData.ignoredRecommendationIds;
     state.rewardsData = localData.rewards;
   } finally {
     state.isRemoteLoading = false;
@@ -218,12 +371,23 @@ export async function saveFinanceDataToCloud() {
         budgetSettings: financeData.budgetSettings,
         budgetEntries: financeData.budgetEntries,
         monthlyBudgets: financeData.monthlyBudgets,
+        accounts: Array.isArray(financeData?.accounts)
+          ? financeData.accounts
+          : [],
         expenses: Array.isArray(financeData?.expenses)
           ? financeData.expenses
           : [],
         assets: Array.isArray(financeData?.assets)
           ? financeData.assets
           : [],
+        subscriptions: Array.isArray(financeData?.subscriptions)
+          ? financeData.subscriptions
+          : [],
+        assetGoals: Array.isArray(financeData?.assetGoals)
+          ? financeData.assetGoals
+          : [],
+        accountsMigratedAt: financeData.accountsMigratedAt || Date.now(),
+        balanceSyncedAt: financeData.balanceSyncedAt || null,
         updatedAt: Date.now(),
       },
       { merge: true },
@@ -259,6 +423,10 @@ export async function savePlannerDataToCloud() {
         items: state.items,
         projects: Array.isArray(state.projects) ? state.projects : [],
         inboxItems: Array.isArray(state.inboxItems) ? state.inboxItems : [],
+        routines: Array.isArray(state.routines) ? state.routines : [],
+        ignoredRecommendationIds: Array.isArray(state.ignoredRecommendationIds)
+          ? state.ignoredRecommendationIds
+          : [],
         rewards: state.rewardsData || { coinVersion: 1, ledger: [] },
         updatedAt: Date.now(),
       },
@@ -281,6 +449,8 @@ export function saveLocalBackup() {
           items: state.items,
           projects: state.projects,
           inboxItems: state.inboxItems,
+          routines: state.routines,
+          ignoredRecommendationIds: state.ignoredRecommendationIds,
           rewards: state.rewardsData,
         }),
       ),

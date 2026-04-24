@@ -867,11 +867,11 @@ function applyFinanceTransactionToForm(item, index, total) {
   }
 
   if (formCardEl) {
-    if (isIncome) {
-      formCardEl.dataset.ocrIncomeAssetMode = "true";
-    } else {
-      delete formCardEl.dataset.ocrIncomeAssetMode;
-    }
+    delete formCardEl.dataset.ocrIncomeAssetMode;
+  }
+
+  if (refs.financeOcrIncomeMode) {
+    refs.financeOcrIncomeMode.value = "account";
   }
 
   formCardEl?.classList.remove("hidden");
@@ -890,6 +890,17 @@ function applyFinanceTransactionToForm(item, index, total) {
 
   if (refs.financeExpenseAmount) {
     refs.financeExpenseAmount.value = String(item.amount || "");
+  }
+
+  if (refs.financeExpenseAccountId) {
+    const accounts = Array.isArray(getFinanceData().accounts)
+      ? getFinanceData().accounts
+      : [];
+    refs.financeExpenseAccountId.value =
+      refs.financeExpenseAccountId.value ||
+      accounts.find((account) => account.type === "living")?.id ||
+      accounts[0]?.id ||
+      "";
   }
 
   const categoryResult = isIncome
@@ -1042,7 +1053,7 @@ export function advanceFinanceOcrReviewQueue() {
       refs.financeReceiptImageInput.value = "";
     }
 
-    alert("OCR 검토 항목 저장이 모두 끝났습니다.");
+    alert("OCR 검토 항목이 모두 끝났습니다.");
     return;
   }
 

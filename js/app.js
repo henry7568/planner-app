@@ -37,7 +37,11 @@ import {
   getOccurrenceDateKeyFromItemId,
 } from "./repeat.js";
 
-import { renderCard, renderSelectedCard } from "./renderItems.js";
+import {
+  renderCard,
+  renderSelectedCard,
+  renderProjectTaskRow,
+} from "./renderItems.js";
 
 import {
   saveEditedSingleItem as saveEditedSingleItemModule,
@@ -90,6 +94,10 @@ import {
   deleteFinanceExpense,
   deleteEditingFinanceExpense,
   deleteEditingFinanceAsset,
+  saveFinanceAccount,
+  resetFinanceAccountForm,
+  deleteEditingFinanceAccount,
+  startEditFinanceAccount,
   startEditFinanceExpense,
   startEditFinanceAsset,
   handleFinancePageChange,
@@ -100,6 +108,7 @@ import {
   openFinanceExpenseFormForAsset,
   openFinanceAssetSummaryPopup,
   openFinanceOverviewSummaryPopup,
+  handleFinanceAssetTransactionPageChange,
 } from "./finance.js";
 
 import {
@@ -117,6 +126,34 @@ import {
   spendCoins,
   updateCoinSpendEntry,
 } from "./rewards.js";
+
+import { parseQuickInput } from "./quickInput.js";
+
+import {
+  configureAiRecommendationModule,
+  getVisibleRecommendations,
+  ignoreAiRecommendation,
+  renderAiRecommendations,
+} from "./aiRecommendations.js";
+
+import {
+  configureFinanceExtrasModule,
+  saveSubscriptionFromForm,
+  resetSubscriptionForm,
+  editSubscription,
+  deleteSubscription,
+  addSubscriptionExpense,
+  saveAssetGoalFromForm,
+  resetAssetGoalForm,
+  editAssetGoal,
+  deleteAssetGoal,
+} from "./financeExtras.js";
+
+import {
+  configureProductivityReportModule,
+  renderProductivityReport,
+  setProductivityReportRange,
+} from "./productivityReport.js";
 
 import {
   configurePlannerUiModule,
@@ -159,6 +196,9 @@ const db = getFirestore(app);
 
 const STORAGE_KEY = "planner_items_tabs_local_backup_v1";
 const DASHBOARD_HIDE_COMPLETED_KEY = "planner_dashboard_hide_completed_v1";
+const PLANNER_NOTIFICATION_ENABLED_KEY = "planner_notifications_enabled_v1";
+const PLANNER_NOTIFICATION_SENT_KEY = "planner_notifications_sent_v1";
+const PROJECT_SECTION_COLLAPSE_KEY = "planner_project_section_collapsed_v1";
 
 let selectedFilterType = "";
 let selectedFilterYear = "";
@@ -186,6 +226,16 @@ let calendarMonth = now.getMonth();
 let dashboardPage = 1;
 let hideCompletedDashboardItems = false;
 const DASHBOARD_PAGE_SIZE = 5;
+const PLANNER_INBOX_PAGE_SIZE = 5;
+const PLANNER_PROJECT_PAGE_SIZE = 2;
+const PLANNER_NOTIFICATION_CHECK_MS = 30 * 1000;
+let plannerInboxPage = 1;
+let plannerProjectPage = 1;
+let plannerNotificationTimer = null;
+let editingInboxId = null;
+let editingProjectId = null;
+let popupQuickAddProjectId = "";
+let collapsedProjectSections = loadProjectSectionCollapseState();
 
 const authLoadingScreen = document.getElementById("authLoadingScreen");
 const authSection = document.getElementById("authScreen");
@@ -209,12 +259,23 @@ const signupBtn = document.getElementById("signupBtn");
 
 const logoutBtn = document.getElementById("logoutBtn");
 const currentUserEmail = document.getElementById("userEmailText");
+const openSettingsBtn = document.getElementById("openSettingsBtn");
+const settingsPopupOverlay = document.getElementById("settingsPopupOverlay");
+const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+const settingsNotificationsToggle = document.getElementById(
+  "settingsNotificationsToggle",
+);
+const settingsNotificationStatus = document.getElementById(
+  "settingsNotificationStatus",
+);
 
 const authMessage = document.getElementById("authMessage");
 
 const bottomTabButtons = document.querySelectorAll(".bottom-tab-btn");
 const dynamicLeftTabBtn = document.getElementById("dynamicLeftTabBtn");
+const plannerInboxTabBtn = document.getElementById("plannerInboxTabBtn");
 const homeTabBtn = document.getElementById("homeTabBtn");
+const plannerProjectTabBtn = document.getElementById("plannerProjectTabBtn");
 const dynamicRightTabBtn = document.getElementById("dynamicRightTabBtn");
 
 const openScheduleHubBtn = document.getElementById("openScheduleHubBtn");
@@ -241,7 +302,7 @@ const HUB_TAB_MAP = {
     },
     right: {
       tab: "planner",
-      label: "일정추가",
+      label: "작업추가",
       icon: "➕",
     },
   },
@@ -285,13 +346,25 @@ const coinLedgerList = document.getElementById("coinLedgerList");
 const coinSpendAmount = document.getElementById("coinSpendAmount");
 const coinSpendMemo = document.getElementById("coinSpendMemo");
 const coinSpendBtn = document.getElementById("coinSpendBtn");
+const coinSpendCancelBtn = document.getElementById("coinSpendCancelBtn");
+const productivityReportRange = document.getElementById(
+  "productivityReportRange",
+);
+const productivityReportCardBody = document.getElementById(
+  "productivityReportCardBody",
+);
 
 const itemType = document.getElementById("itemType");
 const titleInput = document.getElementById("titleInput");
 const itemColor = document.getElementById("itemColor");
 const itemTag = document.getElementById("itemTag");
+const itemReminderMinutes = document.getElementById("itemReminderMinutes");
+const itemRewardDifficulty = document.getElementById("itemRewardDifficulty");
 const plannerFormLauncher = document.getElementById("plannerFormLauncher");
 const openPlannerFormBtn = document.getElementById("openPlannerFormBtn");
+const plannerOverviewSection = document.getElementById(
+  "plannerOverviewSection",
+);
 const plannerFormHome = document.getElementById("plannerFormHome");
 const plannerFormCard = document.getElementById("plannerFormCard");
 const plannerFormTitle = document.getElementById("plannerFormTitle");
@@ -301,7 +374,14 @@ const cancelEditBtn = document.getElementById("cancelEditBtn");
 const openPopupQuickAddBtn = document.getElementById("openPopupQuickAddBtn");
 const editPopupOverlay = document.getElementById("editPopupOverlay");
 const editPopupMount = document.getElementById("editPopupMount");
+const plannerFormPopupTitle = document.getElementById("plannerFormPopupTitle");
+const plannerFormPopupSubtext = document.getElementById("plannerFormPopupSubtext");
 const closeEditPopupBtn = document.getElementById("closeEditPopupBtn");
+const projectDetailOverlay = document.getElementById("projectDetailOverlay");
+const projectDetailTitle = document.getElementById("projectDetailTitle");
+const projectDetailDesc = document.getElementById("projectDetailDesc");
+const projectDetailBody = document.getElementById("projectDetailBody");
+const closeProjectDetailBtn = document.getElementById("closeProjectDetailBtn");
 
 const todoFields = document.getElementById("todoFields");
 const scheduleFields = document.getElementById("scheduleFields");
@@ -371,9 +451,19 @@ const monthFilter = document.getElementById("monthFilter");
 
 const dashboardItemList = document.getElementById("dashboardItemList");
 const todayList = document.getElementById("todayList");
+const todayAchievementRate = document.getElementById("todayAchievementRate");
+const todayAchievementBarFill = document.getElementById(
+  "todayAchievementBarFill",
+);
+const todayAchievementDesc = document.getElementById("todayAchievementDesc");
 const dashboardHideCompletedCheckbox = document.getElementById(
   "dashboardHideCompletedCheckbox",
 );
+const timeAnalysisSummary = document.getElementById("timeAnalysisSummary");
+const quickInputText = document.getElementById("quickInputText");
+const quickInputParseBtn = document.getElementById("quickInputParseBtn");
+const quickInputMessage = document.getElementById("quickInputMessage");
+const aiRecommendationList = document.getElementById("aiRecommendationList");
 const plannerWorkspaceHubSection = document.getElementById(
   "plannerWorkspaceHubSection",
 );
@@ -383,18 +473,15 @@ const openPlannerInboxViewBtn = document.getElementById("openPlannerInboxViewBtn
 const openPlannerProjectViewBtn = document.getElementById(
   "openPlannerProjectViewBtn",
 );
-const plannerBackToHomeFromInboxBtn = document.getElementById(
-  "plannerBackToHomeFromInboxBtn",
-);
-const plannerBackToHomeFromProjectBtn = document.getElementById(
-  "plannerBackToHomeFromProjectBtn",
-);
 const plannerInboxTitleInput = document.getElementById("plannerInboxTitleInput");
 const plannerInboxProjectSelect = document.getElementById(
   "plannerInboxProjectSelect",
 );
 const plannerInboxNoteInput = document.getElementById("plannerInboxNoteInput");
 const plannerInboxAddBtn = document.getElementById("plannerInboxAddBtn");
+const plannerInboxCancelEditBtn = document.getElementById(
+  "plannerInboxCancelEditBtn",
+);
 const plannerInboxList = document.getElementById("plannerInboxList");
 const plannerProjectNameInput = document.getElementById(
   "plannerProjectNameInput",
@@ -406,6 +493,9 @@ const plannerProjectDescriptionInput = document.getElementById(
   "plannerProjectDescriptionInput",
 );
 const plannerProjectAddBtn = document.getElementById("plannerProjectAddBtn");
+const plannerProjectCancelEditBtn = document.getElementById(
+  "plannerProjectCancelEditBtn",
+);
 const plannerProjectList = document.getElementById("plannerProjectList");
 const itemProjectId = document.getElementById("itemProjectId");
 
@@ -413,6 +503,9 @@ const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
 const calendarTitle = document.getElementById("calendarTitle");
 const calendarGrid = document.getElementById("calendarGrid");
+const plannerCalendarSection = document.getElementById(
+  "plannerCalendarSection",
+);
 
 const calendarPopupOverlay = document.getElementById("calendarPopupOverlay");
 const selectedDateLabel = document.getElementById("selectedDateLabel");
@@ -532,6 +625,8 @@ let financeData = {
   monthlyBudgets: {},
   expenses: [],
   assets: [],
+  subscriptions: [],
+  assetGoals: [],
 };
 
 const financeMonthKey = document.getElementById("financeMonthKey");
@@ -614,6 +709,16 @@ const financeExpenseFormCard = document.getElementById(
 const financeTransactionType = document.getElementById(
   "financeTransactionType",
 );
+const financeExpenseAccountId = document.getElementById("financeExpenseAccountId");
+const financeExpenseTargetAccountGroup = document.getElementById(
+  "financeExpenseTargetAccountGroup",
+);
+const financeExpenseTargetAccountId = document.getElementById(
+  "financeExpenseTargetAccountId",
+);
+const financeExpenseAssetId = document.getElementById("financeExpenseAssetId");
+const financeExpenseMemo = document.getElementById("financeExpenseMemo");
+const financeOcrIncomeMode = document.getElementById("financeOcrIncomeMode");
 const financeExpenseDate = document.getElementById("financeExpenseDate");
 const financeExpenseTime = document.getElementById("financeExpenseTime");
 const financeExpenseTitle = document.getElementById("financeExpenseTitle");
@@ -670,6 +775,7 @@ const financeOpenExpenseFormFromAssetBtn = document.getElementById(
 
 const financeAssetCategory = document.getElementById("financeAssetCategory");
 const financeAssetPurpose = document.getElementById("financeAssetPurpose");
+const financeAssetAccountId = document.getElementById("financeAssetAccountId");
 const financeAssetTitle = document.getElementById("financeAssetTitle");
 const financeAssetAmount = document.getElementById("financeAssetAmount");
 const financeAssetBaseDate = document.getElementById("financeAssetBaseDate");
@@ -741,6 +847,75 @@ const financeAccountLeisureGapText = document.getElementById(
 const financeAccountSplitDesc = document.getElementById(
   "financeAccountSplitDesc",
 );
+const financeSubscriptionId = document.getElementById("financeSubscriptionId");
+const financeSubscriptionTitle = document.getElementById("financeSubscriptionTitle");
+const financeSubscriptionAmount = document.getElementById("financeSubscriptionAmount");
+const financeSubscriptionCategory = document.getElementById("financeSubscriptionCategory");
+const financeSubscriptionPaymentMethod = document.getElementById(
+  "financeSubscriptionPaymentMethod",
+);
+const financeSubscriptionBillingCycle = document.getElementById(
+  "financeSubscriptionBillingCycle",
+);
+const financeSubscriptionBillingDay = document.getElementById(
+  "financeSubscriptionBillingDay",
+);
+const financeSubscriptionNextBillingDate = document.getElementById(
+  "financeSubscriptionNextBillingDate",
+);
+const financeSubscriptionMemo = document.getElementById("financeSubscriptionMemo");
+const financeSubscriptionColor = document.getElementById("financeSubscriptionColor");
+const financeSubscriptionActive = document.getElementById("financeSubscriptionActive");
+const financeSubscriptionSaveBtn = document.getElementById(
+  "financeSubscriptionSaveBtn",
+);
+const financeSubscriptionCancelBtn = document.getElementById(
+  "financeSubscriptionCancelBtn",
+);
+const financeSubscriptionMonthlyTotalText = document.getElementById(
+  "financeSubscriptionMonthlyTotalText",
+);
+const financeSubscriptionList = document.getElementById("financeSubscriptionList");
+const financeAssetGoalId = document.getElementById("financeAssetGoalId");
+const financeAssetGoalTitle = document.getElementById("financeAssetGoalTitle");
+const financeAssetGoalTargetAmount = document.getElementById(
+  "financeAssetGoalTargetAmount",
+);
+const financeAssetGoalCurrentAmount = document.getElementById(
+  "financeAssetGoalCurrentAmount",
+);
+const financeAssetGoalLinkedAssets = document.getElementById(
+  "financeAssetGoalLinkedAssets",
+);
+const financeAssetGoalTargetDate = document.getElementById(
+  "financeAssetGoalTargetDate",
+);
+const financeAssetGoalCategory = document.getElementById("financeAssetGoalCategory");
+const financeAssetGoalMemo = document.getElementById("financeAssetGoalMemo");
+const financeAssetGoalColor = document.getElementById("financeAssetGoalColor");
+const financeAssetGoalSaveBtn = document.getElementById("financeAssetGoalSaveBtn");
+const financeAssetGoalCancelBtn = document.getElementById(
+  "financeAssetGoalCancelBtn",
+);
+const financeAssetGoalInsightText = document.getElementById(
+  "financeAssetGoalInsightText",
+);
+const financeAssetGoalList = document.getElementById("financeAssetGoalList");
+const financeAccountFormCard = document.getElementById("financeAccountFormCard");
+const financeAccountId = document.getElementById("financeAccountId");
+const financeAccountName = document.getElementById("financeAccountName");
+const financeAccountType = document.getElementById("financeAccountType");
+const financeAccountBalance = document.getElementById("financeAccountBalance");
+const financeAccountColor = document.getElementById("financeAccountColor");
+const financeAccountMemo = document.getElementById("financeAccountMemo");
+const financeSaveAccountBtn = document.getElementById("financeSaveAccountBtn");
+const financeCancelAccountEditBtn = document.getElementById(
+  "financeCancelAccountEditBtn",
+);
+const financeDeleteAccountBtn = document.getElementById(
+  "financeDeleteAccountBtn",
+);
+const financeAccountList = document.getElementById("financeAccountList");
 
 let financeEditingExpenseId = null;
 let financeEditingAssetId = null;
@@ -749,6 +924,9 @@ const FINANCE_PAGE_SIZE = 10;
 
 const financeCancelExpenseEditBtn = document.getElementById(
   "financeCancelExpenseEditBtn",
+);
+const financeSkipOcrReviewBtn = document.getElementById(
+  "financeSkipOcrReviewBtn",
 );
 const financeDeleteExpenseBtn = document.getElementById(
   "financeDeleteExpenseBtn",
@@ -901,6 +1079,7 @@ let currentUser = null;
 let items = [];
 let projects = [];
 let inboxItems = [];
+let ignoredRecommendationIds = [];
 let rewardsData = normalizeRewardsData();
 let editingCoinSpendId = null;
 let isRemoteLoading = false;
@@ -938,6 +1117,13 @@ window.AppState = {
   },
   set inboxItems(value) {
     inboxItems = Array.isArray(value) ? value : [];
+  },
+
+  get ignoredRecommendationIds() {
+    return ignoredRecommendationIds;
+  },
+  set ignoredRecommendationIds(value) {
+    ignoredRecommendationIds = Array.isArray(value) ? value : [];
   },
 
   get rewardsData() {
@@ -1112,7 +1298,11 @@ configureDashboardModule({
     hobbyBudgetText,
     coinLedgerList,
     dashboardItemList,
+    timeAnalysisSummary,
     todayList,
+    todayAchievementRate,
+    todayAchievementBarFill,
+    todayAchievementDesc,
     summaryPopupLabel,
     summaryPopupList,
     summaryPopupOverlay,
@@ -1123,6 +1313,7 @@ configureDashboardModule({
   dashboardPageSize: DASHBOARD_PAGE_SIZE,
 
   getItems: () => items,
+  getProjectLabel,
   getRewardsData: () => rewardsData,
 
   getSelectedFilterType: () => selectedFilterType,
@@ -1141,6 +1332,29 @@ configureDashboardModule({
     dashboardPage = value;
   },
   shouldHideCompletedDashboardItems: () => hideCompletedDashboardItems,
+});
+
+configureProductivityReportModule({
+  refs: {
+    productivityReportRange,
+    productivityReportCardBody,
+  },
+  getItems: () => items,
+  getProjects: () => projects,
+  getRewardsData: () => rewardsData,
+});
+
+configureAiRecommendationModule({
+  refs: {
+    aiRecommendationList,
+  },
+  getItems: () => items,
+  getProjects: () => projects,
+  getIgnoredRecommendationIds: () => ignoredRecommendationIds,
+  setIgnoredRecommendationIds: (value) => {
+    ignoredRecommendationIds = Array.isArray(value) ? value : [];
+  },
+  queueSavePlannerData,
 });
 
 configureFinanceModule({
@@ -1168,10 +1382,17 @@ configureFinanceModule({
 
     financeExpenseFormCard,
     financeTransactionType,
+    financeExpenseAccountId,
+    financeExpenseTargetAccountGroup,
+    financeExpenseTargetAccountId,
+    financeExpenseAssetId,
+    financeExpenseMemo,
+    financeOcrIncomeMode,
     financeExpenseDate,
     financeExpenseTime,
     financeExpenseTitle,
     financeExpenseAmount,
+    financeExpenseMemo,
     financeExpenseCategory,
     financeExpenseSubCategory,
     financeExpensePaymentMethod,
@@ -1183,6 +1404,7 @@ configureFinanceModule({
     financeExpenseRepeat,
     financeExpenseRepeatUntil,
     financeSaveExpenseBtn,
+    financeSkipOcrReviewBtn,
     financeCancelExpenseEditBtn,
     financeDeleteExpenseBtn,
 
@@ -1190,6 +1412,7 @@ configureFinanceModule({
     financeOpenAssetFormBtn,
     financeAssetCategory,
     financeAssetPurpose,
+    financeAssetAccountId,
     financeAssetTitle,
     financeAssetAmount,
     financeAssetBaseDate,
@@ -1244,6 +1467,17 @@ configureFinanceModule({
     financeListPaymentFilter,
     financeListSortFilter,
     financeListSearchInput,
+    financeAccountFormCard,
+    financeAccountId,
+    financeAccountName,
+    financeAccountType,
+    financeAccountBalance,
+    financeAccountColor,
+    financeAccountMemo,
+    financeSaveAccountBtn,
+    financeCancelAccountEditBtn,
+    financeDeleteAccountBtn,
+    financeAccountList,
   },
 
   getFinanceData: () => financeData,
@@ -1270,16 +1504,71 @@ configureFinanceModule({
   financePageSize: FINANCE_PAGE_SIZE,
 });
 
+configureFinanceExtrasModule({
+  refs: {
+    financeSubscriptionId,
+    financeSubscriptionTitle,
+    financeSubscriptionAmount,
+    financeSubscriptionCategory,
+    financeSubscriptionPaymentMethod,
+    financeSubscriptionBillingCycle,
+    financeSubscriptionBillingDay,
+    financeSubscriptionNextBillingDate,
+    financeSubscriptionMemo,
+    financeSubscriptionColor,
+    financeSubscriptionActive,
+    financeSubscriptionSaveBtn,
+    financeSubscriptionCancelBtn,
+    financeSubscriptionMonthlyTotalText,
+    financeSubscriptionList,
+    financeAssetGoalId,
+    financeAssetGoalTitle,
+    financeAssetGoalTargetAmount,
+    financeAssetGoalCurrentAmount,
+    financeAssetGoalLinkedAssets,
+    financeAssetGoalTargetDate,
+    financeAssetGoalCategory,
+    financeAssetGoalMemo,
+    financeAssetGoalColor,
+    financeAssetGoalSaveBtn,
+    financeAssetGoalCancelBtn,
+    financeAssetGoalInsightText,
+    financeAssetGoalList,
+    financeAccountFormCard,
+    financeAccountId,
+    financeAccountName,
+    financeAccountType,
+    financeAccountBalance,
+    financeAccountColor,
+    financeAccountMemo,
+    financeSaveAccountBtn,
+    financeCancelAccountEditBtn,
+    financeDeleteAccountBtn,
+    financeAccountList,
+  },
+  getFinanceData: () => financeData,
+  setFinanceData: (value) => {
+    financeData = value;
+  },
+  getRewardsData: () => rewardsData,
+  isFinanceOcrReviewActive,
+  renderFinance,
+});
+
 configureFinanceOcrModule({
   refs: {
     financeAnalyzeReceiptBtn,
     financeReceiptImageInput,
 
     financeExpenseFormCard,
+    financeTransactionType,
+    financeExpenseAccountId,
+    financeOcrIncomeMode,
     financeExpenseDate,
     financeExpenseTime: document.getElementById("financeExpenseTime"),
     financeExpenseTitle,
     financeExpenseAmount,
+    financeExpenseMemo,
     financeExpenseCategory,
     financeExpenseSubCategory: document.getElementById(
       "financeExpenseSubCategory",
@@ -1316,6 +1605,8 @@ configurePlannerUiModule({
     titleInput,
     itemColor,
     itemTag,
+    itemReminderMinutes,
+    itemRewardDifficulty,
     itemProjectId,
     itemLocation,
     itemLocationAddress,
@@ -1336,6 +1627,8 @@ configurePlannerUiModule({
     openPopupQuickAddBtn,
     editPopupOverlay,
     editPopupMount,
+    plannerFormPopupTitle,
+    plannerFormPopupSubtext,
     closeEditPopupBtn,
 
     todoFields,
@@ -1551,7 +1844,18 @@ async function initAppOnce() {
   saveItemBtn?.addEventListener("click", saveCurrentItem);
 
   openPlannerFormBtn?.addEventListener("click", () => {
-    openPlannerFormCard();
+    openNewPlannerItemPopup();
+  });
+
+  openSettingsBtn?.addEventListener("click", openSettingsPopup);
+  closeSettingsBtn?.addEventListener("click", closeSettingsPopup);
+  settingsPopupOverlay?.addEventListener("click", (e) => {
+    if (e.target === settingsPopupOverlay) {
+      closeSettingsPopup();
+    }
+  });
+  settingsNotificationsToggle?.addEventListener("change", () => {
+    togglePlannerNotifications(Boolean(settingsNotificationsToggle.checked));
   });
 
   closePlannerFormBtn?.addEventListener("click", () => {
@@ -1585,6 +1889,12 @@ async function initAppOnce() {
     if (e.target === editPopupOverlay) {
       resetPlannerForm();
       closeEditPopup();
+    }
+  });
+  closeProjectDetailBtn?.addEventListener("click", closeProjectDetailPopup);
+  projectDetailOverlay?.addEventListener("click", (e) => {
+    if (e.target === projectDetailOverlay) {
+      closeProjectDetailPopup();
     }
   });
 
@@ -1629,18 +1939,23 @@ async function initAppOnce() {
   });
 
   plannerInboxAddBtn?.addEventListener("click", addPlannerInboxItem);
+  plannerInboxCancelEditBtn?.addEventListener("click", resetPlannerInboxForm);
   plannerProjectAddBtn?.addEventListener("click", addPlannerProject);
+  plannerProjectCancelEditBtn?.addEventListener("click", resetPlannerProjectForm);
   coinSpendBtn?.addEventListener("click", handleCoinSpend);
+  coinSpendCancelBtn?.addEventListener("click", resetCoinSpendForm);
+  productivityReportRange?.addEventListener("change", (e) => {
+    setProductivityReportRange(e.target.value);
+    renderProductivityReport();
+  });
+  plannerInboxTabBtn?.addEventListener("click", () => {
+    openPlannerWorkspaceFromBottom("inbox");
+  });
+  plannerProjectTabBtn?.addEventListener("click", () => {
+    openPlannerWorkspaceFromBottom("project");
+  });
   openPlannerInboxViewBtn?.addEventListener("click", showPlannerInboxView);
   openPlannerProjectViewBtn?.addEventListener("click", showPlannerProjectView);
-  plannerBackToHomeFromInboxBtn?.addEventListener(
-    "click",
-    showPlannerWorkspaceHome,
-  );
-  plannerBackToHomeFromProjectBtn?.addEventListener(
-    "click",
-    showPlannerWorkspaceHome,
-  );
   plannerInboxTitleInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -1651,6 +1966,13 @@ async function initAppOnce() {
     if (e.key === "Enter") {
       e.preventDefault();
       addPlannerProject();
+    }
+  });
+  quickInputParseBtn?.addEventListener("click", applyQuickInputToForm);
+  quickInputText?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyQuickInputToForm();
     }
   });
   dashboardHideCompletedCheckbox?.addEventListener("change", () => {
@@ -1680,10 +2002,10 @@ async function initAppOnce() {
     renderCalendar();
   });
 
-  clearSelectedDateBtn?.addEventListener("click", closeDatePopup);
+  clearSelectedDateBtn?.addEventListener("click", closeDatePopupAndClearProjectContext);
   calendarPopupOverlay?.addEventListener("click", (e) => {
     if (e.target === calendarPopupOverlay) {
-      closeDatePopup();
+      closeDatePopupAndClearProjectContext();
     }
   });
 
@@ -1708,7 +2030,7 @@ async function initAppOnce() {
   popupTodoRepeat?.addEventListener("change", updatePopupTodoRepeatUI);
   popupScheduleRepeat?.addEventListener("change", updatePopupScheduleRepeatUI);
   popupAddItemBtn?.addEventListener("click", addItemFromSelectedDate);
-  closePopupQuickAddBtn?.addEventListener("click", closePopupQuickAddForm);
+  closePopupQuickAddBtn?.addEventListener("click", closePopupQuickAddFormAndClearProject);
 
   financeSaveBudgetBtn?.addEventListener("click", saveFinanceBudget);
   financeOpenExpenseFormBtn?.addEventListener("click", openFinanceExpenseForm);
@@ -1803,7 +2125,37 @@ async function initAppOnce() {
     }
   });
 
+  financeSkipOcrReviewBtn?.addEventListener("click", () => {
+    if (!isFinanceOcrReviewActive()) return;
+
+    advanceFinanceOcrReviewQueue();
+
+    if (!isFinanceOcrReviewActive()) {
+      resetFinanceExpenseForm();
+    }
+  });
+
+  financeSaveAccountBtn?.addEventListener("click", saveFinanceAccount);
+  financeCancelAccountEditBtn?.addEventListener(
+    "click",
+    resetFinanceAccountForm,
+  );
+  financeDeleteAccountBtn?.addEventListener("click", deleteEditingFinanceAccount);
+
   financeTransactionType?.addEventListener("change", () => {
+    syncFinanceExpenseFormButtons();
+  });
+
+  financeOcrIncomeMode?.addEventListener("change", () => {
+    const shouldUseAssetMode = financeOcrIncomeMode.value === "asset";
+    if (financeExpenseFormCard) {
+      financeExpenseFormCard.dataset.ocrIncomeAssetMode = shouldUseAssetMode
+        ? "true"
+        : "";
+      if (!shouldUseAssetMode) {
+        delete financeExpenseFormCard.dataset.ocrIncomeAssetMode;
+      }
+    }
     syncFinanceExpenseFormButtons();
   });
 
@@ -1854,6 +2206,10 @@ async function initAppOnce() {
   financeAssetSearchInput?.addEventListener("input", renderFinance);
   financeAssetCategoryFilter?.addEventListener("change", renderFinance);
   financeAssetSortFilter?.addEventListener("change", renderFinance);
+  financeSubscriptionSaveBtn?.addEventListener("click", saveSubscriptionFromForm);
+  financeSubscriptionCancelBtn?.addEventListener("click", resetSubscriptionForm);
+  financeAssetGoalSaveBtn?.addEventListener("click", saveAssetGoalFromForm);
+  financeAssetGoalCancelBtn?.addEventListener("click", resetAssetGoalForm);
 
   financePrevPageBtn?.addEventListener("click", () => {
     handleFinancePageChange(-1);
@@ -1884,16 +2240,20 @@ async function initAppOnce() {
   closePlannerFormCard();
   enterHomeTab();
   bindRepeatUntilToggleControls();
+  startPlannerNotificationLoop();
 }
 
 function renderAll() {
   renderYearOptions();
   renderMonthOptions();
   renderDashboard();
+  renderProductivityReport();
   renderTodayList();
+  renderAiRecommendations();
   renderCalendar();
   renderPlannerWorkspace();
   renderFinance();
+  syncPlannerNotificationSettingsUi();
 }
 
 function loadDashboardHideCompletedPreference() {
@@ -1913,6 +2273,33 @@ function saveDashboardHideCompletedPreference(value) {
   }
 }
 
+function loadProjectSectionCollapseState() {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PROJECT_SECTION_COLLAPSE_KEY) || "{}",
+    );
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error("Project section state load failed.", error);
+    return {};
+  }
+}
+
+function saveProjectSectionCollapseState() {
+  try {
+    localStorage.setItem(
+      PROJECT_SECTION_COLLAPSE_KEY,
+      JSON.stringify(collapsedProjectSections),
+    );
+  } catch (error) {
+    console.error("Project section state save failed.", error);
+  }
+}
+
+function getProjectSectionStateKey(projectId, sectionKey) {
+  return `${projectId || "unknown"}:${sectionKey || "section"}`;
+}
+
 function handleCoinSpend() {
   const amount = Number(coinSpendAmount?.value || 0);
   const memo = coinSpendMemo?.value.trim() || "취미생활 사용";
@@ -1926,13 +2313,18 @@ function handleCoinSpend() {
     return;
   }
 
+  resetCoinSpendForm();
+
+  queueSavePlannerData();
+  renderDashboard();
+}
+
+function resetCoinSpendForm() {
   editingCoinSpendId = null;
   if (coinSpendAmount) coinSpendAmount.value = "";
   if (coinSpendMemo) coinSpendMemo.value = "";
   if (coinSpendBtn) coinSpendBtn.textContent = "사용 기록";
-
-  queueSavePlannerData();
-  renderDashboard();
+  coinSpendCancelBtn?.classList.add("hidden");
 }
 
 function startEditCoinSpend(id) {
@@ -1945,6 +2337,7 @@ function startEditCoinSpend(id) {
   if (coinSpendAmount) coinSpendAmount.value = Math.abs(Number(entry.amount) || 0);
   if (coinSpendMemo) coinSpendMemo.value = entry.itemTitle || "";
   if (coinSpendBtn) coinSpendBtn.textContent = "사용 수정";
+  coinSpendCancelBtn?.classList.remove("hidden");
   coinSpendAmount?.focus();
 }
 
@@ -1954,10 +2347,7 @@ function deleteCoinSpend(id) {
 
   rewardsData = deleteCoinSpendEntry(rewardsData, id);
   if (editingCoinSpendId === id) {
-    editingCoinSpendId = null;
-    if (coinSpendAmount) coinSpendAmount.value = "";
-    if (coinSpendMemo) coinSpendMemo.value = "";
-    if (coinSpendBtn) coinSpendBtn.textContent = "사용 기록";
+    resetCoinSpendForm();
   }
 
   queueSavePlannerData();
@@ -1970,22 +2360,37 @@ function hideAllPlannerWorkspaceSections() {
   plannerProjectSection?.classList.add("hidden");
 }
 
+function setPlannerScheduleSectionsVisible(isVisible) {
+  [plannerOverviewSection, plannerFormHome, plannerCalendarSection].forEach(
+    (section) => {
+      section?.classList.toggle("hidden", !isVisible);
+    },
+  );
+}
+
 function showPlannerWorkspaceHome() {
   hideAllPlannerWorkspaceSections();
   plannerWorkspaceView = "home";
-  plannerWorkspaceHubSection?.classList.remove("hidden");
+  setPlannerScheduleSectionsVisible(true);
+  syncPlannerBottomShortcutState();
 }
 
 function showPlannerInboxView() {
   hideAllPlannerWorkspaceSections();
+  closeDatePopup();
   plannerWorkspaceView = "inbox";
+  setPlannerScheduleSectionsVisible(false);
   plannerInboxSection?.classList.remove("hidden");
+  syncPlannerBottomShortcutState();
 }
 
 function showPlannerProjectView() {
   hideAllPlannerWorkspaceSections();
+  closeDatePopup();
   plannerWorkspaceView = "project";
+  setPlannerScheduleSectionsVisible(false);
   plannerProjectSection?.classList.remove("hidden");
+  syncPlannerBottomShortcutState();
 }
 
 function getProjectById(projectId) {
@@ -1994,6 +2399,12 @@ function getProjectById(projectId) {
 
 function getProjectLabel(projectId) {
   return getProjectById(projectId)?.name || "프로젝트 없음";
+}
+
+function renderPlannerWorkspace() {
+  renderPlannerProjectSelectOptions();
+  renderPlannerInbox();
+  renderPlannerProjects();
 }
 
 function renderPlannerProjectSelectOptions() {
@@ -2009,7 +2420,7 @@ function renderPlannerProjectSelectOptions() {
       .forEach((project) => {
         const option = document.createElement("option");
         option.value = project.id;
-        option.textContent = project.name || "이름 없는 프로젝트";
+        option.textContent = project.name || "\uD504\uB85C\uC81D\uD2B8";
         select.appendChild(option);
       });
 
@@ -2019,20 +2430,369 @@ function renderPlannerProjectSelectOptions() {
   });
 }
 
+function clampPage(page, totalPages) {
+  return Math.min(Math.max(1, page), Math.max(1, totalPages));
+}
+
+function getPageSlice(list, page, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const safePage = clampPage(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+
+  return {
+    page: safePage,
+    totalPages,
+    visibleItems: list.slice(start, start + pageSize),
+  };
+}
+
+function renderPlannerPagination({
+  page,
+  totalPages,
+  totalCount,
+  action,
+}) {
+  if (totalPages <= 1) return "";
+
+  return `
+    <div class="planner-pagination">
+      <button
+        class="secondary-btn"
+        type="button"
+        data-action="${action}"
+        data-direction="-1"
+        ${page <= 1 ? "disabled" : ""}
+      >
+        이전
+      </button>
+      <span class="planner-pagination-text">${page} / ${totalPages} · 총 ${totalCount}\uAC1C \uC5F0\uACB0</span>
+      <button
+        class="secondary-btn"
+        type="button"
+        data-action="${action}"
+        data-direction="1"
+        ${page >= totalPages ? "disabled" : ""}
+      >
+        다음
+      </button>
+    </div>
+  `;
+}
+
+function changePlannerInboxPage(direction) {
+  const totalPages = Math.max(
+    1,
+    Math.ceil((inboxItems?.length || 0) / PLANNER_INBOX_PAGE_SIZE),
+  );
+  plannerInboxPage = clampPage(plannerInboxPage + direction, totalPages);
+  renderPlannerInbox();
+}
+
+function changePlannerProjectPage(direction) {
+  const totalPages = Math.max(
+    1,
+    Math.ceil((projects?.length || 0) / PLANNER_PROJECT_PAGE_SIZE),
+  );
+  plannerProjectPage = clampPage(plannerProjectPage + direction, totalPages);
+  renderPlannerProjects();
+}
+
+function openSettingsPopup() {
+  syncPlannerNotificationSettingsUi();
+  settingsPopupOverlay?.classList.remove("hidden");
+}
+
+function closeSettingsPopup() {
+  settingsPopupOverlay?.classList.add("hidden");
+}
+
+function isPlannerNotificationSupported() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+function arePlannerNotificationsEnabled() {
+  try {
+    return localStorage.getItem(PLANNER_NOTIFICATION_ENABLED_KEY) === "true";
+  } catch (error) {
+    console.error("알림 설정을 불러오지 못했습니다.", error);
+    return false;
+  }
+}
+
+function setPlannerNotificationsEnabled(isEnabled) {
+  try {
+    localStorage.setItem(
+      PLANNER_NOTIFICATION_ENABLED_KEY,
+      isEnabled ? "true" : "false",
+    );
+  } catch (error) {
+    console.error("알림 설정을 저장하지 못했습니다.", error);
+  }
+}
+
+function loadPlannerNotificationSentMap() {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem(PLANNER_NOTIFICATION_SENT_KEY) || "{}",
+    );
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.error("알림 기록을 불러오지 못했습니다.", error);
+    return {};
+  }
+}
+
+function savePlannerNotificationSentMap(sentMap) {
+  try {
+    localStorage.setItem(
+      PLANNER_NOTIFICATION_SENT_KEY,
+      JSON.stringify(sentMap || {}),
+    );
+  } catch (error) {
+    console.error("알림 기록을 저장하지 못했습니다.", error);
+  }
+}
+
+function syncPlannerNotificationSettingsUi() {
+  if (!settingsNotificationsToggle && !settingsNotificationStatus) return;
+
+  if (!isPlannerNotificationSupported()) {
+    if (settingsNotificationsToggle) {
+      settingsNotificationsToggle.checked = false;
+      settingsNotificationsToggle.disabled = true;
+    }
+    if (settingsNotificationStatus) {
+      settingsNotificationStatus.textContent =
+        "이 브라우저에서는 알림을 지원하지 않습니다.";
+    }
+    return;
+  }
+
+  if (Notification.permission === "denied") {
+    if (settingsNotificationsToggle) {
+      settingsNotificationsToggle.checked = false;
+      settingsNotificationsToggle.disabled = true;
+    }
+    if (settingsNotificationStatus) {
+      settingsNotificationStatus.textContent =
+        "브라우저 설정에서 알림이 차단되어 있습니다.";
+    }
+    return;
+  }
+
+  const isEnabled =
+    arePlannerNotificationsEnabled() && Notification.permission === "granted";
+
+  if (settingsNotificationsToggle) {
+    settingsNotificationsToggle.disabled = false;
+    settingsNotificationsToggle.checked = isEnabled;
+  }
+
+  if (settingsNotificationStatus) {
+    settingsNotificationStatus.textContent = isEnabled
+      ? "작업별 알림 시간에 맞춰 브라우저 알림을 보냅니다."
+      : "알림을 사용하려면 토글을 켜고 권한을 허용해 주세요.";
+  }
+}
+
+async function togglePlannerNotifications(shouldEnable) {
+  if (!isPlannerNotificationSupported()) {
+    alert("이 브라우저에서는 알림을 지원하지 않습니다.");
+    syncPlannerNotificationSettingsUi();
+    return;
+  }
+
+  if (!shouldEnable) {
+    setPlannerNotificationsEnabled(false);
+    stopPlannerNotificationLoop();
+    syncPlannerNotificationSettingsUi();
+    return;
+  }
+
+  const permission =
+    Notification.permission === "granted"
+      ? "granted"
+      : await Notification.requestPermission();
+
+  if (permission !== "granted") {
+    setPlannerNotificationsEnabled(false);
+    syncPlannerNotificationSettingsUi();
+    alert("브라우저에서 알림 권한이 허용되지 않았습니다.");
+    return;
+  }
+
+  setPlannerNotificationsEnabled(true);
+  startPlannerNotificationLoop();
+  checkPlannerNotifications();
+  syncPlannerNotificationSettingsUi();
+}
+
+function stopPlannerNotificationLoop() {
+  if (!plannerNotificationTimer) return;
+  clearInterval(plannerNotificationTimer);
+  plannerNotificationTimer = null;
+}
+
+function startPlannerNotificationLoop() {
+  syncPlannerNotificationSettingsUi();
+
+  if (
+    !isPlannerNotificationSupported() ||
+    !arePlannerNotificationsEnabled() ||
+    Notification.permission !== "granted"
+  ) {
+    stopPlannerNotificationLoop();
+    return;
+  }
+
+  if (!plannerNotificationTimer) {
+    plannerNotificationTimer = setInterval(
+      checkPlannerNotifications,
+      PLANNER_NOTIFICATION_CHECK_MS,
+    );
+  }
+
+  checkPlannerNotifications();
+}
+
+function getDateKeyWithOffset(offsetDays) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return formatDateKey(date);
+}
+
+function getPlannerNotificationDateTime(item) {
+  if (!item) return null;
+  const reminderMinutes = Math.max(0, Number(item.reminderMinutes) || 0);
+  let targetDateTime = null;
+
+  if (item.type === "todo") {
+    if (!item.dueDate) return null;
+    targetDateTime = new Date(makeDateTime(item.dueDate, item.dueTime || "09:00"));
+  } else if (item.type === "schedule") {
+    if (!item.startDate) return null;
+    targetDateTime = new Date(makeDateTime(item.startDate, item.startTime || "09:00"));
+  }
+
+  if (!targetDateTime) return null;
+  targetDateTime.setMinutes(targetDateTime.getMinutes() - reminderMinutes);
+  return targetDateTime;
+}
+
+function getPlannerNotificationKey(item, targetDateTime) {
+  return [
+    item.sourceId || item.id,
+    item.id,
+    item.type,
+    targetDateTime.getTime(),
+  ].join("|");
+}
+
+function collectPlannerNotificationCandidates() {
+  const dateKeys = [
+    getDateKeyWithOffset(-1),
+    getDateKeyWithOffset(0),
+    getDateKeyWithOffset(1),
+  ];
+  const seen = new Set();
+
+  return dateKeys
+    .flatMap((dateKey) => getItemsForDate(dateKey))
+    .filter((item) => {
+      const key = item.id || `${item.type}-${item.title}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return item.status !== "success" && item.status !== "fail";
+    });
+}
+
+function checkPlannerNotifications() {
+  if (
+    !isPlannerNotificationSupported() ||
+    !arePlannerNotificationsEnabled() ||
+    Notification.permission !== "granted"
+  ) {
+    return;
+  }
+
+  const nowMs = Date.now();
+  const sentMap = loadPlannerNotificationSentMap();
+  const staleBefore = nowMs - 7 * 24 * 60 * 60 * 1000;
+  let changed = false;
+
+  Object.entries(sentMap).forEach(([key, sentAt]) => {
+    if (Number(sentAt) < staleBefore) {
+      delete sentMap[key];
+      changed = true;
+    }
+  });
+
+  collectPlannerNotificationCandidates().forEach((item) => {
+    const targetDateTime = getPlannerNotificationDateTime(item);
+    if (!targetDateTime || Number.isNaN(targetDateTime.getTime())) return;
+
+    const targetMs = targetDateTime.getTime();
+    const diffMs = nowMs - targetMs;
+
+    if (diffMs < 0 || diffMs > 5 * 60 * 1000) return;
+
+    const notificationKey = getPlannerNotificationKey(item, targetDateTime);
+    if (sentMap[notificationKey]) return;
+
+    const typeText = item.type === "schedule" ? "시간 작업" : "마감 작업";
+    const timeText = targetDateTime.toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    try {
+      const notification = new Notification(`${typeText} 알림`, {
+        body: `${item.title || "제목 없음"}\n${timeText}`,
+        tag: notificationKey,
+        renotify: false,
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    } catch (error) {
+      console.error("알림을 표시하지 못했습니다.", error);
+      return;
+    }
+
+    sentMap[notificationKey] = nowMs;
+    changed = true;
+  });
+
+  if (changed) {
+    savePlannerNotificationSentMap(sentMap);
+  }
+}
+
 function renderPlannerInbox() {
   if (!plannerInboxList) return;
 
   const sortedInbox = inboxItems
     .slice()
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  const pagedInbox = getPageSlice(
+    sortedInbox,
+    plannerInboxPage,
+    PLANNER_INBOX_PAGE_SIZE,
+  );
+  plannerInboxPage = pagedInbox.page;
 
   if (!sortedInbox.length) {
     plannerInboxList.innerHTML =
-      '<div class="empty-message">아직 Inbox에 쌓인 메모가 없습니다.</div>';
+      '<div class="empty-message">\uD504\uB85C\uC81D\uD2B8\uB97C \uCD94\uAC00\uD558\uBA74 \uC791\uC5C5\uACFC Inbox\uB97C \uBB36\uC5B4\uC11C \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.</div>';
     return;
   }
 
-  plannerInboxList.innerHTML = sortedInbox
+  plannerInboxList.innerHTML = [
+    pagedInbox.visibleItems
     .map((item) => {
       const converted = Boolean(item.convertedAt);
       const projectName = item.projectId ? getProjectLabel(item.projectId) : "";
@@ -2053,18 +2813,51 @@ function renderPlannerInbox() {
           <div class="planner-inbox-actions">
             ${
               converted
-                ? `<span class="meta-badge">완료 ${item.convertedToType === "schedule" ? "일정" : "할일"}</span>`
+                ? `<span class="meta-badge">완료 ${item.convertedToType === "schedule" ? "시간 작업" : "마감 작업"}</span>`
                 : `
-                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">할일로 전환</button>
-                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">일정으로 전환</button>
+                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">\uD560\uC77C</button>
+                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">\uC77C\uC815</button>
                 `
             }
+            <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">\uC218\uC815</button>
             <button class="secondary-btn" type="button" data-action="delete-inbox-item" data-id="${item.id}">삭제</button>
           </div>
         </div>
       `;
     })
-    .join("");
+    .join(""),
+    renderPlannerPagination({
+      page: pagedInbox.page,
+      totalPages: pagedInbox.totalPages,
+      totalCount: sortedInbox.length,
+      action: "change-inbox-page",
+    }),
+  ].join("");
+}
+
+function getProjectInboxItems(projectId) {
+  return inboxItems
+    .filter((item) => (item.projectId || "") === projectId && !item.convertedAt)
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+}
+
+function getProjectTodos(projectId) {
+  return sortItems(
+    items.filter((item) => (item.projectId || "") === projectId && item.type === "todo"),
+  );
+}
+
+function getProjectSchedules(projectId) {
+  return sortItems(
+    items.filter(
+      (item) => (item.projectId || "") === projectId && item.type === "schedule",
+    ),
+  );
+}
+
+function getProjectResources(projectId) {
+  const project = getProjectById(projectId);
+  return Array.isArray(project?.resources) ? project.resources : [];
 }
 
 function renderPlannerProjects() {
@@ -2072,66 +2865,213 @@ function renderPlannerProjects() {
 
   if (!projects.length) {
     plannerProjectList.innerHTML =
-      '<div class="empty-message">프로젝트를 추가하면 일정과 Inbox를 묶어서 볼 수 있습니다.</div>';
+      '<div class="empty-message">????? ???? ??? Inbox? ??? ? ? ????.</div>';
     return;
   }
 
-  plannerProjectList.innerHTML = projects
+  const sortedProjects = projects
     .slice()
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
-    .map((project) => {
-      const linkedItems = sortItems(
-        items.filter((item) => (item.projectId || "") === project.id),
-      );
-      const openCount = linkedItems.filter(
-        (item) => item.status !== "success" && item.status !== "fail",
-      ).length;
-      const projectInboxCount = inboxItems.filter(
-        (item) => (item.projectId || "") === project.id && !item.convertedAt,
-      ).length;
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  const pagedProjects = getPageSlice(
+    sortedProjects,
+    plannerProjectPage,
+    PLANNER_PROJECT_PAGE_SIZE,
+  );
+  plannerProjectPage = pagedProjects.page;
 
-      return `
-        <div class="planner-project-entry" style="--project-accent: ${escapeHtml(project.color || "#2563eb")}">
-          <div class="planner-project-entry-top">
-            <div>
-              <strong>${escapeHtml(project.name || "")}</strong>
-              ${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}
-            </div>
-            <span class="meta-badge">${linkedItems.length}개 연결</span>
-          </div>
-          <div class="item-meta compact-meta">
-            <span class="tag-badge">열린 항목 ${openCount}개</span>
-            <span class="tag-badge">Inbox ${projectInboxCount}개</span>
-          </div>
-          <div class="planner-project-item-list">
-            ${
-              linkedItems.length
-                ? linkedItems
-                    .slice(0, 4)
-                    .map(
-                      (item) =>
-                        `<span class="planner-project-item-chip">${escapeHtml(item.type === "schedule" ? "일정" : "할일")} ${escapeHtml(item.title || "")}</span>`,
-                    )
-                    .join("")
-                : '<span class="meta-badge">아직 연결된 일정이 없습니다.</span>'
-            }
-          </div>
-          <div class="planner-project-actions">
-            <button class="secondary-btn" type="button" data-action="apply-project-filter" data-id="${project.id}">이 프로젝트로 폼 채우기</button>
-            <button class="secondary-btn" type="button" data-action="delete-project" data-id="${project.id}">삭제</button>
-          </div>
+  plannerProjectList.innerHTML = [
+    pagedProjects.visibleItems.map(renderProjectCard).join(""),
+    renderPlannerPagination({
+      page: pagedProjects.page,
+      totalPages: pagedProjects.totalPages,
+      totalCount: sortedProjects.length,
+      action: "change-project-page",
+    }),
+  ].join("");
+}
+
+function renderProjectCard(project) {
+  const projectId = project.id;
+  const inboxCount = getProjectInboxItems(projectId).length;
+  const todoCount = getProjectTodos(projectId).length;
+  const scheduleCount = getProjectSchedules(projectId).length;
+  const resourceCount = getProjectResources(projectId).length;
+  const totalCount = inboxCount + todoCount + scheduleCount + resourceCount;
+
+  return `
+    <article
+      class="planner-project-entry project-summary-card clickable-item-card"
+      style="--project-accent: ${escapeHtml(project.color || "#2563eb")}"
+      data-action="open-project-detail"
+      data-id="${escapeHtml(projectId)}"
+      role="button"
+      tabindex="0"
+    >
+      <div class="planner-project-entry-top">
+        <div>
+          <strong>${escapeHtml(project.name || "")}</strong>
+          ${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}
         </div>
-      `;
-    })
-    .join("");
+        <span class="meta-badge">${totalCount}? ??</span>
+      </div>
+      <div class="item-meta compact-meta project-summary-meta">
+        <span class="tag-badge">Inbox ${inboxCount}</span>
+        <span class="tag-badge">\uD560\uC77C ${todoCount}</span>
+        <span class="tag-badge">\uC77C\uC815 ${scheduleCount}</span>
+        <span class="tag-badge">\uB9AC\uC18C\uC2A4 ${resourceCount}</span>
+      </div>
+      <div class="planner-project-actions">
+        <button class="secondary-btn" type="button" data-action="open-project-detail" data-id="${escapeHtml(projectId)}">\uC5F4\uAE30</button>
+        <button class="secondary-btn" type="button" data-action="edit-project" data-id="${escapeHtml(projectId)}">\uC218\uC815</button>
+        <button class="secondary-btn" type="button" data-action="delete-project" data-id="${escapeHtml(projectId)}">\uC0AD\uC81C</button>
+      </div>
+    </article>
+  `;
 }
 
-function renderPlannerWorkspace() {
-  renderPlannerProjectSelectOptions();
-  renderPlannerInbox();
-  renderPlannerProjects();
+function openProjectDetailPopup(projectId) {
+  const project = getProjectById(projectId);
+  if (!project || !projectDetailOverlay || !projectDetailBody) return;
+
+  if (projectDetailTitle) projectDetailTitle.textContent = project.name || "????";
+  if (projectDetailDesc) projectDetailDesc.textContent = project.description || "";
+  projectDetailBody.innerHTML = renderProjectDetail(project);
+  projectDetailOverlay.classList.remove("hidden");
 }
 
+function closeProjectDetailPopup() {
+  projectDetailOverlay?.classList.add("hidden");
+  if (projectDetailBody) projectDetailBody.innerHTML = "";
+}
+
+function renderProjectDetail(project) {
+  const projectId = project.id;
+  const projectInboxItems = getProjectInboxItems(projectId);
+  const projectTodos = getProjectTodos(projectId);
+  const projectSchedules = getProjectSchedules(projectId);
+  const projectResources = getProjectResources(projectId);
+
+  return `
+    <div class="project-section-actions">
+      <button class="secondary-btn" type="button" data-action="project-add-inbox" data-id="${projectId}">Inbox \uCD94\uAC00</button>
+      <button class="secondary-btn" type="button" data-action="project-add-task" data-id="${projectId}" data-target-type="todo">\uD560\uC77C \uCD94\uAC00</button>
+      <button class="secondary-btn" type="button" data-action="project-add-task" data-id="${projectId}" data-target-type="schedule">\uC77C\uC815 \uCD94\uAC00</button>
+      <button class="secondary-btn" type="button" data-action="add-project-resource" data-id="${projectId}">\uB9AC\uC18C\uC2A4 \uCD94\uAC00</button>
+    </div>
+    <div class="project-section-list">
+      ${renderProjectSection({
+        projectId,
+        sectionKey: "inbox",
+        title: "Inbox",
+        count: projectInboxItems.length,
+        bodyHtml: projectInboxItems.length
+          ? projectInboxItems.map(renderProjectInboxRow).join("")
+          : renderProjectEmptyRow(),
+      })}
+      ${renderProjectSection({
+        projectId,
+        sectionKey: "todo",
+        title: "\uD560\uC77C",
+        count: projectTodos.length,
+        bodyHtml: projectTodos.length
+          ? projectTodos.map((item) => renderProjectTaskRow(item, getStatusSymbol)).join("")
+          : renderProjectEmptyRow(),
+      })}
+      ${renderProjectSection({
+        projectId,
+        sectionKey: "schedule",
+        title: "\uC77C\uC815",
+        count: projectSchedules.length,
+        bodyHtml: projectSchedules.length
+          ? projectSchedules.map((item) => renderProjectTaskRow(item, getStatusSymbol)).join("")
+          : renderProjectEmptyRow(),
+      })}
+      ${renderProjectSection({
+        projectId,
+        sectionKey: "resources",
+        title: "\uB9AC\uC18C\uC2A4/\uB9C1\uD06C",
+        count: projectResources.length,
+        bodyHtml: projectResources.length
+          ? projectResources.map((resource) => renderProjectResourceRow(projectId, resource)).join("")
+          : renderProjectEmptyRow(),
+      })}
+    </div>
+  `;
+}
+
+function refreshProjectDetailIfOpen(projectId) {
+  if (projectDetailOverlay?.classList.contains("hidden")) return;
+  if (!projectId || !getProjectById(projectId)) {
+    closeProjectDetailPopup();
+    return;
+  }
+  openProjectDetailPopup(projectId);
+}
+
+function renderProjectSection({ projectId, sectionKey, title, count, bodyHtml }) {
+  const stateKey = getProjectSectionStateKey(projectId, sectionKey);
+  const isCollapsed = Boolean(collapsedProjectSections[stateKey]);
+
+  return `
+    <section class="project-section ${isCollapsed ? "\u25B8" : "\u25BE"}" data-project-section="${escapeHtml(sectionKey)}">
+      <button
+        class="project-section-header"
+        type="button"
+        data-action="toggle-project-section"
+        data-project-id="${escapeHtml(projectId)}"
+        data-section-key="${escapeHtml(sectionKey)}"
+        aria-expanded="${isCollapsed ? "false" : "true"}"
+      >
+        <span class="project-section-caret" aria-hidden="true">${isCollapsed ? "?" : "?"}</span>
+        <span class="project-section-title">${escapeHtml(title)}</span>
+        <span class="project-section-count">${count}</span>
+      </button>
+      <div class="project-section-body ${isCollapsed ? "hidden" : ""}">
+        ${bodyHtml}
+      </div>
+    </section>
+  `;
+}
+
+function renderProjectEmptyRow() {
+  return '<div class="project-section-empty">\uC544\uC9C1 \uD56D\uBAA9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
+}
+
+function renderProjectInboxRow(item) {
+  const createdText = formatKoreanDate(
+    formatDateKey(new Date(item.createdAt || Date.now())),
+  );
+
+  return `
+    <div class="project-section-row project-inbox-row">
+      <div class="project-row-main">
+        <strong>${escapeHtml(item.title || "")}</strong>
+        ${item.note ? `<span>${escapeHtml(item.note)}</span>` : `<span>${createdText}</span>`}
+      </div>
+      <div class="project-row-actions">
+        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">??</button>
+        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">??</button>
+        <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">??</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderProjectResourceRow(projectId, resource) {
+  const resourceId = resource.id || "";
+  const label = resource.label || resource.title || resource.url || "\uB9AC\uC18C\uC2A4";
+  const url = resource.url || "";
+
+  return `
+    <div class="project-section-row project-resource-row">
+      <div class="project-row-main">
+        <strong>${escapeHtml(label)}</strong>
+        ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>` : ""}
+      </div>
+      <button class="secondary-btn" type="button" data-action="delete-project-resource" data-id="${escapeHtml(projectId)}" data-resource-id="${escapeHtml(resourceId)}">\uC0AD\uC81C</button>
+    </div>
+  `;
+}
 function getPlannerProjectAccent(colorKey) {
   const map = {
     blue: "#2563eb",
@@ -2145,37 +3085,90 @@ function getPlannerProjectAccent(colorKey) {
   return map[colorKey] || map.blue;
 }
 
+function getPlannerProjectColorKeyByAccent(accent) {
+  const normalizedAccent = String(accent || "").toLowerCase();
+  const colorKeys = ["blue", "teal", "green", "orange", "red", "slate"];
+  return (
+    colorKeys.find(
+      (colorKey) =>
+        getPlannerProjectAccent(colorKey).toLowerCase() === normalizedAccent,
+    ) || "blue"
+  );
+}
+
 function addPlannerProject() {
   const name = plannerProjectNameInput?.value.trim() || "";
   const description = plannerProjectDescriptionInput?.value.trim() || "";
   const colorKey = plannerProjectColorSelect?.value || "blue";
+  const nowMs = Date.now();
 
   if (!name) {
-    alert("프로젝트 이름을 입력해 주세요.");
+    alert("\uD504\uB85C\uC81D\uD2B8 \uC774\uB984\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
     plannerProjectNameInput?.focus();
     return;
   }
 
-  projects = [
-    {
-      id: makeId(),
-      name,
-      description,
-      color: getPlannerProjectAccent(colorKey),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-    ...projects,
-  ];
+  if (editingProjectId) {
+    projects = projects.map((project) =>
+      project.id === editingProjectId
+        ? {
+            ...project,
+            name,
+            description,
+            color: getPlannerProjectAccent(colorKey),
+            updatedAt: nowMs,
+          }
+        : project,
+    );
+  } else {
+    projects = [
+      {
+        id: makeId(),
+        name,
+        description,
+        color: getPlannerProjectAccent(colorKey),
+        createdAt: nowMs,
+        updatedAt: nowMs,
+      },
+      ...projects,
+    ];
+    plannerProjectPage = 1;
+  }
 
-  if (plannerProjectNameInput) plannerProjectNameInput.value = "";
-  if (plannerProjectDescriptionInput) plannerProjectDescriptionInput.value = "";
-  if (plannerProjectColorSelect) plannerProjectColorSelect.value = "blue";
-
+  resetPlannerProjectForm();
   queueSavePlannerData();
   renderPlannerWorkspace();
 }
 
+function editPlannerProject(id) {
+  const project = getProjectById(id);
+  if (!project) return;
+
+  editingProjectId = id;
+  if (plannerProjectNameInput) plannerProjectNameInput.value = project.name || "";
+  if (plannerProjectDescriptionInput) {
+    plannerProjectDescriptionInput.value = project.description || "";
+  }
+  if (plannerProjectColorSelect) {
+    plannerProjectColorSelect.value = getPlannerProjectColorKeyByAccent(project.color);
+  }
+  if (plannerProjectAddBtn) {
+    plannerProjectAddBtn.textContent = "\uD504\uB85C\uC81D\uD2B8 \uC218\uC815";
+  }
+  plannerProjectCancelEditBtn?.classList.remove("hidden");
+  plannerProjectNameInput?.focus();
+}
+
+function resetPlannerProjectForm() {
+  editingProjectId = null;
+  if (plannerProjectNameInput) plannerProjectNameInput.value = "";
+  if (plannerProjectDescriptionInput) plannerProjectDescriptionInput.value = "";
+  if (plannerProjectColorSelect) plannerProjectColorSelect.value = "blue";
+  if (plannerProjectAddBtn) {
+    plannerProjectAddBtn.textContent = "\uD504\uB85C\uC81D\uD2B8 \uCD94\uAC00";
+  }
+  plannerProjectCancelEditBtn?.classList.add("hidden");
+}
 function addPlannerInboxItem() {
   const title = plannerInboxTitleInput?.value.trim() || "";
   const note = plannerInboxNoteInput?.value.trim() || "";
@@ -2187,37 +3180,82 @@ function addPlannerInboxItem() {
     return;
   }
 
-  inboxItems = [
-    {
-      id: makeId(),
-      title,
-      note,
-      projectId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      convertedAt: null,
-      convertedToType: "",
-    },
-    ...inboxItems,
-  ];
+  if (editingInboxId) {
+    inboxItems = inboxItems.map((item) =>
+      item.id === editingInboxId
+        ? {
+            ...item,
+            title,
+            note,
+            projectId,
+            updatedAt: Date.now(),
+          }
+        : item,
+    );
+    editingInboxId = null;
+  } else {
+    inboxItems = [
+      {
+        id: makeId(),
+        title,
+        note,
+        projectId,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        convertedAt: null,
+        convertedToType: "",
+      },
+      ...inboxItems,
+    ];
+    plannerInboxPage = 1;
+  }
 
-  if (plannerInboxTitleInput) plannerInboxTitleInput.value = "";
-  if (plannerInboxNoteInput) plannerInboxNoteInput.value = "";
-  if (plannerInboxProjectSelect) plannerInboxProjectSelect.value = "";
+  resetPlannerInboxForm();
 
   queueSavePlannerData();
   renderPlannerWorkspace();
 }
 
+function editPlannerInboxItem(id) {
+  const inboxItem = inboxItems.find((item) => item.id === id);
+  if (!inboxItem) return;
+
+  editingInboxId = id;
+  if (plannerInboxTitleInput) plannerInboxTitleInput.value = inboxItem.title || "";
+  if (plannerInboxNoteInput) plannerInboxNoteInput.value = inboxItem.note || "";
+  if (plannerInboxProjectSelect) {
+    plannerInboxProjectSelect.value = inboxItem.projectId || "";
+  }
+  if (plannerInboxAddBtn) plannerInboxAddBtn.textContent = "Inbox \uC218\uC815";
+  plannerInboxCancelEditBtn?.classList.remove("hidden");
+  plannerInboxTitleInput?.focus();
+}
+
+function resetPlannerInboxForm() {
+  editingInboxId = null;
+  if (plannerInboxTitleInput) plannerInboxTitleInput.value = "";
+  if (plannerInboxNoteInput) plannerInboxNoteInput.value = "";
+  if (plannerInboxProjectSelect) plannerInboxProjectSelect.value = "";
+  if (plannerInboxAddBtn) plannerInboxAddBtn.textContent = "Inbox\uC5D0 \uB123\uAE30";
+  plannerInboxCancelEditBtn?.classList.add("hidden");
+}
+
 function deletePlannerInboxItem(id) {
   inboxItems = inboxItems.filter((item) => item.id !== id);
+  if (editingInboxId === id) {
+    resetPlannerInboxForm();
+  }
   queueSavePlannerData();
   renderPlannerWorkspace();
 }
 
 function deletePlannerProject(id) {
-  const shouldDelete = confirm("이 프로젝트를 삭제할까요? 연결된 일정의 프로젝트 지정은 해제됩니다.");
+  const shouldDelete = confirm("이 프로젝트를 삭제할까요? 연결된 작업의 프로젝트 지정은 해제됩니다.");
   if (!shouldDelete) return;
+
+  if (editingProjectId === id) {
+    resetPlannerProjectForm();
+  }
 
   projects = projects.filter((project) => project.id !== id);
   inboxItems = inboxItems.map((item) =>
@@ -2240,15 +3278,245 @@ function deletePlannerProject(id) {
 }
 
 function applyProjectToPlannerForm(projectId) {
+  openProjectTaskPopup(projectId, "todo");
+}
+
+function closePopupQuickAddFormAndClearProject() {
+  popupQuickAddProjectId = "";
+  closePopupQuickAddForm();
+}
+
+function closeDatePopupAndClearProjectContext() {
+  popupQuickAddProjectId = "";
+  closeDatePopup();
+}
+
+function openProjectTaskPopup(projectId, targetType = "todo") {
   if (!getProjectById(projectId)) return;
-  if (itemProjectId) itemProjectId.value = projectId;
-  openPlannerFormCard();
+
+  selectedDate = formatDateKey(new Date());
+  popupQuickAddProjectId = projectId;
+  resetPopupQuickAddForm();
+  openDatePopup(selectedDate);
+  openPopupQuickAddForm();
+  if (popupItemType) popupItemType.value = targetType === "schedule" ? "schedule" : "todo";
+  if (popupTodoDate) popupTodoDate.value = selectedDate;
+  if (popupScheduleStartDate) popupScheduleStartDate.value = selectedDate;
+  if (popupScheduleEndDate) popupScheduleEndDate.value = selectedDate;
+  updatePopupFields();
+  showPlannerProjectView();
+  popupTitleInput?.focus();
+}
+
+function addInboxItemToProject(projectId) {
+  if (!getProjectById(projectId)) return;
+
+  const title = prompt("Inbox에 추가할 메모를 입력하세요.");
+  if (!title || !title.trim()) return;
+
+  inboxItems = [
+    {
+      id: makeId(),
+      title: title.trim(),
+      note: "",
+      projectId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      convertedAt: null,
+      convertedToType: "",
+    },
+    ...inboxItems,
+  ];
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+  refreshProjectDetailIfOpen(projectId);
+}
+
+function addProjectResource(projectId) {
+  const project = getProjectById(projectId);
+  if (!project) return;
+
+  const label = prompt("리소스 이름이나 메모를 입력하세요.");
+  if (!label || !label.trim()) return;
+  const url = prompt("링크가 있으면 입력하세요. 없으면 비워두세요.") || "";
+  const resource = {
+    id: makeId(),
+    label: label.trim(),
+    url: url.trim(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  projects = projects.map((item) =>
+    item.id === projectId
+      ? {
+          ...item,
+          resources: [...(Array.isArray(item.resources) ? item.resources : []), resource],
+          updatedAt: Date.now(),
+        }
+      : item,
+  );
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+  refreshProjectDetailIfOpen(projectId);
+}
+
+function deleteProjectResource(projectId, resourceId) {
+  if (!resourceId) return;
+
+  projects = projects.map((project) =>
+    project.id === projectId
+      ? {
+          ...project,
+          resources: (Array.isArray(project.resources) ? project.resources : []).filter(
+            (resource) => resource.id !== resourceId,
+          ),
+          updatedAt: Date.now(),
+        }
+      : project,
+  );
+  queueSavePlannerData();
+  renderPlannerWorkspace();
+  refreshProjectDetailIfOpen(projectId);
+}
+
+function toggleProjectSection(projectId, sectionKey) {
+  const stateKey = getProjectSectionStateKey(projectId, sectionKey);
+  collapsedProjectSections = {
+    ...collapsedProjectSections,
+    [stateKey]: !collapsedProjectSections[stateKey],
+  };
+  saveProjectSectionCollapseState();
+  renderPlannerProjects();
+  refreshProjectDetailIfOpen(projectId);
+}
+
+function openNewPlannerItemPopup() {
+  resetPlannerForm();
+  openEditPopup();
   titleInput?.focus();
+}
+
+function applyQuickInputToForm() {
+  const parsed = parseQuickInput(quickInputText?.value || "");
+
+  if (!parsed) {
+    if (quickInputMessage) {
+      quickInputMessage.textContent =
+        "날짜 표현을 찾지 못했어요. 예: 내일 3시 카페 약속, 금요일까지 과제 제출";
+    }
+    openNewPlannerItemPopup();
+    return;
+  }
+
+  resetPlannerForm();
+
+  if (itemType) itemType.value = parsed.type;
+  if (titleInput) titleInput.value = parsed.title;
+  if (itemColor) itemColor.value = parsed.color || "blue";
+  if (itemTag) itemTag.value = parsed.tag || "";
+  if (itemRewardDifficulty) itemRewardDifficulty.value = "auto";
+
+  if (parsed.type === "todo") {
+    if (todoDueDate) todoDueDate.value = parsed.dueDate || "";
+    applyTimeValue("todoDue", parsed.dueTime || "");
+  } else {
+    if (scheduleStartDate) scheduleStartDate.value = parsed.startDate || "";
+    if (scheduleEndDate) scheduleEndDate.value = parsed.startDate || "";
+    applyTimeValue("scheduleStart", parsed.startTime || "");
+    applyTimeValue("scheduleEnd", "");
+    syncScheduleLocationMode("main");
+  }
+
+  updatePlannerFields();
+  openEditPopup();
+
+  if (quickInputMessage) {
+    quickInputMessage.textContent = "빠른 입력을 추가 폼에 채웠어요. 확인 후 저장해주세요.";
+  }
+
+  titleInput?.focus();
+}
+
+function applyAiRecommendation(id) {
+  const recommendation = getVisibleRecommendations().find((item) => item.id === id);
+  if (!recommendation) return;
+
+  const now = Date.now();
+
+  if (recommendation.type === "todo") {
+    items = [
+      ...items,
+      {
+        id: makeId(),
+        type: "todo",
+        title: recommendation.title,
+        color: "blue",
+        tag: "AI추천",
+        projectId: "",
+        reminderMinutes: 0,
+        location: "",
+        locationAddress: "",
+        locationPlaceId: "",
+        dueDate: recommendation.suggestedDate,
+        dueTime: "",
+        repeat: "none",
+        repeatUntil: "",
+        weeklyDays: [],
+        intervalDays: null,
+        status: "pending",
+        isRecurring: false,
+        sourceRecommendationId: recommendation.id,
+        sourceItemId: recommendation.sourceItemId || "",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+  } else {
+    items = [
+      ...items,
+      {
+        id: makeId(),
+        type: "schedule",
+        title: recommendation.title,
+        color: "blue",
+        tag: "AI추천",
+        projectId: "",
+        reminderMinutes: 0,
+        location: "",
+        locationAddress: "",
+        locationPlaceId: "",
+        dailyLocations: [],
+        startDate: recommendation.suggestedDate,
+        startTime: recommendation.suggestedStartTime || "09:00",
+        endDate: recommendation.suggestedDate,
+        endTime: recommendation.suggestedEndTime || "10:00",
+        repeat: "none",
+        repeatUntil: "",
+        weeklyDays: [],
+        intervalDays: null,
+        status: "pending",
+        isRecurring: false,
+        sourceRecommendationId: recommendation.id,
+        sourceItemId: recommendation.sourceItemId || "",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+  }
+
+  ignoredRecommendationIds = [
+    ...new Set([...ignoredRecommendationIds, recommendation.id]),
+  ];
+
+  queueSavePlannerData();
+  renderAll();
 }
 
 function convertInboxItemToPlanner(id, targetType) {
   const inboxItem = inboxItems.find((item) => item.id === id);
   if (!inboxItem || inboxItem.convertedAt) return;
+  const projectId = inboxItem.projectId || "";
 
   resetPlannerForm();
   if (itemType) itemType.value = targetType === "schedule" ? "schedule" : "todo";
@@ -2259,7 +3527,7 @@ function convertInboxItemToPlanner(id, targetType) {
   }
 
   updatePlannerFields();
-  openPlannerFormCard();
+  openEditPopup();
   titleInput?.focus();
 
   inboxItems = inboxItems.map((item) =>
@@ -2275,6 +3543,7 @@ function convertInboxItemToPlanner(id, targetType) {
 
   queueSavePlannerData();
   renderPlannerWorkspace();
+  refreshProjectDetailIfOpen(projectId);
 }
 
 function closeTopMostPopup() {
@@ -2299,8 +3568,13 @@ function closeTopMostPopup() {
     return true;
   }
 
+  if (!projectDetailOverlay?.classList.contains("hidden")) {
+    closeProjectDetailPopup();
+    return true;
+  }
+
   if (!popupQuickAddForm?.classList.contains("hidden")) {
-    closePopupQuickAddForm();
+    closePopupQuickAddFormAndClearProject();
     return true;
   }
 
@@ -2311,6 +3585,11 @@ function closeTopMostPopup() {
 
   if (!summaryPopupOverlay?.classList.contains("hidden")) {
     closeSummaryPopup();
+    return true;
+  }
+
+  if (!settingsPopupOverlay?.classList.contains("hidden")) {
+    closeSettingsPopup();
     return true;
   }
 
@@ -2342,6 +3621,7 @@ function enterHomeTab() {
     dynamicRightTabBtn.classList.add("hidden");
   }
 
+  setPlannerBottomShortcutsVisible(false);
   switchTab("home");
 }
 
@@ -2449,6 +3729,46 @@ function goBackFinanceUtility() {
   showFinanceUtilityHome();
 }
 
+function setPlannerBottomShortcutsVisible(isVisible) {
+  [plannerInboxTabBtn, plannerProjectTabBtn].forEach((button) => {
+    button?.classList.toggle("hidden", !isVisible);
+  });
+}
+
+function syncPlannerBottomShortcutState() {
+  const isPlannerActive = currentTab === "planner";
+
+  plannerInboxTabBtn?.classList.toggle(
+    "active",
+    isPlannerActive && plannerWorkspaceView === "inbox",
+  );
+  plannerProjectTabBtn?.classList.toggle(
+    "active",
+    isPlannerActive && plannerWorkspaceView === "project",
+  );
+
+  if (dynamicRightTabBtn?.dataset.tab === "planner") {
+    dynamicRightTabBtn.classList.toggle(
+      "active",
+      isPlannerActive && plannerWorkspaceView === "home",
+    );
+  }
+}
+
+function openPlannerWorkspaceFromBottom(workspaceView) {
+  switchTab("planner");
+
+  if (workspaceView === "inbox") {
+    showPlannerInboxView();
+  } else if (workspaceView === "project") {
+    showPlannerProjectView();
+  } else {
+    showPlannerWorkspaceHome();
+  }
+
+  syncPlannerBottomShortcutState();
+}
+
 function resetNestedTabState(tabName) {
   if (tabName === "finance") {
     showFinanceDashboardHome();
@@ -2473,6 +3793,7 @@ function openHubGroup(groupName) {
   currentHubGroup = groupName;
   financeDashboardHistory = [];
   financeUtilityHistory = [];
+  setPlannerBottomShortcutsVisible(groupName === "schedule");
 
   if (dynamicLeftTabBtn) {
     dynamicLeftTabBtn.dataset.tab = group.left.tab;
@@ -2682,6 +4003,13 @@ function handleDocumentClick(e) {
     return;
   }
 
+  if (action === "edit-inbox-item") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    editPlannerInboxItem(id);
+    return;
+  }
+
   if (action === "delete-inbox-item") {
     const id = actionTarget.dataset.id;
     if (!id) return;
@@ -2689,10 +4017,126 @@ function handleDocumentClick(e) {
     return;
   }
 
+  if (action === "change-inbox-page") {
+    changePlannerInboxPage(Number(actionTarget.dataset.direction) || 0);
+    return;
+  }
+
+  if (action === "change-project-page") {
+    changePlannerProjectPage(Number(actionTarget.dataset.direction) || 0);
+    return;
+  }
+
+  if (action === "move-kanban-item") {
+    const id = actionTarget.dataset.id;
+    const kanbanStatus = actionTarget.dataset.kanbanStatus;
+    moveKanbanItem(id, kanbanStatus);
+    return;
+  }
+
+  if (action === "open-project-detail") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    openProjectDetailPopup(id);
+    return;
+  }
+
+  if (action === "toggle-project-section") {
+    const projectId = actionTarget.dataset.projectId;
+    const sectionKey = actionTarget.dataset.sectionKey;
+    if (!projectId || !sectionKey) return;
+    toggleProjectSection(projectId, sectionKey);
+    return;
+  }
+
+  if (action === "project-add-inbox") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    addInboxItemToProject(id);
+    return;
+  }
+
+  if (action === "project-add-task") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    openProjectTaskPopup(id, actionTarget.dataset.targetType || "todo");
+    return;
+  }
+
+  if (action === "add-project-resource") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    addProjectResource(id);
+    return;
+  }
+
+  if (action === "delete-project-resource") {
+    const id = actionTarget.dataset.id;
+    const resourceId = actionTarget.dataset.resourceId;
+    if (!id || !resourceId) return;
+    deleteProjectResource(id, resourceId);
+    return;
+  }
+
   if (action === "delete-project") {
     const id = actionTarget.dataset.id;
     if (!id) return;
     deletePlannerProject(id);
+    return;
+  }
+
+  if (action === "edit-project") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    editPlannerProject(id);
+    return;
+  }
+
+  if (action === "apply-ai-recommendation") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    applyAiRecommendation(id);
+    return;
+  }
+
+  if (action === "ignore-ai-recommendation") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    ignoreAiRecommendation(id);
+    return;
+  }
+  if (action === "add-subscription-expense") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    addSubscriptionExpense(id);
+    return;
+  }
+
+  if (action === "edit-subscription") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    editSubscription(id);
+    return;
+  }
+
+  if (action === "delete-subscription") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    deleteSubscription(id);
+    return;
+  }
+
+  if (action === "edit-asset-goal") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    editAssetGoal(id);
+    return;
+  }
+
+  if (action === "delete-asset-goal") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    deleteAssetGoal(id);
     return;
   }
 
@@ -2717,11 +4161,25 @@ function handleDocumentClick(e) {
     return;
   }
 
+  if (action === "open-edit-finance-account") {
+    const id = actionTarget.dataset.id;
+    if (!id) return;
+    startEditFinanceAccount(id);
+    return;
+  }
+
   if (action === "quick-asset-cashflow") {
     const id = actionTarget.dataset.id;
     const flowType = actionTarget.dataset.flowType || "expense";
     if (!id) return;
     openFinanceExpenseFormForAsset(id, flowType);
+    return;
+  }
+
+  if (action === "change-finance-asset-transaction-page") {
+    handleFinanceAssetTransactionPageChange(
+      Number(actionTarget.dataset.direction) || 0,
+    );
     return;
   }
 
@@ -2762,6 +4220,8 @@ function handleDocumentClick(e) {
 }
 
 function addItemFromSelectedDate() {
+  const projectContextId = popupQuickAddProjectId;
+
   applyTitleShortcuts({
     titleInput: popupTitleInput,
     colorInput: popupItemColor,
@@ -2803,6 +4263,7 @@ function addItemFromSelectedDate() {
     popupTitleInput,
     popupItemColor,
     popupItemTag,
+    popupItemProjectId: { value: popupQuickAddProjectId },
     popupItemLocation: { value: primaryLocation.location || "" },
     popupItemLocationAddress: { value: primaryLocation.locationAddress || "" },
     popupItemLocationPlaceId: { value: primaryLocation.locationPlaceId || "" },
@@ -2827,14 +4288,22 @@ function addItemFromSelectedDate() {
   queueSavePlannerData();
   calculateSalaryPreview();
   renderAll();
+  popupQuickAddProjectId = "";
   resetPopupQuickAddForm();
-  openDatePopup(selectedDate);
+  if (projectContextId) {
+    closeDatePopup();
+    showPlannerProjectView();
+  } else {
+    openDatePopup(selectedDate);
+  }
 }
 
 function saveEditedSingleItem(type, title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
+  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const rewardDifficulty = itemRewardDifficulty?.value || "auto";
 
   const isMultiDaySchedule =
     type === "schedule" &&
@@ -2867,6 +4336,8 @@ function saveEditedSingleItem(type, title) {
     color,
     tag,
     projectId,
+    reminderMinutes,
+    rewardDifficulty,
     location: primaryLocation.location || "",
     locationAddress: primaryLocation.locationAddress || "",
     locationPlaceId: primaryLocation.locationPlaceId || "",
@@ -2915,6 +4386,8 @@ function saveTodoSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
+  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const rewardDifficulty = itemRewardDifficulty?.value || "auto";
   const { location, locationAddress, locationPlaceId } = getLocationPayload(
     itemLocation,
     itemLocationAddress,
@@ -2927,6 +4400,8 @@ function saveTodoSeries(title) {
     color,
     tag,
     projectId,
+    reminderMinutes,
+    rewardDifficulty,
     location,
     locationAddress,
     locationPlaceId,
@@ -2944,13 +4419,19 @@ function saveTodoSeries(title) {
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
-  closePlannerFormCard();
+  if (isEditingInPopup) {
+    closeEditPopup();
+  } else {
+    closePlannerFormCard();
+  }
 }
 
 function saveScheduleSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
+  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const rewardDifficulty = itemRewardDifficulty?.value || "auto";
 
   const isMultiDaySchedule = isMultiDayScheduleRange(
     scheduleStartDate?.value || "",
@@ -2979,6 +4460,8 @@ function saveScheduleSeries(title) {
     color,
     tag,
     projectId,
+    reminderMinutes,
+    rewardDifficulty,
     location: primaryLocation.location || "",
     locationAddress: primaryLocation.locationAddress || "",
     locationPlaceId: primaryLocation.locationPlaceId || "",
@@ -2998,7 +4481,11 @@ function saveScheduleSeries(title) {
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
-  closePlannerFormCard();
+  if (isEditingInPopup) {
+    closeEditPopup();
+  } else {
+    closePlannerFormCard();
+  }
 }
 
 function parseTitleShortcuts(rawTitle) {
@@ -4145,7 +5632,7 @@ function addDailyLocationEntry(mode, place) {
   const selectedDate = dateInput?.value || "";
 
   if (!startDate || !endDate) {
-    alert("먼저 일정의 시작 날짜와 종료 날짜를 입력하세요.");
+    alert("먼저 작업의 시작 날짜와 종료 날짜를 입력하세요.");
     return;
   }
 
@@ -4156,7 +5643,7 @@ function addDailyLocationEntry(mode, place) {
   }
 
   if (selectedDate < startDate || selectedDate > endDate) {
-    alert("선택한 날짜는 일정 기간 안에 있어야 합니다.");
+    alert("선택한 날짜는 작업 기간 안에 있어야 합니다.");
     dateInput?.focus();
     return;
   }
@@ -4470,7 +5957,7 @@ function syncScheduleLocationMode(mode) {
     }
 
     if (helperText) {
-      helperText.textContent = "하루 일정은 기본 장소 기능을 사용합니다.";
+      helperText.textContent = "하루 작업은 기본 장소 기능을 사용합니다.";
     }
 
     syncPlaceUi(isPopup ? "popup" : "main");
@@ -4496,7 +5983,7 @@ function syncScheduleLocationMode(mode) {
 
   if (helperText) {
     helperText.textContent =
-      "여러 날 일정은 날짜별 장소 변경 시점 기준으로 자동 적용됩니다.";
+      "여러 날 작업은 날짜별 장소 변경 시점 기준으로 자동 적용됩니다.";
   }
 
   renderScheduleDailyLocationList(mode);
@@ -4623,7 +6110,7 @@ function closeRecurringEditScopePopup() {
   const subTextEl = recurringEditScopeOverlay?.querySelector(".popup-subtext");
 
   if (titleEl) {
-    titleEl.textContent = "반복 일정 적용 범위";
+    titleEl.textContent = "반복 작업 적용 범위";
   }
 
   if (subTextEl) {
@@ -4631,19 +6118,19 @@ function closeRecurringEditScopePopup() {
   }
 
   if (scopeOnlyThisBtn) {
-    scopeOnlyThisBtn.textContent = "해당 일정에만 적용";
+    scopeOnlyThisBtn.textContent = "해당 작업에만 적용";
   }
 
   if (scopeFutureBtn) {
-    scopeFutureBtn.textContent = "해당 일정 이후에 적용";
+    scopeFutureBtn.textContent = "해당 작업 이후에 적용";
   }
 
   if (scopePastBtn) {
-    scopePastBtn.textContent = "해당 일정 이전에 적용";
+    scopePastBtn.textContent = "해당 작업 이전에 적용";
   }
 
   if (scopeAllBtn) {
-    scopeAllBtn.textContent = "전체 일정에 적용";
+    scopeAllBtn.textContent = "전체 작업에 적용";
   }
 }
 
@@ -4659,6 +6146,8 @@ function getEditedSchedulePayload(title) {
     color: itemColor?.value || "blue",
     tag: itemTag?.value.trim() || "",
     projectId: itemProjectId?.value || "",
+    reminderMinutes: Math.max(0, Number(itemReminderMinutes?.value) || 0),
+    rewardDifficulty: itemRewardDifficulty?.value || "auto",
     location: itemLocation?.value || "",
     locationAddress: itemLocationAddress?.value || "",
     locationPlaceId: itemLocationPlaceId?.value || "",
@@ -4707,7 +6196,7 @@ function openRecurringDeleteScopePopup(payload) {
   const subTextEl = recurringEditScopeOverlay?.querySelector(".popup-subtext");
 
   if (titleEl) {
-    titleEl.textContent = "반복 일정 삭제 범위";
+    titleEl.textContent = "반복 작업 삭제 범위";
   }
 
   if (subTextEl) {
@@ -4715,19 +6204,19 @@ function openRecurringDeleteScopePopup(payload) {
   }
 
   if (scopeOnlyThisBtn) {
-    scopeOnlyThisBtn.textContent = "해당 일정만 삭제";
+    scopeOnlyThisBtn.textContent = "해당 작업만 삭제";
   }
 
   if (scopeFutureBtn) {
-    scopeFutureBtn.textContent = "해당 일정 이후 삭제";
+    scopeFutureBtn.textContent = "해당 작업 이후 삭제";
   }
 
   if (scopePastBtn) {
-    scopePastBtn.textContent = "해당 일정 이전 삭제";
+    scopePastBtn.textContent = "해당 작업 이전 삭제";
   }
 
   if (scopeAllBtn) {
-    scopeAllBtn.textContent = "전체 일정 삭제";
+    scopeAllBtn.textContent = "전체 작업 삭제";
   }
 
   recurringEditScopeOverlay?.classList.remove("hidden");

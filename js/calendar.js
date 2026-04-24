@@ -698,7 +698,9 @@ export function renderSelectedDateExtraList(dateKey, itemsForDate) {
 
   selectedDateItemList.innerHTML = `
     <div class="cardless-section-title">시간 미지정 / 종일 항목</div>
-    ${extraItems.map((item) => renderSelectedCard(item, getStatusSymbol)).join("")}
+    <div class="selected-date-list-compact">
+      ${extraItems.map((item) => renderSelectedCard(item, getStatusSymbol)).join("")}
+    </div>
   `;
 }
 

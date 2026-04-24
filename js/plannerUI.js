@@ -427,6 +427,8 @@ export function resetPlannerForm() {
     titleInput,
     itemColor,
     itemTag,
+    itemReminderMinutes,
+    itemRewardDifficulty,
     itemProjectId,
     itemLocation,
     itemLocationAddress,
@@ -462,6 +464,8 @@ export function resetPlannerForm() {
   if (titleInput) titleInput.value = "";
   if (itemColor) itemColor.value = "blue";
   if (itemTag) itemTag.value = "";
+  if (itemReminderMinutes) itemReminderMinutes.value = "0";
+  if (itemRewardDifficulty) itemRewardDifficulty.value = "auto";
   if (itemProjectId) itemProjectId.value = "";
   if (itemLocation) itemLocation.value = "";
   if (itemLocationAddress) itemLocationAddress.value = "";
@@ -536,11 +540,23 @@ export function openEditPopup() {
     editPopupMount,
     editPopupOverlay,
     plannerFormLauncher,
+    plannerFormPopupTitle,
+    plannerFormPopupSubtext,
   } = getRefs();
 
   if (!plannerFormCard || !editPopupMount) return;
 
   setIsEditingInPopup(true);
+
+  if (plannerFormPopupTitle) {
+    plannerFormPopupTitle.textContent = getEditingId() ? "항목 수정" : "작업 추가";
+  }
+
+  if (plannerFormPopupSubtext) {
+    plannerFormPopupSubtext.textContent = getEditingId()
+      ? "현재 항목을 바로 수정할 수 있습니다."
+      : "새 작업을 빠르게 추가합니다.";
+  }
 
   plannerFormLauncher?.classList.add("hidden");
   plannerFormCard.classList.remove("hidden");
@@ -580,6 +596,8 @@ export function startEdit(id) {
     titleInput,
     itemColor,
     itemTag,
+    itemReminderMinutes,
+    itemRewardDifficulty,
     itemProjectId,
     itemLocation,
     itemLocationAddress,
@@ -607,7 +625,7 @@ export function startEdit(id) {
 
   if (plannerFormTitle) {
     plannerFormTitle.textContent =
-      item.type === "todo" ? "할일 수정" : "일정 수정";
+      item.type === "todo" ? "마감 작업 수정" : "시간 작업 수정";
   }
 
   if (saveItemBtn) saveItemBtn.textContent = "수정 저장";
@@ -620,6 +638,10 @@ export function startEdit(id) {
   if (titleInput) titleInput.value = item.title || "";
   if (itemColor) itemColor.value = item.color || "blue";
   if (itemTag) itemTag.value = item.tag || "";
+  if (itemReminderMinutes) {
+    itemReminderMinutes.value = String(Math.max(0, Number(item.reminderMinutes) || 0));
+  }
+  if (itemRewardDifficulty) itemRewardDifficulty.value = item.rewardDifficulty || "auto";
   if (itemProjectId) itemProjectId.value = item.projectId || "";
   if (itemLocation) itemLocation.value = item.location || "";
   if (itemLocationAddress) itemLocationAddress.value = item.locationAddress || "";

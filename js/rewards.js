@@ -10,6 +10,12 @@ const STATUS_LEDGER_TYPES = new Set([
   "fail_penalty",
   "fail_refund",
 ]);
+const DIFFICULTY_MULTIPLIER = {
+  easy: 0.85,
+  normal: 1,
+  hard: 1.2,
+  extreme: 1.4,
+};
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -258,14 +264,30 @@ function getKeywordScore(item) {
 
 export function normalizeRewardsData(data) {
   const source = data && typeof data === "object" ? data : {};
+  const personalization = source.rewardPersonalization || {};
 
   return {
     coinVersion: COIN_VERSION,
     ledger: Array.isArray(source.ledger) ? source.ledger : [],
+    rewardPersonalization: {
+      tagStats:
+        personalization.tagStats && typeof personalization.tagStats === "object"
+          ? personalization.tagStats
+          : {},
+      projectStats:
+        personalization.projectStats && typeof personalization.projectStats === "object"
+          ? personalization.projectStats
+          : {},
+      manualDifficultyOverrides:
+        personalization.manualDifficultyOverrides &&
+        typeof personalization.manualDifficultyOverrides === "object"
+          ? personalization.manualDifficultyOverrides
+          : {},
+    },
   };
 }
 
-export function assessTaskReward(item, occurrenceDateKey = "") {
+export function assessTaskReward(item, occurrenceDateKey = "", rewardsData = null) {
   const quadrant = assessQuadrant(item, occurrenceDateKey);
   const category = getTaskCategory(item);
   const wordScore = countMeaningfulWords(item.title) >= 3 ? 1 : 0;
@@ -302,7 +324,15 @@ export function assessTaskReward(item, occurrenceDateKey = "") {
     : 12;
   const score = clamp(rawScore, 1, maxScore);
   const coinTable = [0, 1, 2, 3, 4, 6, 8, 10, 12, 15, 18, 22, 26];
-  const coins = coinTable[score] || 1;
+  const personalization = getRewardPersonalizationAdjustment(
+    item,
+    score,
+    rewardsData,
+  );
+  const coins = Math.max(
+    1,
+    Math.round((coinTable[score] || 1) * personalization.multiplier),
+  );
   const difficulty =
     score >= 10 ? "legendary" : score >= 7 ? "hard" : score >= 4 ? "normal" : "light";
 
@@ -319,8 +349,83 @@ export function assessTaskReward(item, occurrenceDateKey = "") {
       item.repeat && item.repeat !== "none" ? "반복 보정" : "단일 작업",
       item.projectId ? "프로젝트 포함" : "",
       item.tag ? "태그 포함" : "",
-    ].filter(Boolean),
+    ].filter(Boolean).concat(personalization.label ? [personalization.label] : []),
+    personalization,
   };
+}
+
+function getRewardPersonalizationAdjustment(item, score, rewardsData) {
+  const normalized = normalizeRewardsData(rewardsData || window.AppState?.rewardsData);
+  const personalization = normalized.rewardPersonalization;
+  const override =
+    personalization.manualDifficultyOverrides?.[item.id] ||
+    item.rewardDifficulty ||
+    "auto";
+  const tagStats = item.tag ? personalization.tagStats?.[item.tag] : null;
+  const projectStats = item.projectId
+    ? personalization.projectStats?.[item.projectId]
+    : null;
+  let multiplier = 1;
+  const labels = [];
+
+  [tagStats, projectStats].filter(Boolean).forEach((stat) => {
+    const success = Number(stat.success) || 0;
+    const fail = Number(stat.fail) || 0;
+    const total = success + fail;
+    if (total < 3) return;
+    if (success / total >= 0.75) {
+      multiplier -= 0.12;
+      labels.push("성공 패턴 보정");
+    } else if (fail / total >= 0.45) {
+      multiplier += 0.18;
+      labels.push("실패 패턴 보정");
+    }
+  });
+
+  if (item.status === "pending" && score >= 7) {
+    multiplier += 0.08;
+    labels.push("긴급도 보정");
+  }
+
+  if (override && override !== "auto") {
+    multiplier *= DIFFICULTY_MULTIPLIER[override] || 1;
+    labels.push(`수동 난이도 ${override}`);
+  }
+
+  return {
+    multiplier: clamp(multiplier, 0.6, 1.6),
+    label: labels.join(" · "),
+  };
+}
+
+function updateRewardPersonalizationStats(normalized, item, nextStatus) {
+  if (nextStatus !== "success" && nextStatus !== "fail") return normalized;
+
+  const next = normalizeRewardsData(normalized);
+  const field = nextStatus === "success" ? "success" : "fail";
+
+  if (item.tag) {
+    const prev = next.rewardPersonalization.tagStats[item.tag] || {};
+    next.rewardPersonalization.tagStats[item.tag] = {
+      ...prev,
+      [field]: (Number(prev[field]) || 0) + 1,
+    };
+  }
+
+  if (item.projectId) {
+    const prev = next.rewardPersonalization.projectStats[item.projectId] || {};
+    next.rewardPersonalization.projectStats[item.projectId] = {
+      ...prev,
+      [field]: (Number(prev[field]) || 0) + 1,
+    };
+  }
+
+  if (item.id && item.rewardDifficulty && item.rewardDifficulty !== "auto") {
+    next.rewardPersonalization.manualDifficultyOverrides[item.id] =
+      item.rewardDifficulty;
+  }
+
+  return next;
 }
 
 export function getRewardTargetKey(itemId, occurrenceDateKey = "") {
@@ -357,8 +462,12 @@ function getFailurePenaltyForTarget(rewardsData, targetKey) {
   return Math.abs(Math.min(0, penaltyBalance));
 }
 
-function getFailurePenaltyAmount(item, targetKey) {
-  const reward = assessTaskReward(item, targetKey.split("__")[1] || "");
+function getFailurePenaltyAmount(item, targetKey, rewardsData = null) {
+  const reward = assessTaskReward(
+    item,
+    targetKey.split("__")[1] || "",
+    rewardsData,
+  );
   return Math.max(1, Math.ceil(reward.coins * FAILURE_PENALTY_RATE));
 }
 
@@ -376,7 +485,7 @@ export function applyStatusRewardTransition({
   );
 
   if (nextStatus === "fail") {
-    const penalty = getFailurePenaltyAmount(item, targetKey);
+    const penalty = getFailurePenaltyAmount(item, targetKey, normalized);
     ledger.unshift({
       id: makeId(),
       type: "fail_penalty",
@@ -390,7 +499,11 @@ export function applyStatusRewardTransition({
   }
 
   if (nextStatus === "success") {
-    const reward = assessTaskReward(item, targetKey.split("__")[1] || "");
+    const reward = assessTaskReward(
+      item,
+      targetKey.split("__")[1] || "",
+      normalized,
+    );
     ledger.unshift({
       id: makeId(),
       type: "earn",
@@ -404,8 +517,14 @@ export function applyStatusRewardTransition({
     });
   }
 
+  const nextRewards = updateRewardPersonalizationStats(
+    normalized,
+    item,
+    nextStatus,
+  );
+
   return {
-    ...normalized,
+    ...nextRewards,
     ledger: ledger.slice(0, REWARD_LEDGER_LIMIT),
   };
 }
