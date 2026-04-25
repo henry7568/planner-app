@@ -334,6 +334,7 @@ export function resetPopupQuickAddForm() {
     popupTitleInput,
     popupItemColor,
     popupItemTag,
+    popupReminderMinutes,
     popupItemLocation,
     popupItemLocationAddress,
     popupItemLocationPlaceId,
@@ -358,6 +359,7 @@ export function resetPopupQuickAddForm() {
   if (popupTitleInput) popupTitleInput.value = "";
   if (popupItemColor) popupItemColor.value = "blue";
   if (popupItemTag) popupItemTag.value = "";
+  if (popupReminderMinutes) popupReminderMinutes.value = "-1";
   if (popupItemLocation) popupItemLocation.value = "";
   if (popupItemLocationAddress) popupItemLocationAddress.value = "";
   if (popupItemLocationPlaceId) popupItemLocationPlaceId.value = "";
@@ -464,7 +466,7 @@ export function resetPlannerForm() {
   if (titleInput) titleInput.value = "";
   if (itemColor) itemColor.value = "blue";
   if (itemTag) itemTag.value = "";
-  if (itemReminderMinutes) itemReminderMinutes.value = "0";
+  if (itemReminderMinutes) itemReminderMinutes.value = "-1";
   if (itemRewardDifficulty) itemRewardDifficulty.value = "auto";
   if (itemProjectId) itemProjectId.value = "";
   if (itemLocation) itemLocation.value = "";
@@ -639,7 +641,10 @@ export function startEdit(id) {
   if (itemColor) itemColor.value = item.color || "blue";
   if (itemTag) itemTag.value = item.tag || "";
   if (itemReminderMinutes) {
-    itemReminderMinutes.value = String(Math.max(0, Number(item.reminderMinutes) || 0));
+    itemReminderMinutes.value =
+      item.reminderMinutes == null
+        ? "-1"
+        : String(Math.max(-1, Number(item.reminderMinutes)));
   }
   if (itemRewardDifficulty) itemRewardDifficulty.value = item.rewardDifficulty || "auto";
   if (itemProjectId) itemProjectId.value = item.projectId || "";

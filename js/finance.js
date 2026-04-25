@@ -9,92 +9,414 @@ import {
 
 import {
   loadFinanceLocal,
-  saveFinanceLocal,
   normalizeFinanceData,
+  saveFinanceLocal,
 } from "./storage.js";
 
 import { COIN_KRW_VALUE, getCoinBalance } from "./rewards.js";
-import { renderFinanceExtras } from "./financeExtras.js";
+import { parseBankTransactionsFromOcrResult } from "./financeOcr.js";
 
 let deps = {};
-let financeAssetTransactionPage = 1;
-const FINANCE_ASSET_TRANSACTION_PAGE_SIZE = 10;
+let financePage = 1;
+let financeEventsBound = false;
+let currentAssetRegisterType = "";
+let currentTransactionEditId = "";
+let currentAssetEditId = "";
+let currentRelationshipField = "";
+let financeCaptureReviewQueue = [];
+let financeCaptureReviewIndex = -1;
+let isFinanceCaptureReviewActive = false;
+let financeCaptureSelectedFileName = "";
+const FINANCE_CATEGORY_STAT_SORT_KEY = "lifePlanner.financeCategoryStatSort";
+let financeCategoryStatSort = localStorage.getItem(FINANCE_CATEGORY_STAT_SORT_KEY) || "default";
+
+const LEDGER_PAGE_SIZE = 5;
+
+const ACCOUNT_TYPES = [
+  { type: "living", name: "생활비 계좌", icon: "🏠", color: "#2563eb" },
+  { type: "savings", name: "적금계좌", icon: "💰", color: "#0f766e" },
+  { type: "investment", name: "투자계좌", icon: "📈", color: "#7c3aed" },
+  { type: "leisure", name: "여가비 계좌", icon: "🎮", color: "#f59e0b" },
+];
+
+const TRANSACTION_TYPES = [
+  { value: "expense", label: "지출", sign: -1 },
+  { value: "income", label: "입금", sign: 1 },
+  { value: "withdrawal", label: "출금", sign: -1 },
+  { value: "transfer", label: "이체", sign: 0 },
+  { value: "saving", label: "저축", sign: -1 },
+  { value: "investment", label: "투자", sign: -1 },
+];
+
+const LEDGER_CATEGORIES = [
+  "식비",
+  "교육",
+  "문화/여가",
+  "패션/쇼핑",
+  "온라인쇼핑",
+  "기타",
+];
+
+const EXTRA_LEDGER_CATEGORIES = [
+  "\uC2DD\uBE44",
+  "\uBC30\uB2EC\uC74C\uC2DD",
+  "\uC2DD\uB8CC\uD488",
+  "\uC0DD\uD65C\uC6A9\uD488",
+  "\uAD50\uC721",
+  "\uBB38\uD654/\uC5EC\uAC00",
+  "\uD328\uC158/\uC1FC\uD551",
+  "\uC628\uB77C\uC778\uC1FC\uD551",
+  "\uAD50\uD1B5",
+  "\uC8FC\uAC70/\uD1B5\uC2E0",
+  "\uC758\uB8CC/\uAC74\uAC15",
+  "\uAE08\uC735\uC18C\uB4DD",
+  "\uC774\uCCB4",
+  "\uC785\uAE08",
+  "\uAE30\uD0C0",
+];
+
+function getLedgerCategories(selectedCategory = "") {
+  const categories = [
+    "\uC2DD\uBE44",
+    "\uC678\uC2DD",
+    "\uCE74\uD398",
+    "\uBC30\uB2EC\uC74C\uC2DD",
+    "\uC2DD\uB8CC\uD488",
+    "\uAC04\uC2DD",
+    "\uC220/\uC720\uD765",
+    "\uAD6C\uB3C5",
+    "\uC1FC\uD551",
+    "\uC628\uB77C\uC778\uC1FC\uD551",
+    "\uD328\uC158/\uC1FC\uD551",
+    "\uBBF8\uC6A9",
+    "\uC0DD\uD65C\uC6A9\uD488",
+    "\uBB38\uD654/\uC5EC\uAC00",
+    "\uAD50\uC721",
+    "\uAD50\uD1B5",
+    "\uC8FC\uAC70/\uD1B5\uC2E0",
+    "\uC758\uB8CC/\uAC74\uAC15",
+    "\uC6B4\uB3D9",
+    "\uBC18\uB824\uB3D9\uBB3C",
+    "\uACBD\uC870\uC0AC",
+    "\uC6A9\uB3C8",
+    "\uBCF4\uD5D8",
+    "\uC138\uAE08",
+    "\uAE08\uC735\uC18C\uB4DD",
+    "\uC774\uCCB4",
+    "\uC785\uAE08",
+    "\uAE30\uD0C0",
+  ];
+
+  const selected = String(selectedCategory || "").trim();
+  if (selected && !categories.includes(selected)) {
+    return [selected, ...categories];
+  }
+
+  return categories;
+}
+
+function renderFinanceCategoryPicker(selectedCategory = "\uAE30\uD0C0") {
+  const selected = selectedCategory || "\uAE30\uD0C0";
+  return `
+    <div class="finance-category-picker">
+      <input type="hidden" name="category" value="${escapeHtml(selected)}" />
+      <button class="finance-category-trigger" type="button" data-finance-action="toggle-finance-category">
+        <span>${escapeHtml(selected)}</span>
+        <b aria-hidden="true">⌄</b>
+      </button>
+      <div class="finance-category-menu hidden">
+        ${getLedgerCategories(selected).map((category) => `
+          <button class="finance-category-option ${category === selected ? "selected" : ""}" type="button" data-finance-action="pick-finance-category" data-value="${escapeHtml(category)}">
+            ${escapeHtml(category)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+const WHAT_MAIN_OPTIONS = [
+  "먹기",
+  "놀기",
+  "여행",
+  "쇼핑/뷰티",
+  "경조사",
+  "교육",
+  "용돈",
+  "기타",
+];
+
+const WHAT_SUB_OPTIONS = {
+  먹기: ["점심먹기", "저녁먹기", "브런치", "커피/음료", "빵/디저트", "술", "기타"],
+};
+
+const WHO_OPTIONS = ["나", "가족", "친구", "친척", "직장동료", "기타"];
+const HOW_OPTIONS = ["현금", "카드", "계좌이체", "간편결제", "기타"];
 
 export function configureFinanceModule(config) {
-  deps = config;
-}
-
-function getRefs() {
-  return deps.refs || {};
-}
-
-function getFinanceData() {
-  return normalizeFinanceData(deps.getFinanceData?.());
+  deps = config || {};
 }
 
 function getRewardsData() {
   return deps.getRewardsData?.() || {};
 }
 
+function getFinanceData() {
+  return normalizeFinanceData(deps.getFinanceData?.());
+}
+
 function setFinanceData(value) {
-  deps.setFinanceData?.(value);
+  deps.setFinanceData?.(normalizeFinanceData(value));
 }
 
-function getFinanceEditingExpenseId() {
-  return deps.getFinanceEditingExpenseId?.() || null;
+function query(id) {
+  return document.getElementById(id);
 }
 
-function getFinanceEditingAssetId() {
-  return deps.getFinanceEditingAssetId?.() || null;
+function todayKey() {
+  return formatDateKey(new Date());
 }
 
-function setFinanceEditingAssetId(value) {
-  deps.setFinanceEditingAssetId?.(value);
+function nowTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
 }
 
-function setFinanceEditingExpenseId(value) {
-  deps.setFinanceEditingExpenseId?.(value);
+function normalizeType(type) {
+  if (type === "expense" || type === "income" || type === "transfer") {
+    return type;
+  }
+  if (type === "withdrawal" || type === "saving" || type === "investment") {
+    return type;
+  }
+  return "expense";
 }
 
-function getFinanceAccounts() {
-  return Array.isArray(getFinanceData().accounts) ? getFinanceData().accounts : [];
-}
-
-function getFinanceAccountById(accountId) {
-  return getFinanceAccounts().find((item) => item.id === accountId) || null;
-}
-
-function getFinanceAccountName(accountId) {
-  return getFinanceAccountById(accountId)?.name || "";
-}
-
-function getDefaultFinanceAccountId(type = "living") {
-  const accounts = getFinanceAccounts();
+function getTransactionTypeMeta(type) {
   return (
-    accounts.find((item) => item.type === type)?.id ||
-    accounts[0]?.id ||
-    ""
+    TRANSACTION_TYPES.find((item) => item.value === normalizeType(type)) ||
+    TRANSACTION_TYPES[0]
   );
 }
 
-function applyFinanceTransactionToAccounts(accounts, transaction, direction = 1) {
-  const amount = Math.max(0, Number(transaction?.amount) || 0);
-  const flowType = transaction?.flowType || "expense";
+function getTransactions(data = getFinanceData()) {
+  return Array.isArray(data.transactions) ? data.transactions : [];
+}
 
-  if (!amount || transaction?.repeat !== "none") {
-    return accounts;
+function getAssets(data = getFinanceData()) {
+  return Array.isArray(data.assets) ? data.assets : [];
+}
+
+function getAccounts(data = getFinanceData()) {
+  return Array.isArray(data.accounts) ? data.accounts : [];
+}
+
+function getAccountById(accountId, data = getFinanceData()) {
+  return getAccounts(data).find((account) => account.id === accountId) || null;
+}
+
+function getAssetById(assetId, data = getFinanceData()) {
+  return getAssets(data).find((asset) => asset.id === assetId) || null;
+}
+
+function getAssetLinkedToAccount(accountId, data = getFinanceData()) {
+  if (!accountId) return null;
+  return getAssets(data).find((asset) => asset.accountId === accountId) || null;
+}
+
+function getResolvedTransactionAssetId(transaction, data = getFinanceData()) {
+  if (transaction?.assetId) return transaction.assetId;
+  const accountId = transaction?.accountId || "";
+  if (!accountId) return "";
+
+  const linkedAssets = getAssets(data).filter((asset) => asset.accountId === accountId);
+  return linkedAssets.length === 1 ? linkedAssets[0].id : "";
+}
+
+function getTransactionAccountLabel(item, data = getFinanceData()) {
+  const asset =
+    getAssetById(getResolvedTransactionAssetId(item, data), data) ||
+    getAssetLinkedToAccount(item.accountId, data);
+  const account = getAccountById(item.accountId, data);
+  return asset?.name || asset?.title || account?.name || "계좌 없음";
+}
+
+function getAssetTransactionDelta(assetId, data = getFinanceData()) {
+  if (!assetId) return 0;
+
+  return getTransactions(data).reduce((sum, transaction) => {
+    if (
+      !isFinanceV2Transaction(transaction) ||
+      getResolvedTransactionAssetId(transaction, data) !== assetId
+    ) {
+      return sum;
+    }
+
+    const amount = Number(transaction.amount) || 0;
+    const type = normalizeType(transaction.type || transaction.flowType);
+
+    if (type === "income") return sum + amount;
+    if (["expense", "withdrawal", "saving", "investment", "transfer"].includes(type)) {
+      return sum - amount;
+    }
+
+    return sum;
+  }, 0);
+}
+
+function getAssetDisplayBalance(asset, data = getFinanceData()) {
+  if (!asset) return 0;
+  return (Number(asset.amount) || 0) + getAssetTransactionDelta(asset.id, data);
+}
+
+function getAssetBaseAmountFromDisplayAmount(assetId, displayAmount, data = getFinanceData()) {
+  if (!assetId) return Math.max(0, Number(displayAmount) || 0);
+  return (Number(displayAmount) || 0) - getAssetTransactionDelta(assetId, data);
+}
+
+function getAccountByType(type, data = getFinanceData()) {
+  return getAccounts(data).find((account) => account.type === type) || null;
+}
+
+function getDefaultAccountId(type = "living", data = getFinanceData()) {
+  return getAccountByType(type, data)?.id || getAccounts(data)[0]?.id || "";
+}
+
+function getLeisureCoinLimit() {
+  return Math.max(0, Number(getCoinBalance(getRewardsData())) || 0) * COIN_KRW_VALUE;
+}
+
+function isFinanceV2Transaction(item) {
+  return (
+    Number(item?.financeTransactionSchemaVersion) >= 3 ||
+    item?.source === "finance-v2"
+  );
+}
+
+function getAccountComputedBalance(accountId, data = getFinanceData()) {
+  if (!accountId) return 0;
+
+  const assetTotal = getAssets(data).reduce((sum, asset) => {
+    if (asset.accountId !== accountId) return sum;
+    return sum + getAssetDisplayBalance(asset, data);
+  }, 0);
+
+  const transactionTotal = getTransactions(data).reduce((sum, transaction) => {
+    if (!isFinanceV2Transaction(transaction)) return sum;
+    if (getResolvedTransactionAssetId(transaction, data)) return sum;
+
+    const amount = Number(transaction.amount) || 0;
+    const type = normalizeType(transaction.type || transaction.flowType);
+
+    if (type === "income" && transaction.accountId === accountId) {
+      return sum + amount;
+    }
+
+    if (
+      ["expense", "withdrawal", "saving", "investment"].includes(type) &&
+      transaction.accountId === accountId
+    ) {
+      return sum - amount;
+    }
+
+    if (type === "transfer") {
+      if (transaction.accountId === accountId) return sum - amount;
+      if (transaction.targetAccountId === accountId) return sum + amount;
+    }
+
+    return sum;
+  }, 0);
+
+  return assetTotal + transactionTotal;
+}
+
+function getAccountDisplayBalance(account, data = getFinanceData()) {
+  return getAccountComputedBalance(account?.id, data);
+}
+
+function formatCompactMoney(value) {
+  const safeValue = Number(value) || 0;
+  const absValue = Math.abs(safeValue);
+
+  if (absValue >= 100000) {
+    return `${safeValue < 0 ? "-" : ""}${Math.round(absValue / 10000).toLocaleString("ko-KR")}만 원`;
   }
+
+  return formatMoney(safeValue);
+}
+
+function formatBudgetDisplayMoney(value) {
+  const safeValue = Number(value) || 0;
+  const absValue = Math.abs(safeValue);
+  const sign = safeValue < 0 ? "-" : "";
+
+  if (absValue >= 1000000000000) {
+    return `${sign}${formatScaledNumber(absValue / 1000000000000)} \uC870`;
+  }
+
+  if (absValue >= 100000000) {
+    return `${sign}${formatScaledNumber(absValue / 100000000)} \uC5B5`;
+  }
+
+  if (absValue >= 10000000) {
+    return `${sign}${formatScaledNumber(absValue / 10000000)} \uCC9C\uB9CC\uC6D0`;
+  }
+
+  if (absValue >= 10000) {
+    return `${sign}${formatScaledNumber(absValue / 10000)} \uB9CC\uC6D0`;
+  }
+
+  return formatMoney(safeValue);
+}
+
+function formatScaledNumber(value) {
+  const rounded = Math.round(Number(value) * 10) / 10;
+  return rounded.toLocaleString("ko-KR", {
+    maximumFractionDigits: Number.isInteger(rounded) ? 0 : 1,
+  });
+}
+
+function parseBudgetDisplayMoney(text) {
+  const rawText = String(text || "").replace(/\s/g, "");
+  const numericText = rawText.match(/-?[0-9,.]+/)?.[0] || "0";
+  const numericValue = Number(numericText.replace(/,/g, ""));
+
+  if (!Number.isFinite(numericValue)) return 0;
+  if (rawText.includes("\uC870")) return numericValue * 1000000000000;
+  if (rawText.includes("\uC5B5")) return numericValue * 100000000;
+  if (rawText.includes("\uCC9C\uB9CC")) return numericValue * 10000000;
+  if (rawText.includes("\uB9CC")) return numericValue * 10000;
+  return numericValue;
+}
+
+function saveNextFinanceData(nextData) {
+  const normalized = normalizeFinanceData(nextData);
+  setFinanceData(normalized);
+  saveFinanceLocal(normalized);
+  renderFinance();
+}
+
+function applyTransactionBalance(accounts, transaction, direction = 1) {
+  const amount = Math.max(0, Number(transaction?.amount) || 0);
+  if (!amount) return accounts;
+
+  const type = normalizeType(transaction.type || transaction.flowType);
+  const fromId = transaction.accountId || "";
+  const toId = transaction.targetAccountId || "";
+  const hasSourceAsset = Boolean(transaction.assetId);
 
   return accounts.map((account) => {
     let delta = 0;
 
-    if (flowType === "income" && account.id === transaction.accountId) {
-      delta = amount;
-    } else if (flowType === "expense" && account.id === transaction.accountId) {
-      delta = -amount;
-    } else if (flowType === "transfer") {
-      if (account.id === transaction.accountId) delta -= amount;
-      if (account.id === transaction.targetAccountId) delta += amount;
+    if (!hasSourceAsset && type === "income" && account.id === fromId) {
+      delta += amount;
+    } else if (!hasSourceAsset && ["expense", "withdrawal", "saving", "investment"].includes(type) && account.id === fromId) {
+      delta -= amount;
+    } else if (type === "transfer") {
+      if (!hasSourceAsset && account.id === fromId) delta -= amount;
+      if (account.id === toId) delta += amount;
     }
 
     if (!delta) return account;
@@ -107,3180 +429,1633 @@ function applyFinanceTransactionToAccounts(accounts, transaction, direction = 1)
   });
 }
 
-function renderFinanceAccountOptions(selectedAccountId = "") {
-  const refs = getRefs();
-  const accounts = getFinanceAccounts();
-  const accountOptions = accounts
-    .map(
-      (account) =>
-        `<option value="${escapeHtml(account.id)}">${escapeHtml(
-          account.name || "?듭옣",
-        )} · ${formatMoney(account.balance)}</option>`,
-    )
-    .join("");
-  const emptyOption = `<option value="">?좏깮</option>`;
+function makeTransactionFromForm(form) {
+  const data = getFinanceData();
+  const formData = new FormData(form);
+  const type = normalizeType(formData.get("type"));
+  const accountType =
+    type === "saving" ? "savings" : type === "investment" ? "investment" : "living";
+  const assetId = String(formData.get("assetId") || "");
+  const selectedAsset = getAssetById(assetId, data);
 
-  [
-    refs.financeExpenseAccountId,
-    refs.financeExpenseTargetAccountId,
-    refs.financeAssetAccountId,
-  ].forEach((select) => {
-    if (!select) return;
-
-    const currentValue = selectedAccountId || select.value || "";
-    select.innerHTML = `${emptyOption}${accountOptions}`;
-    select.value = currentValue || "";
-  });
+  return {
+    id: currentTransactionEditId || makeId(),
+    financeTransactionSchemaVersion: 3,
+    source: "finance-v2",
+    type,
+    flowType: type === "income" || type === "transfer" ? type : "expense",
+    title: String(formData.get("title") || "").trim(),
+    amount: Math.max(0, Number(formData.get("amount")) || 0),
+    date: String(formData.get("date") || todayKey()),
+    time: String(formData.get("time") || ""),
+    category: String(formData.get("category") || "기타"),
+    assetId,
+    accountId:
+      selectedAsset?.accountId ||
+      String(formData.get("accountId") || "") ||
+      getDefaultAccountId(accountType, data),
+    targetAccountId: String(formData.get("targetAccountId") || ""),
+    paymentMethod: String(formData.get("paymentMethod") || ""),
+    merchant: String(formData.get("merchant") || "").trim(),
+    memo: "",
+    relationshipLedger: {
+      withWhom: String(formData.get("withWhom") || "나"),
+      what: String(formData.get("what") || ""),
+      how: String(formData.get("how") || ""),
+      memo: String(formData.get("relationshipMemo") || "").trim(),
+    },
+    createdAt: Number(form.dataset.createdAt) || Date.now(),
+    updatedAt: Date.now(),
+  };
 }
 
-function formatFinanceSummaryTotalAsset(value) {
-  const safeValue = Number(value) || 0;
-  const absValue = Math.abs(safeValue);
+function makeAssetFromForm(form) {
+  const data = getFinanceData();
+  const formData = new FormData(form);
+  const type = String(formData.get("assetType") || currentAssetRegisterType || "deposit_saving");
+  const accountType = type === "investment" ? "investment" : "savings";
+  const displayAmount = Math.max(0, Number(formData.get("amount")) || 0);
+  const baseAmount = getAssetBaseAmountFromDisplayAmount(currentAssetEditId, displayAmount, data);
 
-  if (absValue < 100000) {
-    return formatMoney(safeValue);
+  return {
+    id: currentAssetEditId || makeId(),
+    financeAssetSchemaVersion: 3,
+    source: "finance-v2",
+    type,
+    category: type,
+    name: String(formData.get("name") || "").trim(),
+    title: String(formData.get("name") || "").trim(),
+    amount: baseAmount,
+    accountId:
+      String(formData.get("accountId") || "") ||
+      getDefaultAccountId(accountType, data),
+    memo: String(formData.get("memo") || "").trim(),
+    baseDate: String(formData.get("baseDate") || todayKey()),
+    createdAt: Number(form.dataset.createdAt) || Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+function getMonthKey() {
+  return query("financeLedgerMonthInput")?.value || todayKey().slice(0, 7);
+}
+
+function getMonthlyTransactions() {
+  const monthKey = getMonthKey();
+  return getTransactions().filter((item) => String(item.date || "").startsWith(monthKey));
+}
+
+function getTransactionAmountDirection(item) {
+  const type = normalizeType(item.type || item.flowType);
+  if (type === "income") return 1;
+  if (type === "transfer") return 0;
+  return -1;
+}
+
+function getExpenseLikeTransactions(list) {
+  return list.filter((item) => getTransactionAmountDirection(item) < 0);
+}
+
+function getIncomeTransactions(list) {
+  return list.filter((item) => getTransactionAmountDirection(item) > 0);
+}
+
+function getCategoryTotals(list) {
+  return getExpenseLikeTransactions(list).reduce((acc, item) => {
+    const key = item.category || "기타";
+    acc[key] = (acc[key] || 0) + (Number(item.amount) || 0);
+    return acc;
+  }, {});
+}
+
+function renderFinanceShells() {
+  const assetTab = query("tab-finance");
+  const ledgerTab = query("tab-salary");
+
+  if (assetTab && !assetTab.dataset.financeV2Mounted) {
+    assetTab.dataset.financeV2Mounted = "true";
+    assetTab.innerHTML = `
+      <section class="finance-v2 finance-asset-home" id="financeAssetHomeMount"></section>
+      <button id="financeAssetRegisterBtn" class="finance-floating-add" type="button" data-finance-action="open-asset-type-sheet">보유 자산 등록</button>
+    `;
   }
 
-  const manwonValue = Math.round(absValue / 10000);
-  const sign = safeValue < 0 ? "-" : "";
-  return `${sign}${manwonValue.toLocaleString("ko-KR")}\uB9CC \uC6D0`;
-}
-
-function isFinanceOcrIncomeAssetMode() {
-  return getRefs().financeExpenseFormCard?.dataset.ocrIncomeAssetMode === "true";
-}
-
-function setFinanceOcrIncomeAssetMode(value) {
-  const formCard = getRefs().financeExpenseFormCard;
-  if (!formCard) return;
-
-  if (value) {
-    formCard.dataset.ocrIncomeAssetMode = "true";
-    return;
+  if (ledgerTab && !ledgerTab.dataset.financeV2Mounted) {
+    ledgerTab.dataset.financeV2Mounted = "true";
+    ledgerTab.innerHTML = `
+      <section class="finance-v2 finance-ledger-home" id="financeLedgerHomeMount"></section>
+      <button id="financeTransactionAddBtn" class="finance-floating-add" type="button" data-finance-action="open-transaction-form">거래 등록</button>
+    `;
   }
-
-  delete formCard.dataset.ocrIncomeAssetMode;
-}
-
-function isFinanceOcrReviewActive() {
-  return Boolean(deps.isFinanceOcrReviewActive?.());
-}
-
-function getFinancePage() {
-  return deps.getFinancePage?.() || 1;
-}
-
-function setFinancePage(value) {
-  deps.setFinancePage?.(value);
-}
-
-function getFinancePageSize() {
-  return deps.financePageSize || 10;
-}
-
-function cloneFinanceData() {
-  const current = getFinanceData();
-
-  return normalizeFinanceData({
-    ...current,
-    budgetSettings: { ...(current.budgetSettings || {}) },
-    budgetEntries: Object.entries(current.budgetEntries || {}).reduce(
-      (acc, [monthKey, entry]) => {
-        acc[monthKey] = {
-          ...entry,
-          categoryBudgets:
-            entry?.categoryBudgets && typeof entry.categoryBudgets === "object"
-              ? { ...entry.categoryBudgets }
-              : {},
-        };
-        return acc;
-      },
-      {},
-    ),
-    expenses: Array.isArray(current.expenses)
-      ? current.expenses.map((item) => ({
-          ...item,
-          flowType: item.flowType || "expense",
-        }))
-      : [],
-    accounts: Array.isArray(current.accounts)
-      ? current.accounts.map((item) => ({ ...item }))
-      : [],
-    assets: Array.isArray(current.assets)
-      ? current.assets.map((item) => ({
-          ...item,
-        }))
-      : [],
-    subscriptions: Array.isArray(current.subscriptions)
-      ? current.subscriptions.map((item) => ({ ...item }))
-      : [],
-    assetGoals: Array.isArray(current.assetGoals)
-      ? current.assetGoals.map((item) => ({
-          ...item,
-          linkedAssetIds: Array.isArray(item.linkedAssetIds)
-            ? [...item.linkedAssetIds]
-            : [],
-        }))
-      : [],
-  });
 }
 
 export function initFinance() {
-  const refs = getRefs();
   const loaded = loadFinanceLocal();
   const normalized = normalizeFinanceData(loaded);
-
   setFinanceData(normalized);
-
-  const now = new Date();
-  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  if (refs.financeMonthKey && !refs.financeMonthKey.value) {
-    refs.financeMonthKey.value = defaultMonth;
-  }
-
-  const currentBudget = getFinanceBudgetByMonth(refs.financeMonthKey?.value);
-
-  if (refs.financePeriodStartDay && !refs.financePeriodStartDay.value) {
-    refs.financePeriodStartDay.value = currentBudget?.startDay || 1;
-  }
-
-  if (refs.financeBudgetAmount && !refs.financeBudgetAmount.value) {
-    refs.financeBudgetAmount.value = currentBudget?.totalBudget || "";
-  }
-
-  if (refs.financeExpenseDate && !refs.financeExpenseDate.value) {
-    refs.financeExpenseDate.value = formatDateKey(new Date());
-  }
-
-  if (refs.financeTransactionType && !refs.financeTransactionType.value) {
-    refs.financeTransactionType.value = "expense";
-  }
-
-  if (refs.financeAssetCategory && !refs.financeAssetCategory.value) {
-    refs.financeAssetCategory.value = "stock";
-  }
-
-  syncFinanceSubCategoryOptions(refs.financeExpenseCategory?.value || "");
-  syncFinanceExpenseFormButtons();
+  renderFinanceShells();
+  bindFinanceEvents();
   renderFinance();
-}
-
-function findPreviousBudgetEntry(monthKey) {
-  if (!monthKey) return null;
-
-  const entries = Object.values(getFinanceData().budgetEntries || {})
-    .filter((entry) => entry?.monthKey && entry.monthKey < monthKey)
-    .sort((a, b) => String(b.monthKey).localeCompare(String(a.monthKey), "ko"));
-
-  return entries[0] || null;
-}
-
-export function getFinanceBudgetByMonth(monthKey, options = {}) {
-  if (!monthKey) return null;
-
-  const { includeInherited = true } = options;
-  const financeData = getFinanceData();
-  const exactEntry = financeData.budgetEntries?.[monthKey] || null;
-
-  if (exactEntry) {
-    return {
-      ...exactEntry,
-      isInherited: false,
-    };
-  }
-
-  if (!includeInherited || financeData.budgetSettings?.autoApplyPreviousBudget === false) {
-    return null;
-  }
-
-  const inheritedEntry = findPreviousBudgetEntry(monthKey);
-  if (!inheritedEntry) return null;
-
-  return {
-    ...inheritedEntry,
-    monthKey,
-    sourceMonthKey: inheritedEntry.monthKey,
-    isInherited: true,
-  };
-}
-
-export function saveFinanceBudget() {
-  const refs = getRefs();
-
-  const monthKey = refs.financeMonthKey?.value || "";
-  const financeData = getFinanceData();
-  const startDay = Math.max(
-    1,
-    Math.min(
-      31,
-      Number(
-        refs.financePeriodStartDay?.value ||
-          financeData.budgetSettings?.defaultStartDay ||
-          1,
-      ) || 1,
-    ),
-  );
-  const budget = Math.max(0, Number(refs.financeBudgetAmount?.value) || 0);
-
-  if (!monthKey) {
-    alert("기준 월을 선택하세요.");
-    refs.financeMonthKey?.focus();
-    return;
-  }
-
-  const nextData = cloneFinanceData();
-  const existingEntry = nextData.budgetEntries?.[monthKey] || null;
-
-  nextData.budgetSettings = {
-    ...(nextData.budgetSettings || {}),
-    defaultStartDay: startDay,
-  };
-
-  nextData.budgetEntries[monthKey] = {
-    ...(existingEntry || {}),
-    monthKey,
-    startDay,
-    totalBudget: budget,
-    categoryBudgets:
-      existingEntry?.categoryBudgets && typeof existingEntry.categoryBudgets === "object"
-        ? { ...existingEntry.categoryBudgets }
-        : {},
-    note: existingEntry?.note || "",
-    createdAt: Number(existingEntry?.createdAt) || Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  const normalized = normalizeFinanceData(nextData);
-  setFinanceData(normalized);
-  saveFinanceLocal(normalized);
-  renderFinance();
-  alert("예산이 저장되었습니다.");
 }
 
 export function renderFinance() {
-  const refs = getRefs();
+  renderFinanceShells();
+  renderAssetHome();
+  renderLedgerHome();
+}
 
-  const monthKey = refs.financeMonthKey?.value || "";
-  if (!monthKey) return;
+function renderAssetHome() {
+  const mount = query("financeAssetHomeMount");
+  if (!mount) return;
 
-  const savedBudget = getFinanceBudgetByMonth(monthKey);
-  const exactBudget = getFinanceBudgetByMonth(monthKey, {
-    includeInherited: false,
-  });
-
-  const startDay = Math.max(
-    1,
-    Math.min(
-      31,
-      Number(
-        refs.financePeriodStartDay?.value ||
-          savedBudget?.startDay ||
-          getFinanceData().budgetSettings?.defaultStartDay ||
-          1,
-      ),
-    ),
-  );
-
-  const budget = Math.max(
+  const data = getFinanceData();
+  const accounts = ACCOUNT_TYPES.map((template) => ({
+    ...template,
+    account: getAccountByType(template.type, data),
+  }));
+  const totalAccountBalance = accounts.reduce(
+    (sum, item) => sum + getAccountDisplayBalance(item.account, data),
     0,
-    Number(refs.financeBudgetAmount?.value || savedBudget?.totalBudget || 0),
   );
-
-  if (refs.financePeriodStartDay) {
-    refs.financePeriodStartDay.value = startDay;
-  }
-
-  if (
-    savedBudget &&
-    refs.financeBudgetAmount &&
-    !refs.financeBudgetAmount.matches(":focus")
-  ) {
-    refs.financeBudgetAmount.value = savedBudget.totalBudget || "";
-  }
-
-  const period = getFinancePeriodRange(monthKey, startDay);
-  const monthlyTransactions = getFinanceExpensesForPeriod(
-    period.startKey,
-    period.endKey,
+  const assetTotal = getAssets(data).reduce(
+    (sum, asset) => sum + getAssetDisplayBalance(asset, data),
+    0,
   );
-
-  const monthlyExpenseTotal = monthlyTransactions
-    .filter((item) => (item.flowType || "expense") === "expense")
-    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-  const monthlyIncomeTotal = monthlyTransactions
-    .filter((item) => item.flowType === "income")
-    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-  const monthlyNet = monthlyIncomeTotal - monthlyExpenseTotal;
-
-  const todayKey = formatDateKey(new Date());
-
-  const todaySpent = monthlyTransactions
-    .filter(
-      (item) =>
-        item.date === todayKey && (item.flowType || "expense") === "expense",
-    )
-    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-  const remaining = budget - monthlyExpenseTotal;
-  const progress =
-    budget > 0
-      ? Math.min(999, Math.round((monthlyExpenseTotal / budget) * 100))
-      : 0;
-
-  if (refs.financeCurrentPeriodLabel) {
-    refs.financeCurrentPeriodLabel.textContent = `${formatKoreanDate(period.startKey)} ~ ${formatKoreanDate(period.endKey)}`;
-  }
-
-  if (refs.financeMonthlyBudgetText) {
-    refs.financeMonthlyBudgetText.textContent = formatMoney(budget);
-  }
-
-  if (refs.financeTotalBudgetText) {
-    refs.financeTotalBudgetText.textContent = formatMoney(budget);
-  }
-
-  if (refs.financeRemainingBudgetText) {
-    refs.financeRemainingBudgetText.textContent = formatMoney(remaining);
-  }
-
-  if (refs.financeTodaySpentText) {
-    refs.financeTodaySpentText.textContent = formatMoney(todaySpent);
-  }
-
-  if (refs.financeMonthlySpentText) {
-    refs.financeMonthlySpentText.textContent =
-      formatFinanceSummaryTotalAsset(monthlyExpenseTotal);
-  }
-
-  if (refs.financeMonthlyIncomeText) {
-    refs.financeMonthlyIncomeText.textContent =
-      formatFinanceSummaryTotalAsset(monthlyIncomeTotal);
-  }
-
-  if (refs.financeMonthlyNetText) {
-    refs.financeMonthlyNetText.textContent =
-      formatFinanceSummaryTotalAsset(monthlyNet);
-  }
-
-  if (refs.financeBudgetProgressText) {
-    refs.financeBudgetProgressText.textContent = `${progress}%`;
-  }
-
-  if (refs.financeBudgetProgressBar) {
-    refs.financeBudgetProgressBar.style.width = `${Math.min(progress, 100)}%`;
-  }
-
-  renderFinanceAccountOptions();
-  renderFinanceAccountList();
-  renderFinanceFilterOptions();
-
-  const filteredTransactions = getFinanceFilteredExpenses();
-  const expenseOnlyList = filteredTransactions.filter(
-    (item) => (item.flowType || "expense") === "expense",
+  const leisureAccount = getAccountByType("leisure", data);
+  const leisureUsed = getExpenseLikeTransactions(getTransactions(data)).reduce(
+    (sum, item) => sum + (item.accountId === leisureAccount?.id ? Number(item.amount) || 0 : 0),
+    0,
   );
-
-  renderFinanceExpenseList(filteredTransactions);
-  renderFinanceCategorySummary(expenseOnlyList);
-  renderFinanceAssetFilters();
-  renderFinanceAssetDashboard();
-  renderFinanceAssetCategorySummary();
-  renderFinanceAssetTransactionList(filteredTransactions);
-  renderFinanceExtras();
-
-  if (refs.financeSummaryTopCategoryText) {
-    if (!expenseOnlyList.length) {
-      refs.financeSummaryTopCategoryText.textContent = "-";
-    } else {
-      const grouped = expenseOnlyList.reduce((acc, item) => {
-        const key = item.category || "미분류";
-        acc[key] = (acc[key] || 0) + (Number(item.amount) || 0);
-        return acc;
-      }, {});
-
-      const topCategory = Object.entries(grouped).sort(
-        (a, b) => b[1] - a[1],
-      )[0];
-
-      refs.financeSummaryTopCategoryText.textContent = topCategory?.[0] || "-";
-    }
-  }
-
-  if (refs.financeSummaryExpenseCountText) {
-    const inheritedLabel =
-      savedBudget?.isInherited && !exactBudget?.monthKey
-        ? ` · ${savedBudget.sourceMonthKey} 예산 적용`
-        : "";
-    refs.financeSummaryExpenseCountText.textContent = `${filteredTransactions.length}건${inheritedLabel}`;
-  }
-}
-
-export function getFinancePeriodRange(monthKey, startDay) {
-  const [year, month] = monthKey.split("-").map(Number);
-
-  const startDate = new Date(year, month - 1, startDay);
-
-  const nextMonthDate = new Date(year, month, startDay);
-  nextMonthDate.setDate(nextMonthDate.getDate() - 1);
-
-  return {
-    startKey: formatDateKey(startDate),
-    endKey: formatDateKey(nextMonthDate),
-  };
-}
-
-export function getFinanceExpensesForPeriod(startKey, endKey) {
-  return expandRecurringFinanceExpensesInRange(
-    getFinanceData().expenses,
-    startKey,
-    endKey,
-  ).filter((item) => item.date >= startKey && item.date <= endKey);
-}
-
-function buildFinanceTransactionPayload(existing = null) {
-  const refs = getRefs();
-  const flowType = refs.financeTransactionType?.value || "expense";
-  const repeat = refs.financeExpenseRepeat?.value || "none";
-
-  return {
-    ...(existing || {}),
-    id: existing?.id || makeId(),
-    date: refs.financeExpenseDate?.value || "",
-    time: refs.financeExpenseTime?.value || "",
-    title: refs.financeExpenseTitle?.value.trim() || "",
-    amount: Math.max(0, Number(refs.financeExpenseAmount?.value) || 0),
-    category: refs.financeExpenseCategory?.value || "",
-    subCategory: refs.financeExpenseSubCategory?.value || "",
-    accountId:
-      refs.financeExpenseAccountId?.value || getDefaultFinanceAccountId("living"),
-    targetAccountId:
-      flowType === "transfer" ? refs.financeExpenseTargetAccountId?.value || "" : "",
-    assetId: refs.financeExpenseAssetId?.value || "",
-    paymentMethod: refs.financeExpensePaymentMethod?.value || "",
-    merchant: refs.financeExpenseMerchant?.value.trim() || "",
-    tag: refs.financeExpenseTag?.value.trim() || "",
-    color: refs.financeExpenseColor?.value || "blue",
-    memo: refs.financeExpenseMemo?.value.trim() || "",
-    flowType,
-    repeat,
-    repeatUntil: refs.financeExpenseRepeatUntil?.value || "",
-    isRecurring: repeat !== "none",
-    createdAt: Number(existing?.createdAt) || Date.now(),
-    updatedAt: Date.now(),
-  };
-}
-
-export function saveFinanceExpense() {
-  const refs = getRefs();
-
-  const editingId = String(getFinanceEditingExpenseId() || "").split("__")[0];
-  const nextData = cloneFinanceData();
-  const previous = editingId
-    ? nextData.expenses.find((item) => item.id === editingId)
-    : null;
-  const payload = buildFinanceTransactionPayload(previous);
-  const isOcrIncomeAssetMode =
-    payload.flowType === "income" && isFinanceOcrIncomeAssetMode();
-
-  if (!payload.date) {
-    alert("날짜를 입력하세요.");
-    refs.financeExpenseDate?.focus();
-    return { ok: false };
-  }
-
-  if (!payload.title) {
-    alert("거래명을 입력하세요.");
-    refs.financeExpenseTitle?.focus();
-    return { ok: false };
-  }
-
-  if (!payload.amount) {
-    alert("금액을 입력하세요.");
-    refs.financeExpenseAmount?.focus();
-    return { ok: false };
-  }
-
-  if (!payload.accountId) {
-    alert("통장을 선택하세요.");
-    refs.financeExpenseAccountId?.focus();
-    return { ok: false };
-  }
-
-  if (payload.flowType === "transfer" && !payload.targetAccountId) {
-    alert("받는 통장을 선택하세요.");
-    refs.financeExpenseTargetAccountId?.focus();
-    return { ok: false };
-  }
-
-  if (
-    payload.flowType === "transfer" &&
-    payload.accountId === payload.targetAccountId
-  ) {
-    alert("보내는 통장과 받는 통장이 같을 수 없습니다.");
-    refs.financeExpenseTargetAccountId?.focus();
-    return { ok: false };
-  }
-
-  if (!isOcrIncomeAssetMode && payload.flowType !== "transfer" && !payload.category) {
-    alert(
-      payload.flowType === "income"
-        ? "입금 카테고리를 선택하세요."
-        : "출금 카테고리를 선택하세요.",
-    );
-    refs.financeExpenseCategory?.focus();
-    return { ok: false };
-  }
-
-  const subCategoryOptions = getFinanceSubCategoryMap()[payload.category] || [];
-  if (
-    !isOcrIncomeAssetMode &&
-    payload.flowType !== "transfer" &&
-    subCategoryOptions.length > 0 &&
-    !payload.subCategory
-  ) {
-    alert("서브카테고리를 선택하세요.");
-    refs.financeExpenseSubCategory?.focus();
-    return { ok: false };
-  }
-
-  if (
-    payload.repeat === "monthly" &&
-    payload.repeatUntil &&
-    new Date(`${payload.repeatUntil}T00:00`) <
-      new Date(`${payload.date}T00:00`)
-  ) {
-    alert("반복 종료일은 거래 날짜보다 같거나 뒤여야 합니다.");
-    refs.financeExpenseRepeatUntil?.focus();
-    return { ok: false };
-  }
-
-  if (isOcrIncomeAssetMode) {
-    const targetAssetId = refs.financeIncomeAssetTargetSelect?.value || "";
-    const targetId = String(targetAssetId || "").split("__")[0];
-    const normalizedTitle = payload.title.trim();
-    const existingIndex = targetId
-      ? nextData.assets.findIndex((item) => item.id === targetId)
-      : nextData.assets.findIndex(
-          (asset) =>
-            String(asset.category || "") === "deposit" &&
-            String(asset.title || asset.name || "").trim() === normalizedTitle &&
-            String(asset.repeat || "none") === "none",
-        );
-
-    if (targetId && existingIndex < 0) {
-      alert("선택한 자산을 찾지 못했습니다.");
-      refs.financeIncomeAssetTargetSelect?.focus();
-      return { ok: false };
-    }
-
-    if (existingIndex >= 0) {
-      const currentAmount = Number(nextData.assets[existingIndex].amount) || 0;
-      nextData.assets[existingIndex] = {
-        ...nextData.assets[existingIndex],
-        amount: currentAmount + payload.amount,
-        updatedAt: Date.now(),
-      };
-    } else {
-      nextData.assets.push({
-        id: makeId(),
-        category: "deposit",
-        name: normalizedTitle,
-        title: normalizedTitle,
-        amount: payload.amount,
-        accountId: payload.accountId,
-        baseDate: payload.date || formatDateKey(new Date()),
-        repeat: "none",
-        repeatUntil: "",
-        isRecurring: false,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-    }
-
-    setFinanceData(nextData);
-    saveFinanceLocal(nextData);
-    resetFinanceExpenseForm();
-    renderFinance();
-    alert("입금 항목을 자산에 반영했습니다.");
-    return {
-      ok: true,
-      mode: "create",
-      flowType: payload.flowType,
-      assetLinked: true,
-    };
-  }
-
-  if (editingId) {
-    if (previous) {
-      nextData.accounts = applyFinanceTransactionToAccounts(
-        nextData.accounts,
-        previous,
-        -1,
-      );
-    }
-
-    nextData.expenses = nextData.expenses.map((item) =>
-      item.id === editingId
-        ? {
-            ...item,
-            ...payload,
-            id: editingId,
-            createdAt: Number(item.createdAt) || payload.createdAt,
-            updatedAt: Date.now(),
-          }
-        : item,
-    );
-    nextData.accounts = applyFinanceTransactionToAccounts(
-      nextData.accounts,
-      { ...payload, id: editingId },
-      1,
-    );
-  } else {
-    nextData.expenses.push(payload);
-    nextData.accounts = applyFinanceTransactionToAccounts(
-      nextData.accounts,
-      payload,
-      1,
-    );
-  }
-
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  setFinancePage(1);
-  resetFinanceExpenseForm();
-  renderFinance();
-
-  alert(editingId ? "거래내역이 수정되었습니다." : "거래내역이 저장되었습니다.");
-  return {
-    ok: true,
-    mode: editingId ? "edit" : "create",
-    flowType: payload.flowType,
-    repeat: payload.repeat,
-    count: 1,
-  };
-}
-
-export function resetFinanceExpenseForm() {
-  const refs = getRefs();
-
-  setFinanceEditingExpenseId(null);
-  setFinanceOcrIncomeAssetMode(false);
-
-  if (refs.financeTransactionType) {
-    refs.financeTransactionType.value = "expense";
-  }
-
-  if (refs.financeOcrIncomeMode) {
-    refs.financeOcrIncomeMode.value = "account";
-  }
-
-  if (refs.financeExpenseAccountId) {
-    refs.financeExpenseAccountId.value = getDefaultFinanceAccountId("living");
-  }
-
-  if (refs.financeExpenseTargetAccountId) {
-    refs.financeExpenseTargetAccountId.value = "";
-  }
-
-  refs.financeExpenseTargetAccountGroup?.classList.add("hidden");
-
-  if (refs.financeExpenseDate) {
-    refs.financeExpenseDate.value = formatDateKey(new Date());
-  }
-
-  if (refs.financeExpenseTime) {
-    refs.financeExpenseTime.value = "";
-  }
-
-  if (refs.financeExpenseTitle) {
-    refs.financeExpenseTitle.value = "";
-  }
-
-  if (refs.financeExpenseAmount) {
-    refs.financeExpenseAmount.value = "";
-  }
-
-  if (refs.financeExpenseCategory) {
-    refs.financeExpenseCategory.value = "";
-  }
-
-  syncFinanceSubCategoryOptions("");
-
-  if (refs.financeExpenseSubCategory) {
-    refs.financeExpenseSubCategory.value = "";
-  }
-
-  if (refs.financeExpensePaymentMethod) {
-    refs.financeExpensePaymentMethod.value = "";
-  }
-
-  if (refs.financeExpenseMerchant) {
-    refs.financeExpenseMerchant.value = "";
-  }
-
-  if (refs.financeIncomeAssetTargetSelect) {
-    refs.financeIncomeAssetTargetSelect.value = "";
-  }
-
-  if (refs.financeExpenseAssetId) {
-    refs.financeExpenseAssetId.value = "";
-  }
-
-  if (refs.financeExpenseMemo) {
-    refs.financeExpenseMemo.value = "";
-  }
-
-  if (refs.financeExpenseTag) {
-    refs.financeExpenseTag.value = "";
-  }
-
-  if (refs.financeExpenseColor) {
-    refs.financeExpenseColor.value = "blue";
-  }
-
-  if (refs.financeExpenseRepeat) {
-    refs.financeExpenseRepeat.value = "none";
-    refs.financeExpenseRepeat.disabled = false;
-  }
-
-  if (refs.financeExpenseRepeatUntil) {
-    refs.financeExpenseRepeatUntil.value = "";
-    refs.financeExpenseRepeatUntil.disabled = false;
-  }
-
-  deps.syncRepeatUntilToggleState?.("finance");
-  syncFinanceExpenseFormButtons();
-  closeFinanceEditPopup();
-}
-
-export function renderFinanceExpenseList(expenseList) {
-  const refs = getRefs();
-  if (!refs.financeExpenseList) return;
-
-  const list = Array.isArray(expenseList) ? [...expenseList] : [];
-
-  if (list.length === 0) {
-    refs.financeExpenseList.innerHTML = `<div class="empty-message">조건에 맞는 거래내역이 없습니다.</div>`;
-
-    if (refs.financePageText) refs.financePageText.textContent = "1 / 1";
-    if (refs.financePrevPageBtn) refs.financePrevPageBtn.disabled = true;
-    if (refs.financeNextPageBtn) refs.financeNextPageBtn.disabled = true;
-    return;
-  }
-
-  const { pageItems, totalPages, currentPage } = getFinancePagedExpenses(list);
-
-  if (refs.financePageText) {
-    refs.financePageText.textContent = `${currentPage} / ${totalPages}`;
-  }
-
-  if (refs.financePrevPageBtn) {
-    refs.financePrevPageBtn.disabled = currentPage <= 1;
-  }
-
-  if (refs.financeNextPageBtn) {
-    refs.financeNextPageBtn.disabled = currentPage >= totalPages;
-  }
-
-  refs.financeExpenseList.innerHTML = pageItems
-    .map((item) => renderFinanceExpenseCard(item))
-    .join("");
-}
-
-export function renderFinanceExpenseCard(item) {
-  const dateTimeText = `${formatKoreanDate(item.date)}${item.time ? ` ${item.time}` : ""}`;
-
-  const paymentText = item.paymentMethod
-    ? getFinancePaymentMethodText(item.paymentMethod)
-    : "";
-
-  const repeatText =
-    item.repeat === "monthly" ? `<span class="tag-badge">매월 반복</span>` : "";
-
-  const flowType = item.flowType || "expense";
-  const flowText = flowType === "income" ? "입금" : flowType === "transfer" ? "이체" : "출금";
-  const signedAmount =
-    flowType === "income"
-      ? `+ ${formatMoney(item.amount)}`
-      : flowType === "transfer"
-        ? formatMoney(item.amount)
-        : `- ${formatMoney(item.amount)}`;
-  const targetId = item.sourceId || item.id;
-
-  return `
-    <div
-      class="item-card item-color-${item.color || "blue"} clickable-item-card"
-      data-action="open-edit-finance-expense"
-      data-id="${targetId}"
-      role="button"
-      tabindex="0"
-      title="클릭해서 수정"
-    >
-      <div class="item-content">
-        <div class="item-title-row">
-          <div class="item-title">
-            ${escapeHtml(item.title || "")}
-          </div>
-
-          <div class="finance-amount-strong">
-            ${escapeHtml(signedAmount)}
-          </div>
-        </div>
-
-        <div class="item-meta compact-meta">
-          <span class="meta-badge compact">
-            ${escapeHtml(dateTimeText)}
-          </span>
-
-          <span class="tag-badge">${flowText}</span>
-
-          ${
-            item.accountId
-              ? `<span class="tag-badge">${escapeHtml(getFinanceAccountName(item.accountId) || "통장")}</span>`
-              : ""
-          }
-
-          ${
-            item.targetAccountId
-              ? `<span class="tag-badge">→ ${escapeHtml(getFinanceAccountName(item.targetAccountId) || "통장")}</span>`
-              : ""
-          }
-
-          ${
-            item.category
-              ? `<span class="tag-badge">${escapeHtml(item.category)}</span>`
-              : ""
-          }
-
-          ${
-            item.subCategory
-              ? `<span class="tag-badge">${escapeHtml(item.subCategory)}</span>`
-              : ""
-          }
-
-          ${
-            paymentText
-              ? `<span class="tag-badge">${escapeHtml(paymentText)}</span>`
-              : ""
-          }
-
-          ${
-            item.merchant
-              ? `<span class="tag-badge">${escapeHtml(item.merchant)}</span>`
-              : ""
-          }
-
-          ${
-            item.tag
-              ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>`
-              : ""
-          }
-
-          ${repeatText}
-        </div>
+  const leisureLimit = getLeisureCoinLimit();
+  const leisureRemain = leisureLimit - leisureUsed;
+
+  mount.innerHTML = `
+    <section class="finance-mobile-hero">
+      <div>
+        <span class="finance-mini-label">자산 홈</span>
+        <h2>총 자산</h2>
       </div>
-    </div>
+      <strong>${formatMoney(totalAccountBalance)}</strong>
+      <p>생활비, 적금, 투자, 여가비 계좌 합계입니다.</p>
+    </section>
+
+    <section class="finance-account-grid" aria-label="자산 계좌">
+      ${accounts.map((item) => renderAccountCard(item)).join("")}
+    </section>
+
+    <section class="finance-leisure-card">
+      <div>
+        <span class="finance-mini-label">AI 코인 연동</span>
+        <h3>여가비 계좌</h3>
+      </div>
+      <div class="finance-leisure-lines">
+        <span>현재 사용 ${formatMoney(leisureUsed)}</span>
+        <span>코인 기준 최대 ${formatMoney(leisureLimit)}</span>
+        <strong>남은 사용 가능 ${formatMoney(leisureRemain)}</strong>
+      </div>
+    </section>
+
+    <section class="finance-section-card">
+      <div class="finance-section-title">
+        <h3>보유 자산</h3>
+        <strong>${formatMoney(assetTotal)}</strong>
+      </div>
+      <div class="finance-asset-list-v2">
+        ${renderAssetRows(getAssets(data))}
+      </div>
+    </section>
   `;
 }
 
-export function deleteFinanceExpense(id) {
-  const targetId = String(id || "").split("__")[0];
-  const targetItem = getFinanceData().expenses.find(
-    (item) => item.id === targetId,
-  );
-  if (!targetItem) return;
-
-  const ok = confirm("이 거래내역을 삭제할까요?");
-  if (!ok) return;
-
-  const nextData = cloneFinanceData();
-
-  nextData.accounts = applyFinanceTransactionToAccounts(
-    nextData.accounts,
-    targetItem,
-    -1,
-  );
-  nextData.expenses = nextData.expenses.filter((item) => item.id !== targetId);
-
-  if (
-    getFinanceEditingExpenseId() === id ||
-    getFinanceEditingExpenseId() === targetId
-  ) {
-    resetFinanceExpenseForm();
-  }
-
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  setFinancePage(1);
-  renderFinance();
+function renderAccountCard({ type, name, icon, color, account }) {
+  const balance = getAccountDisplayBalance(account);
+  const accountId = account?.id || "";
+  return `
+    <button class="finance-account-card-v2" type="button" style="--finance-accent:${color}" data-finance-action="open-account-detail" data-id="${escapeHtml(accountId)}">
+      <span class="finance-account-icon">${icon}</span>
+      <div>
+        <strong>${escapeHtml(account?.name || name)}</strong>
+        <small>${escapeHtml(account?.memo || name)}</small>
+      </div>
+      <b>${formatMoney(balance)}</b>
+    </button>
+  `;
 }
 
-export function renderFinanceFilterOptions() {
-  const refs = getRefs();
-  const todayKey = formatDateKey(new Date());
-
-  const expanded = expandRecurringFinanceExpensesInRange(
-    getFinanceData().expenses,
-    "1900-01-01",
-    todayKey,
-  );
-
-  if (refs.financeListMonthFilter) {
-    const monthKeys = [
-      ...new Set(expanded.map((item) => String(item.date || "").slice(0, 7))),
-    ]
-      .filter(Boolean)
-      .sort()
-      .reverse();
-
-    const currentValue = refs.financeListMonthFilter.value || "";
-    refs.financeListMonthFilter.innerHTML = `<option value="">전체</option>`;
-
-    monthKeys.forEach((monthKey) => {
-      const option = document.createElement("option");
-      option.value = monthKey;
-
-      const [year, month] = monthKey.split("-");
-      option.textContent = `${year.slice(2)}년 ${Number(month)}월`;
-
-      if (currentValue === monthKey) {
-        option.selected = true;
-      }
-
-      refs.financeListMonthFilter.appendChild(option);
-    });
-
-    if (currentValue && !monthKeys.includes(currentValue)) {
-      refs.financeListMonthFilter.value = "";
-    }
+function renderAssetRows(assets) {
+  if (!assets.length) {
+    return `<p class="finance-empty-text">등록된 보유 자산이 없습니다.</p>`;
   }
 
-  if (refs.financeListFlowFilter) {
-    const currentValue = refs.financeListFlowFilter.value || "";
-    refs.financeListFlowFilter.innerHTML = `
-      <option value="">전체</option>
-      <option value="expense">출금</option>
-      <option value="income">입금</option>
-      <option value="transfer">이체</option>
-    `;
-    refs.financeListFlowFilter.value = currentValue;
-  }
-
-  if (refs.financeListCategoryFilter) {
-    const categories = [...new Set(expanded.map((item) => item.category || ""))]
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "ko"));
-
-    const currentValue = refs.financeListCategoryFilter.value || "";
-    refs.financeListCategoryFilter.innerHTML = `<option value="">전체</option>`;
-
-    categories.forEach((category) => {
-      const option = document.createElement("option");
-      option.value = category;
-      option.textContent = category;
-
-      if (currentValue === category) {
-        option.selected = true;
-      }
-
-      refs.financeListCategoryFilter.appendChild(option);
-    });
-
-    if (currentValue && !categories.includes(currentValue)) {
-      refs.financeListCategoryFilter.value = "";
-    }
-  }
-
-  if (refs.financeListPaymentFilter) {
-    const paymentMethods = [
-      ...new Set(expanded.map((item) => item.paymentMethod || "")),
-    ].filter(Boolean);
-
-    const paymentOrder = ["card", "cash", "transfer", "simple_pay"];
-    const sortedPaymentMethods = paymentMethods.sort((a, b) => {
-      return paymentOrder.indexOf(a) - paymentOrder.indexOf(b);
-    });
-
-    const currentValue = refs.financeListPaymentFilter.value || "";
-    refs.financeListPaymentFilter.innerHTML = `<option value="">전체</option>`;
-
-    sortedPaymentMethods.forEach((method) => {
-      const option = document.createElement("option");
-      option.value = method;
-      option.textContent = getFinancePaymentMethodText(method);
-
-      if (currentValue === method) {
-        option.selected = true;
-      }
-
-      refs.financeListPaymentFilter.appendChild(option);
-    });
-
-    if (currentValue && !sortedPaymentMethods.includes(currentValue)) {
-      refs.financeListPaymentFilter.value = "";
-    }
-  }
-
-  if (refs.financeListSortFilter) {
-    const currentValue = refs.financeListSortFilter.value || "latest";
-
-    refs.financeListSortFilter.innerHTML = `
-      <option value="latest">최신순</option>
-      <option value="oldest">오래된순</option>
-      <option value="amount_high">금액 높은순</option>
-      <option value="amount_low">금액 낮은순</option>
-      <option value="title_asc">이름순</option>
-    `;
-
-    refs.financeListSortFilter.value = currentValue;
-  }
+  return assets
+    .slice()
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))
+    .map((asset) => {
+      const account = getAccountById(asset.accountId);
+      const balance = getAssetDisplayBalance(asset);
+      return `
+        <button class="finance-compact-row" type="button" data-finance-action="open-asset-form" data-id="${escapeHtml(asset.id)}">
+          <span>${asset.type === "investment" ? "📈" : "💰"}</span>
+          <span class="finance-row-main">
+            <strong>${escapeHtml(asset.name || asset.title || "이름 없는 자산")}</strong>
+            <small>${escapeHtml(account?.name || "연결 계좌 없음")}</small>
+          </span>
+          <b>${formatMoney(balance)}</b>
+        </button>
+      `;
+    })
+    .join("");
 }
 
-export function getFinanceFilteredExpenses() {
-  const refs = getRefs();
-  const todayKey = formatDateKey(new Date());
+function openAccountDetailPopup(accountId) {
+  const data = getFinanceData();
+  const account = getAccountById(accountId, data);
+  if (!account) return;
 
-  let list = expandRecurringFinanceExpensesInRange(
-    getFinanceData().expenses,
-    "1900-01-01",
-    todayKey,
-  ).filter((item) => {
-    const itemDate = item.date || "";
-    return !!itemDate && itemDate <= todayKey;
-  });
-
-  const monthValue = refs.financeListMonthFilter?.value || "";
-  const flowValue = refs.financeListFlowFilter?.value || "";
-  const categoryValue = refs.financeListCategoryFilter?.value || "";
-  const paymentValue = refs.financeListPaymentFilter?.value || "";
-  const sortValue = refs.financeListSortFilter?.value || "latest";
-  const searchValue = (refs.financeListSearchInput?.value || "")
-    .trim()
-    .toLowerCase();
-
-  if (monthValue) {
-    list = list.filter(
-      (item) => String(item.date || "").slice(0, 7) === monthValue,
+  const assets = getAssets(data).filter((asset) => asset.accountId === accountId);
+  const transactions = getTransactions(data)
+    .filter(
+      (transaction) =>
+        transaction.accountId === accountId ||
+        transaction.targetAccountId === accountId,
+    )
+    .sort((a, b) =>
+      `${b.date || ""} ${b.time || ""}`.localeCompare(
+        `${a.date || ""} ${a.time || ""}`,
+      ),
     );
-  }
+  const balance = getAccountDisplayBalance(account, data);
+  const mount = getPopupMount();
 
-  if (flowValue) {
-    list = list.filter((item) => (item.flowType || "expense") === flowValue);
-  }
+  mount.innerHTML = `
+    <div class="finance-popup-header">
+      <div>
+        <h2>${escapeHtml(account.name || "통장")}</h2>
+        <p>${escapeHtml(account.memo || account.type || "연결된 항목을 확인합니다.")}</p>
+      </div>
+      <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+    </div>
 
-  if (categoryValue) {
-    list = list.filter((item) => (item.category || "") === categoryValue);
-  }
+    <section class="finance-detail-hero">
+      <span>🏦</span>
+      <strong>${formatMoney(balance)}</strong>
+      <small>보유 자산 ${assets.length}건 · 거래 ${transactions.length}건</small>
+    </section>
 
-  if (paymentValue) {
-    list = list.filter((item) => (item.paymentMethod || "") === paymentValue);
-  }
+    <section class="finance-account-detail-section">
+      <div class="finance-section-title">
+        <h3>보유 자산</h3>
+        <strong>${formatMoney(assets.reduce((sum, asset) => sum + getAssetDisplayBalance(asset, data), 0))}</strong>
+      </div>
+      ${renderAccountAssetRows(assets)}
+    </section>
 
-  if (searchValue) {
-    list = list.filter((item) => {
-      const target = [
-        item.title,
-        item.category,
-        item.subCategory,
-        item.merchant,
-        item.tag,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return target.includes(searchValue);
-    });
-  }
-
-  if (sortValue === "oldest") {
-    list.sort((a, b) => {
-      const aKey = `${a.date || ""} ${a.time || ""}`;
-      const bKey = `${b.date || ""} ${b.time || ""}`;
-      return aKey.localeCompare(bKey, "ko");
-    });
-    return list;
-  }
-
-  if (sortValue === "amount_high") {
-    list.sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0));
-    return list;
-  }
-
-  if (sortValue === "amount_low") {
-    list.sort((a, b) => (Number(a.amount) || 0) - (Number(b.amount) || 0));
-    return list;
-  }
-
-  if (sortValue === "title_asc") {
-    list.sort((a, b) =>
-      String(a.title || "").localeCompare(String(b.title || ""), "ko"),
-    );
-    return list;
-  }
-
-  list.sort((a, b) => {
-    const aKey = `${a.date || ""} ${a.time || ""}`;
-    const bKey = `${b.date || ""} ${b.time || ""}`;
-    return bKey.localeCompare(aKey, "ko");
-  });
-
-  return list;
+    <section class="finance-account-detail-section">
+      <div class="finance-section-title">
+        <h3>거래 내역</h3>
+        <strong>${transactions.length}건</strong>
+      </div>
+      ${renderAccountTransactionRows(transactions, accountId)}
+    </section>
+  `;
+  openPopupOverlay();
 }
 
-export function getFinancePaymentMethodText(value) {
-  if (value === "card") return "카드";
-  if (value === "cash") return "현금";
-  if (value === "transfer") return "계좌이체";
-  if (value === "simple_pay") return "간편결제";
-  return value || "";
+function renderAccountAssetRows(assets) {
+  if (!assets.length) {
+    return `<p class="finance-empty-text">연결된 보유 자산이 없습니다.</p>`;
+  }
+
+  return assets
+    .map(
+      (asset) => {
+        const balance = getAssetDisplayBalance(asset);
+        return `
+        <button class="finance-compact-row" type="button" data-finance-action="open-asset-form" data-id="${escapeHtml(asset.id)}">
+          <span>${asset.type === "investment" ? "📈" : "💰"}</span>
+          <span class="finance-row-main">
+            <strong>${escapeHtml(asset.name || asset.title || "이름 없는 자산")}</strong>
+            <small>${escapeHtml(asset.baseDate || "기준일 없음")}</small>
+          </span>
+          <b>${formatMoney(balance)}</b>
+        </button>
+      `;
+      },
+    )
+    .join("");
 }
 
-export function getFinanceSubCategoryMap() {
+function renderAccountTransactionRows(transactions, accountId) {
+  if (!transactions.length) {
+    return `<p class="finance-empty-text">연결된 거래가 없습니다.</p>`;
+  }
+
+  return transactions
+    .slice(0, 30)
+    .map((transaction) => {
+      const type = normalizeType(transaction.type || transaction.flowType);
+      const isIncoming =
+        type === "income" ||
+        (type === "transfer" && transaction.targetAccountId === accountId);
+      const isOutgoing =
+        ["expense", "withdrawal", "saving", "investment"].includes(type) ||
+        (type === "transfer" && transaction.accountId === accountId);
+      const sign = isIncoming ? "+" : isOutgoing ? "-" : "";
+      const amountClass = isIncoming ? "is-income" : isOutgoing ? "is-expense" : "";
+
+      return `
+        <button class="finance-transaction-row" type="button" data-finance-action="open-transaction-detail" data-id="${escapeHtml(transaction.id)}">
+          <span class="finance-transaction-icon">${isIncoming ? "↗" : "↘"}</span>
+          <span class="finance-row-main">
+            <strong>${escapeHtml(transaction.title || transaction.merchant || "거래")}</strong>
+            <small>${escapeHtml(transaction.date || "날짜 없음")} ${escapeHtml(transaction.time || "")}</small>
+          </span>
+          <b class="${amountClass}">${sign}${formatMoney(transaction.amount)}</b>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function getDefaultCaptureAccountId(type = "expense") {
+  if (type === "income") return getDefaultAccountId("living");
+  if (type === "transfer") return getDefaultAccountId("living");
+  return getDefaultAccountId("living");
+}
+
+function toTransactionFormItem(item = {}) {
+  const type = normalizeType(item.type || item.flowType || "expense");
   return {
-    식사: ["한식", "중식", "일식", "양식", "패스트푸드", "배달", "기타"],
-    카페: ["커피", "디저트", "베이커리", "음료", "기타"],
-    생활용품: ["생필품", "청소용품", "주방용품", "소모품", "기타"],
-    의류: ["의류", "신발", "잡화", "전자기기", "온라인쇼핑", "기타"],
-    교통: ["대중교통", "택시", "주유", "주차", "기타"],
-    의료: ["병원", "약국", "검진", "치과", "기타"],
-    여가생활: ["영화", "공연", "여행", "전시", "기타"],
-    취미: ["게임", "운동", "독서", "음악", "기타"],
-    "주거/통신": ["월세", "관리비", "전기/가스", "통신비", "인터넷", "기타"],
-    교육: ["학원", "수강료", "교재", "시험응시료", "기타"],
-    저축: ["예금", "적금", "투자", "비상금", "기타"],
-    급여: ["월급", "상여", "보너스", "기타"],
-    용돈: ["가족", "지원", "기타"],
-    환급: ["카드환급", "입금환급", "취소환불", "기타"],
-    이자: ["예금이자", "적금이자", "기타"],
-    투자수익: ["주식매도", "배당금", "기타"],
-    기타수입: ["중고판매", "부수입", "기타"],
-    기타: ["기타"],
+    ...item,
+    type,
+    flowType: type === "income" || type === "transfer" ? type : "expense",
+    accountId: item.accountId || getDefaultCaptureAccountId(type),
+    date: item.date || todayKey(),
+    time: item.time || "",
+    category: item.category || "기타",
+    paymentMethod: item.paymentMethod || "",
   };
 }
 
-export function syncFinanceSubCategoryOptions(
-  categoryValue,
-  selectedValue = "",
-) {
-  const refs = getRefs();
-  const subCategoryInput = refs.financeExpenseSubCategory;
-  if (!subCategoryInput) return;
-
-  const map = getFinanceSubCategoryMap();
-  const options = map[categoryValue] || [];
-
-  subCategoryInput.innerHTML = `<option value="">서브카테고리 선택</option>`;
-
-  options.forEach((label) => {
-    const option = document.createElement("option");
-    option.value = label;
-    option.textContent = label;
-    if (label === selectedValue) {
-      option.selected = true;
-    }
-    subCategoryInput.appendChild(option);
-  });
-
-  if (!options.includes(selectedValue)) {
-    subCategoryInput.value = "";
-  }
+function getFinanceBudgetAmount(monthKey) {
+  const entry = getFinanceData().budgetEntries?.[monthKey];
+  return Math.max(0, Number(entry?.totalBudget ?? entry?.budget ?? 0) || 0);
 }
 
-export function renderFinanceCategorySummary(expenseList) {
-  const refs = getRefs();
-  if (!refs.financeCategorySummaryList) return;
+function saveFinanceBudgetAmount(monthKey, amount) {
+  if (!monthKey) return;
 
-  if (!expenseList.length) {
-    refs.financeCategorySummaryList.innerHTML = `<div class="empty-message">표시할 카테고리 합계가 없습니다.</div>`;
+  const data = getFinanceData();
+  const currentEntry = data.budgetEntries?.[monthKey] || {};
+  const nextData = {
+    ...data,
+    budgetEntries: {
+      ...(data.budgetEntries || {}),
+      [monthKey]: {
+        ...currentEntry,
+        monthKey,
+        startDay:
+          Number(currentEntry.startDay) ||
+          Number(data.budgetSettings?.defaultStartDay) ||
+          1,
+        totalBudget: Math.max(0, Number(amount) || 0),
+        categoryBudgets:
+          currentEntry.categoryBudgets &&
+          typeof currentEntry.categoryBudgets === "object"
+            ? { ...currentEntry.categoryBudgets }
+            : {},
+        note: currentEntry.note || "",
+        createdAt: Number(currentEntry.createdAt) || Date.now(),
+        updatedAt: Date.now(),
+      },
+    },
+  };
+
+  saveNextFinanceData(nextData);
+}
+
+function startLedgerBudgetInlineEdit() {
+  const editor = query("financeLedgerBudgetEditor");
+  const value = query("financeLedgerBudgetValue");
+  if (!editor || !value) return;
+
+  editor.classList.add("is-editing");
+  value.dataset.beforeEdit = value.textContent || "";
+  value.setAttribute("contenteditable", "true");
+  value.focus();
+
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(value);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function commitLedgerBudgetInlineEdit() {
+  const value = query("financeLedgerBudgetValue");
+  if (!value || value.getAttribute("contenteditable") !== "true") return;
+
+  const amount = parseBudgetDisplayMoney(value.textContent);
+  if (!Number.isFinite(amount)) {
+    renderLedgerHome();
     return;
   }
 
-  const netTotal = expenseList.reduce((sum, item) => {
-    const signed =
-      (item.flowType || "expense") === "income"
-        ? Number(item.amount) || 0
-        : -(Number(item.amount) || 0);
-    return sum + signed;
-  }, 0);
+  saveFinanceBudgetAmount(getMonthKey(), amount);
+}
 
-  const grouped = expenseList.reduce((acc, item) => {
-    const flowLabel =
-      (item.flowType || "expense") === "income" ? "입금" : "출금";
-    const category = item.category || "미분류";
-    const key = `${flowLabel} · ${category}`;
-    const signed =
-      (item.flowType || "expense") === "income"
-        ? Number(item.amount) || 0
-        : -(Number(item.amount) || 0);
+function renderLedgerHome() {
+  const mount = query("financeLedgerHomeMount");
+  if (!mount) return;
 
-    acc[key] = (acc[key] || 0) + signed;
+  const monthKey = getMonthKey();
+  const monthly = getMonthlyTransactions();
+  const incomeTotal = getIncomeTransactions(monthly).reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
+  const expenseTotal = getExpenseLikeTransactions(monthly).reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
+  const budgetAmount = getFinanceBudgetAmount(monthKey);
+  const budgetRemain = budgetAmount - expenseTotal;
+  const budgetDisplayText = formatBudgetDisplayMoney(budgetAmount);
+  const categoryTotals = getCategoryTotals(monthly);
+  const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+  const monthLabel = `${Number(monthKey.slice(5, 7)) || new Date().getMonth() + 1}월`;
+
+  mount.innerHTML = `
+    <section class="finance-ledger-summary">
+      <div class="finance-ledger-topline">
+        <button class="finance-month-button" type="button" data-finance-action="prev-ledger-month">‹</button>
+        <label class="finance-month-picker-label">
+          <span>${monthLabel}</span>
+          <input id="financeLedgerMonthInput" type="month" value="${escapeHtml(monthKey)}" aria-label="가계부 월 선택" />
+        </label>
+        <button class="finance-month-button" type="button" data-finance-action="next-ledger-month">›</button>
+      </div>
+      <div class="finance-ledger-total-grid">
+        <div><span>수입</span><strong>${formatCompactMoney(incomeTotal)}</strong></div>
+        <div id="financeLedgerBudgetEditor" class="finance-ledger-budget-cell">
+          <div id="financeLedgerBudgetDisplay" class="finance-ledger-budget-text" role="button" tabindex="0" data-finance-action="edit-ledger-budget">
+            <span>이번 달 예산</span>
+            <strong id="financeLedgerBudgetValue">${budgetDisplayText}</strong>
+            ${budgetAmount ? `<small>남은 예산 ${formatBudgetDisplayMoney(budgetRemain)}</small>` : `<small>눌러서 수정</small>`}
+          </div>
+        </div>
+        <div><span>지출</span><strong>${formatCompactMoney(expenseTotal)}</strong></div>
+      </div>
+      <p>주요 카테고리 ${topCategory ? `${escapeHtml(topCategory[0])} ${Math.round((topCategory[1] / Math.max(expenseTotal, 1)) * 100)}%` : "없음"}</p>
+    </section>
+
+    <section class="finance-section-card">
+      <div class="finance-section-title">
+        <h3>월별 지출 통계</h3>
+        <div class="finance-stat-sort">
+          <strong>${formatCompactMoney(expenseTotal)}</strong>
+          <select id="financeCategoryStatSortSelect" aria-label="카테고리 통계 정렬">
+            <option value="default" ${financeCategoryStatSort === "default" ? "selected" : ""}>기본순</option>
+            <option value="amount-desc" ${financeCategoryStatSort === "amount-desc" ? "selected" : ""}>금액 높은순</option>
+            <option value="amount-asc" ${financeCategoryStatSort === "amount-asc" ? "selected" : ""}>금액 낮은순</option>
+            <option value="name" ${financeCategoryStatSort === "name" ? "selected" : ""}>이름순</option>
+          </select>
+        </div>
+      </div>
+      <div class="finance-ratio-list">${renderCategoryRatios(categoryTotals, expenseTotal)}</div>
+    </section>
+
+    <section class="finance-section-card">
+      <div class="finance-section-title">
+        <h3>거래 목록</h3>
+        <strong>${monthly.length}건</strong>
+      </div>
+      <div id="financeLedgerTransactionList">
+        ${renderTransactionDateGroups(monthly)}
+      </div>
+      ${renderLedgerPagination(monthly.length)}
+    </section>
+  `;
+}
+
+function renderCategoryRatios(categoryTotals, expenseTotal) {
+  let entries = getLedgerCategories().map((category) => [
+    category,
+    categoryTotals[category] || 0,
+  ]).filter(([, value]) => value > 0);
+
+  if (!entries.length) {
+    return `<p class="finance-empty-text">이번 달 지출 데이터가 없습니다.</p>`;
+  }
+
+  if (financeCategoryStatSort === "amount-desc") {
+    entries = entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
+  } else if (financeCategoryStatSort === "amount-asc") {
+    entries = entries.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], "ko"));
+  } else if (financeCategoryStatSort === "name") {
+    entries = entries.sort((a, b) => a[0].localeCompare(b[0], "ko"));
+  }
+
+  return entries
+    .map(([category, value]) => {
+      const ratio = Math.round((value / Math.max(expenseTotal, 1)) * 100);
+      return `
+        <div class="finance-ratio-row">
+          <span>${escapeHtml(category)}</span>
+          <div><i style="width:${ratio}%"></i></div>
+          <b>${ratio}%</b>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function formatLedgerDateHeader(dateKey) {
+  if (!dateKey || dateKey === "날짜 없음") return "날짜 없음";
+
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateKey;
+
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  return `${date.getMonth() + 1}월 ${date.getDate()}일(${weekdays[date.getDay()]})`;
+}
+
+function renderTransactionDateGroups(transactions) {
+  const sorted = transactions
+    .slice()
+    .sort((a, b) => `${b.date || ""} ${b.time || ""}`.localeCompare(`${a.date || ""} ${a.time || ""}`));
+  const startIndex = (financePage - 1) * LEDGER_PAGE_SIZE;
+  const visible = sorted.slice(startIndex, startIndex + LEDGER_PAGE_SIZE);
+
+  if (!visible.length) {
+    return `<p class="finance-empty-text">거래 내역이 없습니다.</p>`;
+  }
+
+  const groups = visible.reduce((acc, item) => {
+    const key = item.date || "날짜 없음";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
     return acc;
   }, {});
 
-  const sorted = Object.entries(grouped).sort(
-    (a, b) => Math.abs(b[1]) - Math.abs(a[1]),
-  );
-
-  refs.financeCategorySummaryList.innerHTML = `
-    <div class="item-card">
-      <div class="item-content">
-        <div class="item-title">카테고리 요약</div>
-        <div class="item-meta compact-meta">
-          <span class="meta-badge compact">
-            순합계 ${
-              netTotal >= 0
-                ? `+ ${formatMoney(Math.abs(netTotal))}`
-                : `- ${formatMoney(Math.abs(netTotal))}`
-            }
-          </span>
-        </div>
-      </div>
-    </div>
-
-    ${sorted
-      .map(([category, amount]) => {
-        const amountText =
-          amount >= 0
-            ? `+ ${formatMoney(Math.abs(amount))}`
-            : `- ${formatMoney(Math.abs(amount))}`;
-
-        return `
-          <div class="item-card">
-            <div class="item-content">
-              <div class="item-title">${escapeHtml(category)}</div>
-              <div class="item-meta compact-meta">
-                <span class="meta-badge compact">${escapeHtml(amountText)}</span>
-              </div>
-            </div>
-          </div>
-        `;
-      })
-      .join("")}
-  `;
-}
-export function startEditFinanceExpense(id) {
-  const refs = getRefs();
-  const targetId = String(id || "").split("__")[0];
-  const item = getFinanceData().expenses.find((x) => x.id === targetId);
-  if (!item) return;
-
-  setFinanceOcrIncomeAssetMode(false);
-  setFinanceEditingExpenseId(targetId);
-
-  if (refs.financeTransactionType) {
-    refs.financeTransactionType.value = item.flowType || "expense";
-  }
-
-  if (refs.financeExpenseAccountId) {
-    refs.financeExpenseAccountId.value =
-      item.accountId || getDefaultFinanceAccountId("living");
-  }
-
-  if (refs.financeExpenseTargetAccountId) {
-    refs.financeExpenseTargetAccountId.value = item.targetAccountId || "";
-  }
-
-  refs.financeExpenseTargetAccountGroup?.classList.toggle(
-    "hidden",
-    (item.flowType || "expense") !== "transfer",
-  );
-
-  if (refs.financeExpenseDate) {
-    refs.financeExpenseDate.value = item.date || formatDateKey(new Date());
-  }
-
-  if (refs.financeExpenseTime) {
-    refs.financeExpenseTime.value = item.time || "";
-  }
-
-  if (refs.financeExpenseTitle) {
-    refs.financeExpenseTitle.value = item.title || "";
-  }
-
-  if (refs.financeExpenseAmount) {
-    refs.financeExpenseAmount.value = item.amount || "";
-  }
-
-  if (refs.financeExpenseCategory) {
-    refs.financeExpenseCategory.value = item.category || "";
-  }
-
-  syncFinanceSubCategoryOptions(item.category || "", item.subCategory || "");
-
-  if (refs.financeExpenseSubCategory) {
-    refs.financeExpenseSubCategory.value = item.subCategory || "";
-  }
-
-  if (refs.financeExpensePaymentMethod) {
-    refs.financeExpensePaymentMethod.value = item.paymentMethod || "";
-  }
-
-  if (refs.financeExpenseMerchant) {
-    refs.financeExpenseMerchant.value = item.merchant || "";
-  }
-
-  if (refs.financeExpenseTag) {
-    refs.financeExpenseTag.value = item.tag || "";
-  }
-
-  if (refs.financeExpenseAssetId) {
-    refs.financeExpenseAssetId.value = item.assetId || "";
-  }
-
-  if (refs.financeExpenseMemo) {
-    refs.financeExpenseMemo.value = item.memo || "";
-  }
-
-  if (refs.financeExpenseColor) {
-    refs.financeExpenseColor.value = item.color || "blue";
-  }
-
-  if (refs.financeExpenseRepeat) {
-    refs.financeExpenseRepeat.value = item.repeat || "none";
-    refs.financeExpenseRepeat.disabled = false;
-  }
-
-  if (refs.financeExpenseRepeatUntil) {
-    refs.financeExpenseRepeatUntil.value = item.repeatUntil || "";
-    refs.financeExpenseRepeatUntil.disabled = false;
-  }
-
-  syncFinanceExpenseFormButtons();
-  openFinanceEditPopup("expense");
-
-  setTimeout(() => {
-    refs.financeExpenseTitle?.focus();
-  }, 100);
-
-  deps.syncRepeatUntilToggleState?.("finance");
-}
-
-export function deleteEditingFinanceExpense() {
-  const editingId = getFinanceEditingExpenseId();
-  if (!editingId) return;
-
-  deleteFinanceExpense(editingId);
-
-  const stillExists = getFinanceData().expenses.some(
-    (item) => item.id === editingId,
-  );
-
-  if (!stillExists) {
-    resetFinanceExpenseForm();
-  }
-}
-
-export function syncFinanceExpenseFormButtons() {
-  const refs = getRefs();
-  const isEditing = !!getFinanceEditingExpenseId();
-  const flowType = refs.financeTransactionType?.value || "expense";
-  const isOcrReviewActive = isFinanceOcrReviewActive();
-  const isOcrIncomeAssetMode =
-    flowType === "income" && isFinanceOcrIncomeAssetMode();
-  const noun =
-    flowType === "income"
-      ? "\uC785\uAE08"
-      : flowType === "transfer"
-        ? "\uC774\uCCB4"
-        : "\uCD9C\uAE08";
-
-  renderFinanceIncomeAssetTargetOptions();
-  renderFinanceAccountOptions();
-
-  refs.financeExpenseTargetAccountGroup?.classList.toggle(
-    "hidden",
-    flowType !== "transfer",
-  );
-
-  refs.financeIncomeAssetLinkGroup?.classList.toggle(
-    "hidden",
-    !isOcrIncomeAssetMode,
-  );
-
-  if (refs.financeSaveExpenseBtn) {
-    refs.financeSaveExpenseBtn.textContent = isOcrIncomeAssetMode
-      ? "\uC790\uC0B0 \uBC18\uC601"
-      : isEditing
-        ? `${noun} \uC218\uC815`
-        : `${noun} \uC800\uC7A5`;
-  }
-
-  const formTitle = refs.financeExpenseFormCard?.querySelector("h2");
-  if (formTitle) {
-    formTitle.textContent = isOcrIncomeAssetMode
-      ? "OCR \uC785\uAE08 \uC790\uC0B0 \uBC18\uC601"
-      : isEditing
-        ? `${noun} \uC218\uC815`
-        : `${noun} \uCD94\uAC00`;
-  }
-
-  refs.financeSkipOcrReviewBtn?.classList.toggle("hidden", !isOcrReviewActive);
-
-  if (refs.financeCancelExpenseEditBtn) {
-    refs.financeCancelExpenseEditBtn.textContent =
-      isOcrReviewActive && !isEditing
-        ? "OCR \uCDE8\uC18C"
-        : "\uC218\uC815 \uCDE8\uC18C";
-    refs.financeCancelExpenseEditBtn.classList.toggle(
-      "hidden",
-      !isEditing && !isOcrReviewActive,
-    );
-  }
-
-  refs.financeDeleteExpenseBtn?.classList.toggle("hidden", !isEditing);
-}
-export function renderFinanceIncomeAssetTargetOptions(preferredAssetId = "") {
-  const refs = getRefs();
-  if (!refs.financeIncomeAssetTargetSelect) return;
-
-  const currentValue =
-    preferredAssetId || refs.financeIncomeAssetTargetSelect.value || "";
-  const assets = Array.isArray(getFinanceData().assets)
-    ? [...getFinanceData().assets]
-    : [];
-
-  const options = assets.sort((a, b) =>
-    String(a.title || "").localeCompare(String(b.title || ""), "ko"),
-  );
-
-  refs.financeIncomeAssetTargetSelect.innerHTML =
-    `<option value="">새 자산으로 등록</option>`;
-
-  options.forEach((asset) => {
-    const option = document.createElement("option");
-    option.value = asset.id || "";
-    option.textContent = `${asset.name || asset.title || "자산"} · ${formatMoney(
-      asset.amount,
-    )}`;
-    refs.financeIncomeAssetTargetSelect.appendChild(option);
-  });
-
-  refs.financeIncomeAssetTargetSelect.value = currentValue;
-}
-
-function getFinanceAccountTypeLabel(type) {
-  return (
-    {
-      living: "생활비",
-      leisure: "여유자금",
-      emergency: "비상금",
-      investment_waiting: "투자 대기금",
-      custom: "직접 설정",
-    }[type] || "직접 설정"
-  );
-}
-
-export function renderFinanceAccountList() {
-  const refs = getRefs();
-  if (!refs.financeAccountList) return;
-
-  const accounts = getFinanceAccounts();
-
-  if (!accounts.length) {
-    refs.financeAccountList.innerHTML =
-      `<div class="empty-message">등록된 통장이 없습니다.</div>`;
-    return;
-  }
-
-  refs.financeAccountList.innerHTML = accounts
-    .map(
-      (account) => `
-        <article class="finance-account-card">
-          <div>
-            <strong>${escapeHtml(account.name || "통장")}</strong>
-            <span class="tag-badge">${escapeHtml(
-              getFinanceAccountTypeLabel(account.type),
-            )}</span>
-          </div>
-          <div class="finance-account-balance">${formatMoney(account.balance)}</div>
-          ${
-            account.memo
-              ? `<p class="small-text">${escapeHtml(account.memo)}</p>`
-              : ""
-          }
-          <div class="button-row compact-button-row">
-            <button class="secondary-btn" type="button" data-action="open-edit-finance-account" data-id="${escapeHtml(account.id)}">수정</button>
-          </div>
-        </article>
-      `,
-    )
+  return Object.entries(groups)
+    .map(([date, items]) => {
+      const income = getIncomeTransactions(items).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const expense = getExpenseLikeTransactions(items).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      return `
+        <section class="finance-date-group">
+          <header>
+            <strong>${formatLedgerDateHeader(date)}</strong>
+            <span>
+              ${income ? `<b class="is-income">+${formatMoney(income)}</b>` : ""}
+              ${expense ? `<b class="is-expense">-${formatMoney(expense)}</b>` : ""}
+            </span>
+          </header>
+          ${items.map(renderTransactionRow).join("")}
+        </section>
+      `;
+    })
     .join("");
 }
 
-export function resetFinanceAccountForm() {
-  const refs = getRefs();
+function renderTransactionRow(item) {
+  const typeMeta = getTransactionTypeMeta(item.type || item.flowType);
+  const accountLabel = getTransactionAccountLabel(item);
+  const direction = getTransactionAmountDirection(item);
+  const amountClass = direction > 0 ? "is-income" : direction < 0 ? "is-expense" : "";
+  const iconType = direction > 0 ? "income" : "expense";
+  const icon = direction > 0 ? "↗" : "↘";
+  const installment = item.installment || item.cardPlan || "";
 
-  if (refs.financeAccountId) refs.financeAccountId.value = "";
-  if (refs.financeAccountName) refs.financeAccountName.value = "";
-  if (refs.financeAccountType) refs.financeAccountType.value = "custom";
-  if (refs.financeAccountBalance) refs.financeAccountBalance.value = "";
-  if (refs.financeAccountColor) refs.financeAccountColor.value = "blue";
-  if (refs.financeAccountMemo) refs.financeAccountMemo.value = "";
-  if (refs.financeSaveAccountBtn) refs.financeSaveAccountBtn.textContent = "통장 저장";
-  refs.financeCancelAccountEditBtn?.classList.add("hidden");
-  refs.financeDeleteAccountBtn?.classList.add("hidden");
+  return `
+    <button class="finance-transaction-row" type="button" data-finance-action="open-transaction-detail" data-id="${escapeHtml(item.id)}">
+      <span class="finance-transaction-icon is-${iconType}" aria-hidden="true">${icon}</span>
+      <span class="finance-row-main">
+        <strong>${escapeHtml(item.title || item.merchant || typeMeta.label)}</strong>
+        <small>${escapeHtml(item.time || "시간 없음")} | ${escapeHtml(item.category || "기타")} | ${escapeHtml(item.paymentMethod || accountLabel)}</small>
+      </span>
+      <span class="finance-transaction-amount">
+        <b class="${amountClass}">${direction > 0 ? "+" : direction < 0 ? "-" : ""}${formatMoney(item.amount)}</b>
+        ${installment ? `<small>${escapeHtml(installment)}</small>` : ""}
+      </span>
+    </button>
+  `;
 }
 
-export function startEditFinanceAccount(id) {
-  const refs = getRefs();
-  const account = getFinanceAccountById(String(id || "").split("__")[0]);
-  if (!account) return;
+function renderLedgerPagination(total) {
+  const maxPage = Math.max(1, Math.ceil(total / LEDGER_PAGE_SIZE));
+  financePage = Math.min(Math.max(1, financePage), maxPage);
 
-  if (refs.financeAccountId) refs.financeAccountId.value = account.id || "";
-  if (refs.financeAccountName) refs.financeAccountName.value = account.name || "";
-  if (refs.financeAccountType) refs.financeAccountType.value = account.type || "custom";
-  if (refs.financeAccountBalance) refs.financeAccountBalance.value = account.balance || "";
-  if (refs.financeAccountColor) refs.financeAccountColor.value = account.color || "blue";
-  if (refs.financeAccountMemo) refs.financeAccountMemo.value = account.memo || "";
-  if (refs.financeSaveAccountBtn) refs.financeSaveAccountBtn.textContent = "통장 수정";
-  refs.financeCancelAccountEditBtn?.classList.remove("hidden");
-  refs.financeDeleteAccountBtn?.classList.remove("hidden");
-  refs.financeAccountName?.focus();
+  if (maxPage <= 1) return "";
+
+  return `
+    <div class="finance-pagination">
+      <button class="secondary-btn" type="button" data-finance-action="ledger-page" data-direction="-1" ${financePage <= 1 ? "disabled" : ""}>이전</button>
+      <span>${financePage} / ${maxPage}</span>
+      <button class="secondary-btn" type="button" data-finance-action="ledger-page" data-direction="1" ${financePage >= maxPage ? "disabled" : ""}>다음</button>
+    </div>
+  `;
 }
 
-export function saveFinanceAccount() {
-  const refs = getRefs();
-  const editingId = refs.financeAccountId?.value || "";
-  const name = refs.financeAccountName?.value.trim() || "";
+function bindFinanceEvents() {
+  if (financeEventsBound) return;
+  financeEventsBound = true;
 
-  if (!name) {
-    alert("통장 이름을 입력하세요.");
-    refs.financeAccountName?.focus();
-    return;
-  }
+  document.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-finance-action]");
+    if (!target) {
+      closeFinanceCategoryMenus();
+      return;
+    }
 
-  const payload = {
-    id: editingId || makeId(),
-    name,
-    type: refs.financeAccountType?.value || "custom",
-    balance: Number(refs.financeAccountBalance?.value) || 0,
-    color: refs.financeAccountColor?.value || "blue",
-    memo: refs.financeAccountMemo?.value.trim() || "",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
+    event.preventDefault();
+    event.stopPropagation();
+    if (target.dataset.financeAction !== "toggle-finance-category") {
+      closeFinanceCategoryMenus(target.closest(".finance-category-picker"));
+    }
+    handleFinanceAction(target);
+  }, true);
 
-  const nextData = cloneFinanceData();
-  nextData.accounts = editingId
-    ? nextData.accounts.map((item) =>
-        item.id === editingId
-          ? {
-              ...item,
-              ...payload,
-              createdAt: Number(item.createdAt) || payload.createdAt,
-            }
-          : item,
-      )
-    : [payload, ...nextData.accounts];
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-finance-form]");
+    if (!form) return;
 
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  resetFinanceAccountForm();
-  renderFinance();
-}
+    event.preventDefault();
+    event.stopPropagation();
 
-export function deleteEditingFinanceAccount() {
-  const refs = getRefs();
-  const targetId = refs.financeAccountId?.value || "";
-  if (!targetId) return;
+    if (form.dataset.financeForm === "transaction") {
+      submitTransactionForm(form);
+    } else if (form.dataset.financeForm === "asset") {
+      submitAssetForm(form);
+    }
+  }, true);
 
-  const data = getFinanceData();
-  const isLinkedToTransaction = data.expenses.some(
-    (item) => item.accountId === targetId || item.targetAccountId === targetId,
-  );
-  const isLinkedToAsset = data.assets.some((item) => item.accountId === targetId);
+  document.addEventListener("change", (event) => {
+    if (event.target?.id === "financeLedgerMonthInput") {
+      financePage = 1;
+      renderLedgerHome();
+    }
 
-  if (isLinkedToTransaction || isLinkedToAsset) {
-    alert("연결된 거래나 자산이 있어 삭제할 수 없습니다. 먼저 연결을 변경하세요.");
-    return;
-  }
+    if (event.target?.id === "financeLedgerBudgetValue") {
+      commitLedgerBudgetInlineEdit();
+    }
 
-  if (!confirm("통장을 삭제할까요?")) return;
+    if (event.target?.id === "financeCategoryStatSortSelect") {
+      setFinanceCategoryStatSort(event.target.value || "default");
+    }
 
-  const nextData = cloneFinanceData();
-  nextData.accounts = nextData.accounts.filter((item) => item.id !== targetId);
+    if (event.target?.id === "financeCaptureImageInput") {
+      financeCaptureSelectedFileName = event.target.files?.[0]?.name || "";
+      updateFinanceCaptureFileLabel();
+    }
+  });
 
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  resetFinanceAccountForm();
-  renderFinance();
-}
+  document.addEventListener("focusout", (event) => {
+    if (event.target?.id === "financeLedgerBudgetValue") {
+      commitLedgerBudgetInlineEdit();
+    }
+  });
 
-export function getFinancePagedExpenses(sortedExpenses) {
-  const totalPages = Math.max(
-    1,
-    Math.ceil(sortedExpenses.length / getFinancePageSize()),
-  );
+  document.addEventListener("keydown", (event) => {
+    if (event.target?.id !== "financeLedgerBudgetValue") return;
 
-  if (getFinancePage() > totalPages) {
-    setFinancePage(totalPages);
-  }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitLedgerBudgetInlineEdit();
+    }
 
-  if (getFinancePage() < 1) {
-    setFinancePage(1);
-  }
-
-  const startIndex = (getFinancePage() - 1) * getFinancePageSize();
-  const pageItems = sortedExpenses.slice(
-    startIndex,
-    startIndex + getFinancePageSize(),
-  );
-
-  return {
-    pageItems,
-    totalPages,
-    currentPage: getFinancePage(),
-  };
-}
-
-export function handleFinancePageChange(direction) {
-  setFinancePage(getFinancePage() + direction);
-
-  if (getFinancePage() < 1) {
-    setFinancePage(1);
-  }
-
-  renderFinance();
-
-  getRefs().financeExpenseListCard?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.target.textContent = event.target.dataset.beforeEdit || event.target.textContent;
+      renderLedgerHome();
+    }
   });
 }
 
-export function generateFinanceExpenseSeries({
-  date,
-  time,
-  title,
-  amount,
-  category,
-  subCategory,
-  paymentMethod,
-  merchant,
-  tag,
-  color,
-  repeat,
-  repeatUntil,
-  flowType,
-}) {
-  return [
-    {
-      id: makeId(),
-      date,
-      time,
-      title,
-      amount,
-      category,
-      subCategory,
-      paymentMethod,
-      merchant,
-      tag,
-      color,
-      flowType: flowType || "expense",
-      repeat: repeat || "none",
-      repeatUntil: repeatUntil || "",
-      isRecurring: repeat !== "none",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-  ];
+function handleFinanceAction(target) {
+  const action = target.dataset.financeAction;
+
+  if (action === "open-asset-type-sheet") openAssetTypeSheet();
+  if (action === "select-asset-type") openFinanceAssetForm(target.dataset.type || "");
+  if (action === "open-asset-form") openFinanceAssetForm("", target.dataset.id || "");
+  if (action === "open-account-detail") openAccountDetailPopup(target.dataset.id || "");
+  if (action === "open-transaction-form") openFinanceEditPopup("expense");
+  if (action === "open-transaction-detail") openTransactionDetail(target.dataset.id);
+  if (action === "edit-transaction") startEditFinanceExpense(target.dataset.id);
+  if (action === "delete-transaction") deleteFinanceExpense(target.dataset.id);
+  if (action === "delete-asset") deleteEditingFinanceAsset();
+  if (action === "close-finance-popup") closeFinanceEditPopup();
+  if (action === "relationship-field") openRelationshipPicker(target.dataset.field);
+  if (action === "relationship-pick") applyRelationshipPick(target);
+  if (action === "show-custom-relationship") showCustomRelationship(target.dataset.field);
+  if (action === "save-custom-relationship") saveCustomRelationship(target.dataset.field);
+  if (action === "cancel-custom-relationship") openRelationshipPicker(target.dataset.field);
+  if (action === "ledger-page") handleFinancePageChange(Number(target.dataset.direction) || 0);
+  if (action === "prev-ledger-month") shiftLedgerMonth(-1);
+  if (action === "next-ledger-month") shiftLedgerMonth(1);
+  if (action === "edit-ledger-budget") startLedgerBudgetInlineEdit();
+  if (action === "toggle-finance-category") toggleFinanceCategoryMenu(target);
+  if (action === "pick-finance-category") pickFinanceCategory(target);
+  if (action === "choose-finance-capture") query("financeCaptureImageInput")?.click();
+  if (action === "analyze-finance-capture") analyzeFinanceCaptureImage();
+  if (action === "register-current-finance-capture") registerCurrentFinanceCaptureItem();
+  if (action === "register-all-finance-capture") registerAllFinanceCaptureItems();
+  if (action === "skip-finance-capture") skipFinanceCaptureItem();
+  if (action === "cancel-finance-capture") finishFinanceCaptureReviewCancel();
 }
 
-export function toggleFinanceExpenseForm(forceOpen = null) {
-  const refs = getRefs();
-  if (!refs.financeExpenseFormCard) return;
+function closeFinanceCategoryMenus(exceptPicker = null) {
+  document.querySelectorAll(".finance-category-picker").forEach((picker) => {
+    if (exceptPicker && picker === exceptPicker) return;
+    picker.querySelector(".finance-category-menu")?.classList.add("hidden");
+  });
+}
 
-  const isOpen = !refs.financeExpenseFormCard.classList.contains("hidden");
-  const shouldOpen = forceOpen === null ? !isOpen : forceOpen;
+function toggleFinanceCategoryMenu(target) {
+  const picker = target.closest(".finance-category-picker");
+  if (!picker) return;
+  const menu = picker.querySelector(".finance-category-menu");
+  if (!menu) return;
 
-  refs.financeExpenseFormCard.classList.toggle("hidden", !shouldOpen);
+  const shouldOpen = menu.classList.contains("hidden");
+  closeFinanceCategoryMenus(picker);
+  menu.classList.toggle("hidden", !shouldOpen);
+}
 
-  if (refs.financeOpenExpenseFormBtn) {
-    refs.financeOpenExpenseFormBtn.textContent = shouldOpen
-      ? "닫기"
-      : "거래 추가";
-  }
+function pickFinanceCategory(target) {
+  const picker = target.closest(".finance-category-picker");
+  if (!picker) return;
 
-  if (shouldOpen) {
-    requestAnimationFrame(() => {
-      refs.financeExpenseTitle?.focus();
+  const value = target.dataset.value || "\uAE30\uD0C0";
+  const input = picker.querySelector("input[name='category']");
+  const label = picker.querySelector(".finance-category-trigger span");
+  if (input) input.value = value;
+  if (label) label.textContent = value;
+
+  picker.querySelectorAll(".finance-category-option").forEach((button) => {
+    button.classList.toggle("selected", button === target);
+  });
+  closeFinanceCategoryMenus();
+}
+
+function openAssetTypeSheet() {
+  const mount = getPopupMount();
+  mount.innerHTML = `
+    <div class="finance-popup-header finance-register-header">
+      <div>
+        <h2>자산 등록</h2>
+        <p>통장 잔액이 아니라, 따로 보유 중인 자산만 등록합니다.</p>
+      </div>
+      <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+    </div>
+    <div class="finance-type-grid finance-asset-type-grid">
+      <button class="finance-register-type-card" type="button" data-finance-action="select-asset-type" data-type="deposit_saving">
+        <span>💰</span>
+        <strong>예금·적금</strong>
+        <small>만기나 목적이 있는 묶인 돈</small>
+      </button>
+      <button class="finance-register-type-card" type="button" data-finance-action="select-asset-type" data-type="investment">
+        <span>📈</span>
+        <strong>투자</strong>
+        <small>주식, 펀드, 투자성 자산</small>
+      </button>
+    </div>
+  `;
+  openPopupOverlay();
+}
+
+function openPopupOverlay() {
+  query("financeEditPopupOverlay")?.classList.remove("hidden");
+  resetFinancePopupScroll();
+}
+
+function resetFinancePopupScroll() {
+  const overlay = query("financeEditPopupOverlay");
+  const panel = overlay?.querySelector(".finance-edit-popup-panel");
+  const mount = query("financeEditPopupMount");
+
+  [overlay, panel, mount].forEach((element) => {
+    if (element) element.scrollTop = 0;
+  });
+
+  requestAnimationFrame(() => {
+    [overlay, panel, mount].forEach((element) => {
+      if (element) element.scrollTop = 0;
     });
+  });
+}
+
+function getPopupMount() {
+  const overlay = query("financeEditPopupOverlay");
+  let mount = query("financeEditPopupMount");
+
+  if (overlay && overlay.dataset.financeV2Popup !== "true") {
+    overlay.dataset.financeV2Popup = "true";
+    overlay.innerHTML = `<div class="popup-panel popup-shell finance-edit-popup-panel"><div id="financeEditPopupMount"></div></div>`;
+    mount = query("financeEditPopupMount");
   }
+
+  if (!mount && overlay) {
+    overlay.innerHTML = `<div class="popup-panel popup-shell finance-edit-popup-panel"><div id="financeEditPopupMount"></div></div>`;
+    overlay.dataset.financeV2Popup = "true";
+    mount = query("financeEditPopupMount");
+  }
+
+  return mount;
+}
+
+export function closeFinanceEditPopup() {
+  query("financeEditPopupOverlay")?.classList.add("hidden");
+  const mount = query("financeEditPopupMount");
+  if (mount) mount.innerHTML = "";
+  currentAssetRegisterType = "";
+  currentTransactionEditId = "";
+  currentAssetEditId = "";
+  currentRelationshipField = "";
+}
+
+export function openFinanceEditPopup(mode = "expense") {
+  const type = mode === "income" ? "income" : "expense";
+  currentTransactionEditId = "";
+  renderTransactionForm({ type, date: todayKey(), time: nowTime() });
+  openPopupOverlay();
 }
 
 export function openFinanceExpenseForm() {
-  resetFinanceExpenseForm();
   openFinanceEditPopup("expense");
 }
 
 export function openFinanceExpenseFormForAsset(assetId, flowType = "expense") {
-  const targetId = String(assetId || "").split("__")[0];
-  const asset = getFinanceData().assets.find((item) => item.id === targetId);
-
-  if (!asset) return;
-
-  resetFinanceExpenseForm();
-
-  const refs = getRefs();
-
-  if (refs.financeTransactionType) {
-    refs.financeTransactionType.value =
-      flowType === "income" ? "income" : "expense";
-  }
-
-  if (refs.financeExpenseDate) {
-    refs.financeExpenseDate.value = formatDateKey(new Date());
-  }
-
-  if (refs.financeExpenseTitle) {
-    refs.financeExpenseTitle.value = `${asset.name || asset.title || "자산"} ${
-      flowType === "income" ? "입금" : "출금"
-    }`;
-  }
-
-  if (refs.financeExpenseMerchant) {
-    refs.financeExpenseMerchant.value = asset.title || "";
-  }
-
-  if (flowType === "income") {
-    renderFinanceIncomeAssetTargetOptions(targetId);
-    if (refs.financeIncomeAssetTargetSelect) {
-      refs.financeIncomeAssetTargetSelect.value = targetId;
-    }
-  }
-
-  if (refs.financeExpenseTag) {
-    refs.financeExpenseTag.value = "자산";
-  }
-
-  if (refs.financeExpenseCategory) {
-    refs.financeExpenseCategory.value =
-      flowType === "income" ? "기타수입" : "기타";
-  }
-
-  syncFinanceSubCategoryOptions(refs.financeExpenseCategory?.value || "");
-
-  if (refs.financeExpensePaymentMethod) {
-    refs.financeExpensePaymentMethod.value = "transfer";
-  }
-
-  syncFinanceExpenseFormButtons();
-  openFinanceEditPopup("expense");
-
-  setTimeout(() => {
-    refs.financeExpenseAmount?.focus();
-  }, 100);
+  const asset = getAssets().find((item) => item.id === assetId);
+  renderTransactionForm({
+    type: normalizeType(flowType),
+    title: asset?.name || asset?.title || "",
+    category: "기타",
+    date: todayKey(),
+    assetId: asset?.id || "",
+    accountId: asset?.accountId || "",
+  });
+  openPopupOverlay();
 }
 
-export function resetFinanceAssetForm() {
-  const refs = getRefs();
+export function openFinanceAssetForm(type = "", assetId = "") {
+  const existing = getAssets().find((asset) => asset.id === assetId) || null;
+  currentAssetRegisterType =
+    type === "investment" || type === "deposit_saving"
+      ? type
+      : existing?.type === "investment"
+        ? "investment"
+        : "deposit_saving";
+  currentAssetEditId = existing?.id || "";
 
-  setFinanceEditingAssetId(null);
+  renderAssetForm(existing);
+  openPopupOverlay();
+}
 
-  if (refs.financeAssetCategory) {
-    refs.financeAssetCategory.value = "stock";
+function renderTransactionForm(item = {}) {
+  const mount = getPopupMount();
+  const data = getFinanceData();
+  const type = normalizeType(item.type || item.flowType || "expense");
+  const relationship = item.relationshipLedger || {};
+  currentTransactionEditId = item.id || "";
+  const selectedAssetId =
+    item.assetId || getAssetLinkedToAccount(item.accountId, data)?.id || "";
+
+  mount.innerHTML = `
+    <div class="finance-popup-header finance-register-header">
+      <div>
+        <span class="finance-form-badge">거래내역</span>
+        <h2>${currentTransactionEditId ? "거래 수정" : "거래 등록"}</h2>
+        <p>입금, 지출, 출금, 이체처럼 돈이 움직인 기록을 저장합니다.</p>
+      </div>
+      <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+    </div>
+    <form class="finance-form-v2" data-finance-form="transaction" data-created-at="${Number(item.createdAt) || ""}">
+      <section class="finance-form-section">
+        <div class="finance-form-section-title">
+          <span>1</span>
+          <strong>거래 기본 정보</strong>
+        </div>
+        <div class="finance-form-grid">
+          <label>거래 유형
+            <select name="type">${TRANSACTION_TYPES.map((meta) => `<option value="${meta.value}" ${type === meta.value ? "selected" : ""}>${meta.label}</option>`).join("")}</select>
+          </label>
+          <label>금액
+            <input name="amount" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(item.amount || "")}" placeholder="예: 12000" required />
+          </label>
+          <label class="finance-form-wide">거래명
+            <input name="title" type="text" value="${escapeHtml(item.title || item.merchant || "")}" placeholder="예: 점심, 급여, 카드값" required />
+          </label>
+          <label>카테고리
+            ${renderFinanceCategoryPicker(item.category || "\uAE30\uD0C0")}
+          </label>
+          <label>거래수단
+            <input name="paymentMethod" type="text" value="${escapeHtml(item.paymentMethod || "")}" placeholder="카드, 현금, 계좌이체" />
+          </label>
+        </div>
+      </section>
+
+      <section class="finance-form-section">
+        <div class="finance-form-section-title">
+          <span>2</span>
+          <strong>날짜와 계좌</strong>
+        </div>
+        <div class="finance-form-grid">
+          <label>날짜
+            <input name="date" type="date" value="${escapeHtml(item.date || todayKey())}" required />
+          </label>
+          <label>시간
+            <input name="time" type="time" value="${escapeHtml(item.time || "")}" />
+          </label>
+          <label>거래 자산
+            <select name="assetId">${renderAssetAccountOptions(selectedAssetId, data)}</select>
+          </label>
+          <label>받는 계좌
+            <select name="targetAccountId"><option value="">선택 안 함</option>${renderAccountOptions(item.targetAccountId, data, false)}</select>
+          </label>
+          <label class="finance-form-wide">가맹점 / 거래처
+            <input name="merchant" type="text" value="${escapeHtml(item.merchant || "")}" placeholder="예: 스타벅스, 회사, 친구" />
+          </label>
+        </div>
+      </section>
+
+      <section class="finance-form-section finance-capture-section">
+        <div class="finance-form-section-title">
+          <span>OCR</span>
+          <strong>캡처 채우기</strong>
+        </div>
+        <p class="finance-form-help">은행/카드 앱 거래내역 캡처를 분석해 여러 거래를 한 건씩 검토합니다.</p>
+        <div class="finance-capture-actions">
+          <input id="financeCaptureImageInput" class="hidden" type="file" accept="image/*" />
+          <button class="secondary-btn" type="button" data-finance-action="choose-finance-capture">캡처 선택</button>
+          <button id="financeCaptureAnalyzeBtn" class="secondary-btn" type="button" data-finance-action="analyze-finance-capture">캡처 채우기</button>
+        </div>
+        <div id="financeCaptureReviewStatus" class="finance-capture-review-status"></div>
+      </section>
+
+      <section class="finance-relationship-editor">
+        <h3>인간관계부</h3>
+        ${renderRelationshipField("withWhom", "누구와", relationship.withWhom || "나")}
+        ${renderRelationshipField("what", "무엇을", relationship.what || "")}
+        ${renderRelationshipField("how", "어떻게", relationship.how || "")}
+        <label>메모
+          <textarea name="relationshipMemo" rows="2" placeholder="입력 전이에요">${escapeHtml(relationship.memo || "")}</textarea>
+        </label>
+        <input type="hidden" name="withWhom" value="${escapeHtml(relationship.withWhom || "나")}" />
+        <input type="hidden" name="what" value="${escapeHtml(relationship.what || "")}" />
+        <input type="hidden" name="how" value="${escapeHtml(relationship.how || "")}" />
+      </section>
+
+      <div class="finance-popup-actions">
+        <button class="primary-btn" type="submit">${currentTransactionEditId ? "수정 저장" : "저장"}</button>
+        <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">취소</button>
+        ${currentTransactionEditId ? `<button class="delete-btn" type="button" data-finance-action="delete-transaction" data-id="${escapeHtml(currentTransactionEditId)}">삭제</button>` : ""}
+      </div>
+    </form>
+  `;
+
+  renderFinanceCaptureReviewStatus();
+  updateFinanceCaptureFileLabel();
+  resetFinancePopupScroll();
+}
+
+function updateFinanceCaptureFileLabel() {
+  const button = document.querySelector("[data-finance-action='choose-finance-capture']");
+  if (!button) return;
+
+  const input = query("financeCaptureImageInput");
+  const fileName = input?.files?.[0]?.name || financeCaptureSelectedFileName;
+  button.textContent = fileName || "\uCEA1\uCC98 \uC120\uD0DD";
+  button.title = fileName || "\uCEA1\uCC98 \uC120\uD0DD";
+}
+
+function renderFinanceCaptureReviewStatus() {
+  const mount = query("financeCaptureReviewStatus");
+  if (!mount) return;
+
+  if (!isFinanceCaptureReviewActive || !financeCaptureReviewQueue.length) {
+    mount.innerHTML = "";
+    return;
   }
 
-  if (refs.financeAssetPurpose) {
-    refs.financeAssetPurpose.value = "general";
+  mount.innerHTML = `
+    <div class="finance-capture-review-box">
+      <strong>${financeCaptureReviewIndex + 1} / ${financeCaptureReviewQueue.length} 검토 중</strong>
+      <div class="finance-capture-review-actions">
+        <button class="primary-btn" type="button" data-finance-action="register-current-finance-capture">등록</button>
+        <button class="secondary-btn" type="button" data-finance-action="register-all-finance-capture">전체 등록</button>
+        <button class="secondary-btn" type="button" data-finance-action="skip-finance-capture">이 항목 건너뛰기</button>
+        <button class="secondary-btn" type="button" data-finance-action="cancel-finance-capture">취소</button>
+      </div>
+    </div>
+  `;
+}
+
+function setFinanceCaptureLoading(isLoading) {
+  const button = query("financeCaptureAnalyzeBtn");
+  if (!button) return;
+
+  button.disabled = isLoading;
+  button.textContent = isLoading ? "분석 중..." : "캡처 채우기";
+}
+
+async function analyzeFinanceCaptureImage() {
+  const input = query("financeCaptureImageInput");
+  const file = input?.files?.[0];
+
+  if (!file) {
+    alert("먼저 거래내역 캡처 이미지를 선택해주세요.");
+    input?.focus();
+    return;
   }
 
-  if (refs.financeAssetAccountId) {
-    refs.financeAssetAccountId.value = getDefaultFinanceAccountId("leisure");
+  if (!window.Tesseract) {
+    alert("OCR 라이브러리가 아직 로드되지 않았습니다.");
+    return;
   }
 
-  if (refs.financeAssetTitle) {
-    refs.financeAssetTitle.value = "";
+  try {
+    setFinanceCaptureLoading(true);
+    const result = await window.Tesseract.recognize(file, "kor+eng");
+    const parsed = parseBankTransactionsFromOcrResult(result?.data || {}, {
+      defaultDate: todayKey(),
+      year: Number(getMonthKey().slice(0, 4)) || new Date().getFullYear(),
+    }).filter((item) => item.title && item.amount);
+
+    if (!parsed.length) {
+      alert("거래내역 항목을 찾지 못했습니다.");
+      return;
+    }
+
+    startFinanceCaptureReview(parsed);
+  } catch (error) {
+    console.error("거래내역 캡처 OCR 오류:", error);
+    alert("캡처 분석 중 오류가 발생했습니다.");
+  } finally {
+    setFinanceCaptureLoading(false);
+  }
+}
+
+function getFinanceCaptureDuplicateKey(item, includeTitle = false) {
+  const type = normalizeType(item?.type || item?.flowType || "expense");
+  const base = [
+    item?.date || "",
+    item?.time || "",
+    Number(item?.amount) || 0,
+    type,
+  ];
+  if (includeTitle) {
+    base.push(String(item?.title || item?.merchant || "").replace(/\s+/g, "").toLowerCase());
+  }
+  return base.join("|");
+}
+
+function normalizeFinanceCaptureReviewItems(items) {
+  const seen = new Set();
+
+  return (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      ...toTransactionFormItem(item),
+      id: "",
+    }))
+    .filter((item) => {
+      if (!item.title || !item.amount) return false;
+      const queueKey = getFinanceCaptureDuplicateKey(item);
+      if (seen.has(queueKey)) return false;
+      seen.add(queueKey);
+      return true;
+    });
+}
+
+function startFinanceCaptureReview(items) {
+  financeCaptureReviewQueue = normalizeFinanceCaptureReviewItems(items);
+  financeCaptureReviewIndex = 0;
+  isFinanceCaptureReviewActive = true;
+
+  if (!financeCaptureReviewQueue.length) {
+    isFinanceCaptureReviewActive = false;
+    alert("새로 검토할 거래 항목이 없습니다.");
+    return;
   }
 
-  if (refs.financeAssetAmount) {
-    refs.financeAssetAmount.value = "";
+  renderFinanceCaptureReviewItem();
+}
+
+function renderFinanceCaptureReviewItem() {
+  const item = financeCaptureReviewQueue[financeCaptureReviewIndex];
+
+  if (!item) {
+    cancelFinanceCaptureReview();
+    closeFinanceEditPopup();
+    renderFinance();
+    return;
   }
 
-  if (refs.financeAssetBaseDate) {
-    refs.financeAssetBaseDate.value = formatDateKey(new Date());
+  currentTransactionEditId = "";
+  renderTransactionForm(item);
+}
+
+function advanceFinanceCaptureReview() {
+  financeCaptureReviewIndex += 1;
+
+  if (financeCaptureReviewIndex >= financeCaptureReviewQueue.length) {
+    const count = financeCaptureReviewQueue.length;
+    cancelFinanceCaptureReview();
+    closeFinanceEditPopup();
+    renderFinance();
+    alert(`${count}건의 거래 검토를 마쳤습니다.`);
+    return;
   }
 
-  if (refs.financeAssetRepeat) {
-    refs.financeAssetRepeat.value = "none";
+  renderFinanceCaptureReviewItem();
+}
+
+function skipFinanceCaptureItem() {
+  if (!isFinanceCaptureReviewActive) return;
+  advanceFinanceCaptureReview();
+}
+
+function registerCurrentFinanceCaptureItem() {
+  if (!isFinanceCaptureReviewActive) return;
+
+  const form = query("financeEditPopupMount")?.querySelector("[data-finance-form='transaction']");
+  if (!form) return;
+
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+  } else {
+    submitTransactionForm(form);
+  }
+}
+
+function finishFinanceCaptureReviewCancel() {
+  if (!isFinanceCaptureReviewActive) {
+    closeFinanceEditPopup();
+    return;
   }
 
-  if (refs.financeAssetRepeatUntil) {
-    refs.financeAssetRepeatUntil.value = "";
-    refs.financeAssetRepeatUntil.disabled = true;
-    refs.financeAssetRepeatUntil.classList.remove("hidden");
+  cancelFinanceCaptureReview();
+  closeFinanceEditPopup();
+  renderFinance();
+}
+
+function cancelFinanceCaptureReview() {
+  financeCaptureReviewQueue = [];
+  financeCaptureReviewIndex = -1;
+  isFinanceCaptureReviewActive = false;
+  financeCaptureSelectedFileName = "";
+
+  const input = query("financeCaptureImageInput");
+  if (input) input.value = "";
+  updateFinanceCaptureFileLabel();
+}
+
+function saveTransactionDirect(item) {
+  const data = getFinanceData();
+  let accounts = getAccounts(data).map((account) => ({ ...account }));
+  const transactions = getTransactions(data).map((transaction) => ({ ...transaction }));
+  const normalized = {
+    ...toTransactionFormItem(item),
+    id: item.id || makeId(),
+    financeTransactionSchemaVersion: 3,
+    source: "finance-v2",
+    createdAt: Number(item.createdAt) || Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  transactions.push(normalized);
+  accounts = applyTransactionBalance(accounts, normalized, 1);
+
+  saveNextFinanceData({
+    ...data,
+    accounts,
+    transactions,
+    expenses: transactions,
+  });
+}
+
+function registerAllFinanceCaptureItems() {
+  if (!isFinanceCaptureReviewActive) return;
+
+  const remaining = financeCaptureReviewQueue.slice(financeCaptureReviewIndex);
+  remaining.forEach((item) => saveTransactionDirect(item));
+  const count = remaining.length;
+  cancelFinanceCaptureReview();
+  closeFinanceEditPopup();
+  renderFinance();
+  alert(`${count}건의 거래를 등록했습니다.`);
+}
+
+function renderRelationshipField(field, label, value) {
+  return `
+    <button class="finance-relationship-row" type="button" data-finance-action="relationship-field" data-field="${field}">
+      <span>${label}</span>
+      <strong data-relationship-value="${field}">${escapeHtml(value || "입력 전이에요")}</strong>
+    </button>
+  `;
+}
+
+function renderAccountOptions(selectedId = "", data = getFinanceData(), includeEmpty = true) {
+  return `${includeEmpty ? `<option value="">선택 안 함</option>` : ""}${getAccounts(data)
+    .map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === selectedId ? "selected" : ""}>${escapeHtml(account.name)}</option>`)
+    .join("")}`;
+}
+
+function renderAssetAccountOptions(selectedId = "", data = getFinanceData(), includeEmpty = true) {
+  const assets = getAssets(data);
+  const emptyLabel = assets.length ? "선택 안 함" : "보유 자산을 먼저 등록하세요";
+
+  return `${includeEmpty ? `<option value="">${emptyLabel}</option>` : ""}${assets
+    .map((asset) => {
+      const account = getAccountById(asset.accountId, data);
+      const label = account?.name
+        ? `${asset.name || asset.title || "이름 없는 자산"} · ${account.name}`
+        : asset.name || asset.title || "이름 없는 자산";
+      return `<option value="${escapeHtml(asset.id)}" ${asset.id === selectedId ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    })
+    .join("")}`;
+}
+
+function renderAssetForm(asset = null) {
+  const mount = getPopupMount();
+  const data = getFinanceData();
+  const amountValue = asset ? getAssetDisplayBalance(asset, data) : "";
+  const type = currentAssetRegisterType || asset?.type || "deposit_saving";
+  const title = type === "investment" ? "투자 등록" : "예금·적금 등록";
+  const badge = type === "investment" ? "투자 자산" : "예금·적금";
+  const icon = type === "investment" ? "📈" : "💰";
+
+  mount.innerHTML = `
+    <div class="finance-popup-header finance-register-header">
+      <div>
+        <span class="finance-form-badge">${badge}</span>
+        <h2>${currentAssetEditId ? "자산 수정" : title}</h2>
+        <p>${type === "investment" ? "투자계좌에 연결할 보유 투자 자산을 등록합니다." : "적금계좌에 연결할 예금·적금 자산을 등록합니다."}</p>
+      </div>
+      <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+    </div>
+    <form class="finance-form-v2" data-finance-form="asset" data-created-at="${Number(asset?.createdAt) || ""}">
+      <input type="hidden" name="assetType" value="${escapeHtml(type)}" />
+      <section class="finance-asset-form-hero">
+        <span>${icon}</span>
+        <div>
+          <strong>${currentAssetEditId ? "등록된 보유 자산을 수정합니다." : "새 보유 자산을 추가합니다."}</strong>
+          <small>입출금 거래가 아니라 현재 보유 중인 자산입니다.</small>
+        </div>
+      </section>
+      <section class="finance-form-section">
+        <div class="finance-form-section-title">
+          <span>1</span>
+          <strong>자산 정보</strong>
+        </div>
+        <div class="finance-form-grid">
+          <label class="finance-form-wide">자산명
+            <input name="name" type="text" value="${escapeHtml(asset?.name || asset?.title || "")}" placeholder="${type === "investment" ? "예: 국내 주식" : "예: 청년 적금"}" required />
+          </label>
+          <label>금액
+            <input name="amount" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(amountValue)}" placeholder="예: 5000000" required />
+          </label>
+          <label>기준일
+            <input name="baseDate" type="date" value="${escapeHtml(asset?.baseDate || todayKey())}" />
+          </label>
+        </div>
+      </section>
+      <section class="finance-form-section">
+        <div class="finance-form-section-title">
+          <span>2</span>
+          <strong>연결 정보</strong>
+        </div>
+        <label>연결 계좌
+          <select name="accountId">${renderAccountOptions(asset?.accountId, data)}</select>
+        </label>
+        <label>메모
+          <textarea name="memo" rows="2" placeholder="메모">${escapeHtml(asset?.memo || "")}</textarea>
+        </label>
+      </section>
+      <div class="finance-popup-actions">
+        <button class="primary-btn" type="submit">${currentAssetEditId ? "수정 저장" : "저장"}</button>
+        <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">취소</button>
+        ${currentAssetEditId ? `<button class="delete-btn" type="button" data-finance-action="delete-asset" data-id="${escapeHtml(currentAssetEditId)}">삭제</button>` : ""}
+      </div>
+    </form>
+  `;
+}
+
+function submitTransactionForm(form) {
+  const item = makeTransactionFromForm(form);
+
+  if (!item.title || !item.amount) {
+    alert("거래명과 금액을 입력해주세요.");
+    return;
   }
 
-  if (refs.financeAssetRepeatUntilNoneBtn) {
-    refs.financeAssetRepeatUntilNoneBtn.classList.add("hidden");
+  const data = getFinanceData();
+  let accounts = getAccounts(data).map((account) => ({ ...account }));
+  const transactions = getTransactions(data).map((transaction) => ({ ...transaction }));
+  const existingIndex = transactions.findIndex((transaction) => transaction.id === item.id);
+
+  if (existingIndex >= 0) {
+    accounts = applyTransactionBalance(accounts, transactions[existingIndex], -1);
+    transactions[existingIndex] = item;
+  } else {
+    transactions.push(item);
   }
 
-  if (refs.financeAssetRepeatUntilToggleBtn) {
-    refs.financeAssetRepeatUntilToggleBtn.textContent = "없음 사용";
+  accounts = applyTransactionBalance(accounts, item, 1);
+
+  saveNextFinanceData({
+    ...data,
+    accounts,
+    transactions,
+    expenses: transactions,
+  });
+
+  if (isFinanceCaptureReviewActive) {
+    advanceFinanceCaptureReview();
+    return;
   }
 
-  if (refs.financeSaveAssetBtn) {
-    refs.financeSaveAssetBtn.textContent = "자산 저장";
-  }
-
-  const formTitle = refs.financeAssetFormCard?.querySelector("h2");
-  if (formTitle) {
-    formTitle.textContent = "자산 추가";
-  }
-
-  refs.financeDeleteAssetBtn?.classList.add("hidden");
   closeFinanceEditPopup();
 }
 
-export function deleteEditingFinanceAsset() {
-  const editingId = getFinanceEditingAssetId();
-  if (!editingId) return;
+function submitAssetForm(form) {
+  const asset = makeAssetFromForm(form);
 
-  const ok = confirm("이 자산을 삭제할까요?");
-  if (!ok) return;
+  if (!asset.name || !asset.amount) {
+    alert("자산명과 금액을 입력해주세요.");
+    return;
+  }
 
-  const targetId = String(editingId).split("__")[0];
-  const nextData = cloneFinanceData();
+  const data = getFinanceData();
+  const assets = getAssets(data).map((item) => ({ ...item }));
+  const existingIndex = assets.findIndex((item) => item.id === asset.id);
 
-  nextData.assets = nextData.assets.filter((item) => item.id !== targetId);
+  if (existingIndex >= 0) {
+    assets[existingIndex] = asset;
+  } else {
+    assets.push(asset);
+  }
 
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  resetFinanceAssetForm();
-  renderFinance();
+  saveNextFinanceData({ ...data, assets });
+  closeFinanceEditPopup();
+}
+
+function openTransactionDetail(id) {
+  const item = getTransactions().find((transaction) => transaction.id === id);
+  if (!item) return;
+
+  const typeMeta = getTransactionTypeMeta(item.type || item.flowType);
+  const accountLabel = getTransactionAccountLabel(item);
+  const relationship = item.relationshipLedger || {};
+  const mount = getPopupMount();
+
+  mount.innerHTML = `
+    <div class="finance-detail-view">
+      <div class="finance-popup-header">
+        <div>
+          <h2>${escapeHtml(item.title || item.merchant || "거래")}</h2>
+          <p>${typeMeta.label}</p>
+        </div>
+        <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+      </div>
+      <section class="finance-detail-hero">
+        <span>${item.type === "income" ? "↗" : "↘"}</span>
+        <strong>${formatMoney(item.amount)}</strong>
+        <small>${escapeHtml(item.paymentMethod || accountLabel)} · ${escapeHtml(item.date || "")} ${escapeHtml(item.time || "")}</small>
+      </section>
+      <section class="finance-relationship-editor">
+        <h3>인간관계부</h3>
+        ${renderReadOnlyLedgerRow("누구와", relationship.withWhom || "입력 전이에요")}
+        ${renderReadOnlyLedgerRow("무엇을", relationship.what || "입력 전이에요")}
+        ${renderReadOnlyLedgerRow("어떻게", relationship.how || "입력 전이에요")}
+        ${renderReadOnlyLedgerRow("메모", relationship.memo || "입력 전이에요")}
+      </section>
+      <div class="finance-popup-actions">
+        <button class="primary-btn" type="button" data-finance-action="edit-transaction" data-id="${escapeHtml(item.id)}">수정</button>
+        <button class="delete-btn" type="button" data-finance-action="delete-transaction" data-id="${escapeHtml(item.id)}">삭제</button>
+      </div>
+    </div>
+  `;
+  openPopupOverlay();
+}
+
+function renderReadOnlyLedgerRow(label, value) {
+  return `
+    <div class="finance-relationship-row is-readonly">
+      <span>${label}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function openRelationshipPicker(field = "") {
+  currentRelationshipField = field;
+  const mount = getPopupMount();
+  const form = mount.querySelector("[data-finance-form='transaction']");
+  if (!form) return;
+
+  const selectedValue = form.querySelector(`[name="${field}"]`)?.value || "";
+  const title = field === "withWhom" ? "누구와 함께 하셨나요?" : field === "what" ? "무엇을 하셨나요?" : "어떻게 하셨나요?";
+  const options = field === "withWhom" ? WHO_OPTIONS : field === "how" ? HOW_OPTIONS : WHAT_MAIN_OPTIONS;
+  const subOptions = field === "what" && (selectedValue === "먹기" || !selectedValue) ? WHAT_SUB_OPTIONS["먹기"] : [];
+
+  const picker = document.createElement("section");
+  picker.className = "finance-picker-panel";
+  picker.dataset.relationshipPicker = field;
+  picker.innerHTML = `
+    <div class="finance-popup-header">
+      <div>
+        <h3>${title}</h3>
+        <p>선택된 항목은 저장 시 거래에 함께 남습니다.</p>
+      </div>
+      <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+    </div>
+    <div class="finance-chip-grid">
+      ${options.map((option) => renderPickerChip(field, option, selectedValue)).join("")}
+    </div>
+    ${subOptions.length ? `<div class="finance-chip-grid is-sub">${subOptions.map((option) => renderPickerChip(field, option, selectedValue)).join("")}</div>` : ""}
+    <div class="finance-picker-custom" data-custom-field="${field}">
+      <button class="secondary-btn" type="button" data-finance-action="show-custom-relationship" data-field="${field}">추가하기</button>
+    </div>
+  `;
+
+  form.classList.add("hidden");
+  mount.appendChild(picker);
+}
+
+function renderPickerChip(field, option, selectedValue) {
+  return `
+    <button class="${option === selectedValue ? "is-selected" : ""}" type="button" data-finance-action="relationship-pick" data-field="${field}" data-value="${escapeHtml(option)}">${escapeHtml(option)}</button>
+  `;
+}
+
+function applyRelationshipPick(target) {
+  const field = target.dataset.field || currentRelationshipField;
+  const value = target.dataset.value || "";
+  const mount = getPopupMount();
+  const form = mount.querySelector("[data-finance-form='transaction']");
+  if (!form) return;
+
+  const input = form.querySelector(`[name="${field}"]`);
+  const label = form.querySelector(`[data-relationship-value="${field}"]`);
+  if (input) input.value = value;
+  if (label) label.textContent = value || "입력 전이에요";
+
+  mount.querySelector(`[data-relationship-picker="${field}"]`)?.remove();
+
+  if (field === "what" && WHAT_SUB_OPTIONS[value]) {
+    form.classList.remove("hidden");
+    openRelationshipPicker(field);
+    return;
+  }
+
+  form.classList.remove("hidden");
+}
+
+function showCustomRelationship(field) {
+  const box = getPopupMount().querySelector(`[data-custom-field="${field}"]`);
+  if (!box) return;
+
+  box.innerHTML = `
+    <input id="financeCustomRelationshipInput" type="text" maxlength="8" placeholder="항목명(8자)" />
+    <button class="primary-btn" type="button" data-finance-action="save-custom-relationship" data-field="${field}">저장</button>
+    <button class="secondary-btn" type="button" data-finance-action="cancel-custom-relationship" data-field="${field}">취소</button>
+  `;
+  query("financeCustomRelationshipInput")?.focus();
+}
+
+function saveCustomRelationship(field) {
+  const value = query("financeCustomRelationshipInput")?.value.trim() || "";
+  if (!value) return;
+  applyRelationshipPick({ dataset: { field, value } });
+}
+
+export function startEditFinanceExpense(id) {
+  const item = getTransactions().find((transaction) => transaction.id === id);
+  if (!item) return;
+  renderTransactionForm(item);
+  openPopupOverlay();
+}
+
+export function deleteFinanceExpense(id) {
+  const targetId = id || currentTransactionEditId;
+  if (!targetId) return;
+
+  const data = getFinanceData();
+  const transactions = getTransactions(data);
+  const target = transactions.find((item) => item.id === targetId);
+  if (!target) return;
+
+  const nextTransactions = transactions.filter((item) => item.id !== targetId);
+  const accounts = applyTransactionBalance(getAccounts(data), target, -1);
+
+  saveNextFinanceData({
+    ...data,
+    accounts,
+    transactions: nextTransactions,
+    expenses: nextTransactions,
+  });
+  closeFinanceEditPopup();
+}
+
+export function deleteEditingFinanceExpense() {
+  deleteFinanceExpense(currentTransactionEditId);
 }
 
 export function startEditFinanceAsset(id) {
-  const refs = getRefs();
-  const targetId = String(id || "").split("__")[0];
-  const item = getFinanceData().assets.find((x) => x.id === targetId);
-  if (!item) return;
+  openFinanceAssetForm("", id);
+}
 
-  setFinanceEditingAssetId(targetId);
+export function deleteEditingFinanceAsset() {
+  if (!currentAssetEditId) return;
+  const data = getFinanceData();
+  saveNextFinanceData({
+    ...data,
+    assets: getAssets(data).filter((asset) => asset.id !== currentAssetEditId),
+  });
+  closeFinanceEditPopup();
+}
 
-  if (refs.financeAssetCategory) {
-    refs.financeAssetCategory.value = item.category || "stock";
+export function handleFinancePageChange(direction) {
+  const total = getMonthlyTransactions().length;
+  const maxPage = Math.max(1, Math.ceil(total / LEDGER_PAGE_SIZE));
+  financePage = Math.min(maxPage, Math.max(1, financePage + direction));
+  renderLedgerHome();
+}
+
+function shiftLedgerMonth(delta) {
+  const input = query("financeLedgerMonthInput");
+  const current = input?.value || todayKey().slice(0, 7);
+  const [year, month] = current.split("-").map(Number);
+  const date = new Date(year, month - 1 + delta, 1);
+  if (input) {
+    input.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   }
+  financePage = 1;
+  renderLedgerHome();
+}
 
-  if (refs.financeAssetPurpose) {
-    refs.financeAssetPurpose.value = item.accountPurpose || "general";
-  }
+function setFinanceCategoryStatSort(value) {
+  financeCategoryStatSort = ["default", "amount-desc", "amount-asc", "name"].includes(value)
+    ? value
+    : "default";
+  localStorage.setItem(FINANCE_CATEGORY_STAT_SORT_KEY, financeCategoryStatSort);
+  renderLedgerHome();
+}
 
-  if (refs.financeAssetAccountId) {
-    refs.financeAssetAccountId.value =
-      item.accountId || getDefaultFinanceAccountId("leisure");
-  }
-
-  if (refs.financeAssetTitle) {
-    refs.financeAssetTitle.value = item.name || item.title || "";
-  }
-
-  if (refs.financeAssetAmount) {
-    refs.financeAssetAmount.value = item.amount || "";
-  }
-
-  if (refs.financeAssetBaseDate) {
-    refs.financeAssetBaseDate.value = item.baseDate || item.createdDate || "";
-  }
-
-  if (refs.financeAssetRepeat) {
-    refs.financeAssetRepeat.value = item.repeat || "none";
-  }
-
-  if (refs.financeAssetRepeatUntil) {
-    refs.financeAssetRepeatUntil.value = item.repeatUntil || "";
-    refs.financeAssetRepeatUntil.disabled =
-      (item.repeat || "none") === "none";
-
-    const isNoneMode =
-      (item.repeat || "none") !== "none" && !item.repeatUntil;
-
-    refs.financeAssetRepeatUntil.classList.toggle("hidden", isNoneMode);
-    refs.financeAssetRepeatUntilNoneBtn?.classList.toggle("hidden", !isNoneMode);
-  }
-
-  if (refs.financeAssetRepeatUntilToggleBtn) {
-    refs.financeAssetRepeatUntilToggleBtn.textContent =
-      refs.financeAssetRepeatUntil?.classList.contains("hidden")
-        ? "날짜 사용"
-        : "없음 사용";
-  }
-
-  if (refs.financeSaveAssetBtn) {
-    refs.financeSaveAssetBtn.textContent = "자산 수정";
-  }
-
-  const formTitle = refs.financeAssetFormCard?.querySelector("h2");
-  if (formTitle) {
-    formTitle.textContent = "자산 수정";
-  }
-
-  refs.financeDeleteAssetBtn?.classList.remove("hidden");
-
-  openFinanceEditPopup("asset");
-
-  setTimeout(() => {
-    refs.financeAssetTitle?.focus();
-  }, 100);
+export function saveFinanceExpense() {
+  const form = query("financeEditPopupMount")?.querySelector("[data-finance-form='transaction']");
+  if (!form) return { ok: false };
+  submitTransactionForm(form);
+  return { ok: true };
 }
 
 export function saveFinanceAsset() {
-  const refs = getRefs();
+  const form = query("financeEditPopupMount")?.querySelector("[data-finance-form='asset']");
+  if (!form) return { ok: false };
+  submitAssetForm(form);
+  return { ok: true };
+}
 
-  const category = refs.financeAssetCategory?.value || "";
-  const accountPurpose = refs.financeAssetPurpose?.value || "general";
-  const accountId = refs.financeAssetAccountId?.value || "";
-  const title = refs.financeAssetTitle?.value.trim() || "";
-  const amount = Math.max(0, Number(refs.financeAssetAmount?.value) || 0);
-  const baseDate = refs.financeAssetBaseDate?.value || "";
-  const repeat = refs.financeAssetRepeat?.value || "none";
-  const repeatUntilInputHidden =
-    refs.financeAssetRepeatUntil?.classList.contains("hidden");
-  const repeatUntil =
-    repeat !== "none" && !repeatUntilInputHidden
-      ? refs.financeAssetRepeatUntil?.value || ""
-      : "";
+export function resetFinanceExpenseForm() {
+  currentTransactionEditId = "";
+}
 
-  if (!category) {
-    alert("자산 종류를 선택하세요.");
-    refs.financeAssetCategory?.focus();
-    return { ok: false };
-  }
+export function resetFinanceAssetForm() {
+  currentAssetEditId = "";
+}
 
-  if (!title) {
-    alert("자산명을 입력하세요.");
-    refs.financeAssetTitle?.focus();
-    return { ok: false };
-  }
-
-  if (!amount) {
-    alert("자산 금액을 입력하세요.");
-    refs.financeAssetAmount?.focus();
-    return { ok: false };
-  }
-
-  if (!baseDate) {
-    alert("기준 날짜를 입력하세요.");
-    refs.financeAssetBaseDate?.focus();
-    return { ok: false };
-  }
-
-  if (
-    repeat === "monthly" &&
-    repeatUntil &&
-    new Date(`${repeatUntil}T00:00`) < new Date(`${baseDate}T00:00`)
-  ) {
-    alert("반복 종료일은 기준 날짜와 같거나 뒤여야 합니다.");
-    refs.financeAssetRepeatUntil?.focus();
-    return { ok: false };
-  }
-
-  const editingId = String(getFinanceEditingAssetId() || "").split("__")[0];
-  const nextData = cloneFinanceData();
-
-  if (editingId) {
-    nextData.assets = nextData.assets.map((item) =>
-      item.id === editingId
-        ? {
-            ...item,
-            category,
-            accountPurpose,
-            purpose: accountPurpose,
-            accountId,
-            name: title,
-            title,
-            amount,
-            baseDate,
-            repeat,
-            repeatUntil,
-            isRecurring: repeat !== "none",
-            updatedAt: Date.now(),
-          }
-        : item,
-    );
-
-    setFinanceData(nextData);
-    saveFinanceLocal(nextData);
-    resetFinanceAssetForm();
-    renderFinance();
-
-    alert("자산이 수정되었습니다.");
-    return {
-      ok: true,
-      mode: "edit",
-    };
-  }
-
-  nextData.assets.push({
-    id: makeId(),
-    category,
-    accountPurpose,
-    purpose: accountPurpose,
-    accountId,
-    name: title,
-    title,
-    amount,
-    baseDate,
-    repeat,
-    repeatUntil,
-    isRecurring: repeat !== "none",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-
-  setFinanceData(nextData);
-  saveFinanceLocal(nextData);
-  resetFinanceAssetForm();
+export function saveFinanceBudget() {
   renderFinance();
-
-  alert("자산이 저장되었습니다.");
-  return {
-    ok: true,
-    mode: "create",
-  };
 }
 
-export function renderFinanceAssetSummary(transactionList = []) {
-  const refs = getRefs();
-  const todayKey = formatDateKey(new Date());
+export function syncFinanceSubCategoryOptions() {}
+export function syncFinanceExpenseFormButtons() {}
+export function renderFinanceExpenseList() {}
+export function renderFinanceFilterOptions() {}
+export function renderFinanceCategorySummary() {}
+export function renderFinanceAccountList() {}
+export function renderFinanceAssetFilters() {}
+export function renderFinanceAssetDashboard() {}
+export function renderFinanceAssetCategorySummary() {}
+export function renderFinanceAssetTransactionList() {}
 
-  const expandedAssets = expandRecurringAssetsInRange(
-    getFinanceData().assets,
-    "1900-01-01",
-    todayKey,
-  ).filter((item) => {
-    const targetDate = item.displayDate || item.baseDate || "";
-    return !!targetDate && targetDate <= todayKey;
-  });
-
-  const assetBaseAmount = expandedAssets.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0,
-  );
-
-  const transactionNetAmount = (Array.isArray(transactionList)
-    ? transactionList
-    : []
-  ).reduce((sum, item) => {
-    const amount = Number(item.amount) || 0;
-    return sum + ((item.flowType || "expense") === "income" ? amount : -amount);
-  }, 0);
-
-  const totalAssetAmount = assetBaseAmount + transactionNetAmount;
-
-  [refs.financeDashboardTotalAssetText, refs.financeManageTotalAssetText]
-    .filter(Boolean)
-    .forEach((node) => {
-      node.textContent = formatFinanceSummaryTotalAsset(totalAssetAmount);
-    });
-
-  if (!refs.financeAssetList) return;
-
-  if (!expandedAssets.length) {
-    refs.financeAssetList.innerHTML =
-      `<div class="empty-message">등록된 자산이 없습니다.</div>`;
-    return;
-  }
-
-  const categoryTextMap = {
-    stock: "二쇱떇",
-    savings: "?곴툑",
-    deposit: "?덇툑",
-  };
-
-  refs.financeAssetList.innerHTML = expandedAssets
-    .sort((a, b) => {
-      const aKey = a.displayDate || a.baseDate || "";
-      const bKey = b.displayDate || b.baseDate || "";
-      return bKey.localeCompare(aKey, "ko");
-    })
-    .map((item) => {
-      const categoryText =
-        categoryTextMap[item.category] || item.category || "기타";
-
-      const repeatText =
-        item.repeat === "monthly"
-          ? `<span class="tag-badge">매월 반복</span>`
-          : "";
-
-      const dateText = getAssetDisplayDateText(item);
-      const targetId = item.sourceId || item.id;
-
-      return `
-        <div
-          class="item-card clickable-item-card"
-          data-action="open-edit-finance-asset"
-          data-id="${targetId}"
-          role="button"
-          tabindex="0"
-          title="클릭해서 수정"
-        >
-          <div class="item-content">
-            <div class="item-title-row">
-              <div class="item-title">${escapeHtml(item.name || item.title || "")}</div>
-              <div class="finance-amount-strong">${formatMoney(item.amount)}</div>
-            </div>
-            <div class="item-meta compact-meta">
-              <span class="tag-badge">${escapeHtml(categoryText)}</span>
-              ${
-                item.accountId
-                  ? `<span class="tag-badge">${escapeHtml(getFinanceAccountName(item.accountId) || "연결 통장")}</span>`
-                  : ""
-              }
-              ${dateText ? `<span class="meta-badge compact">${escapeHtml(dateText)}</span>` : ""}
-              ${repeatText}
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
+export function saveFinanceAccount() {
+  renderFinance();
 }
 
-function getExpandedFinanceAssetsToToday() {
-  const todayKey = formatDateKey(new Date());
+export function resetFinanceAccountForm() {}
+export function deleteEditingFinanceAccount() {}
+export function startEditFinanceAccount() {}
 
-  return expandRecurringAssetsInRange(
-    getFinanceData().assets,
-    "1900-01-01",
-    todayKey,
-  ).filter((item) => {
-    const targetDate = item.displayDate || item.baseDate || "";
-    return !!targetDate && targetDate <= todayKey;
-  });
+export function openFinanceAssetSummaryPopup() {
+  openAssetTypeSheet();
 }
 
-function getExpandedFinanceTransactionsToToday() {
-  const todayKey = formatDateKey(new Date());
-
-  return expandRecurringFinanceExpensesInRange(
-    getFinanceData().expenses,
-    "1900-01-01",
-    todayKey,
-  ).filter((item) => {
-    const itemDate = item.date || "";
-    return !!itemDate && itemDate <= todayKey;
-  });
-}
-
-function getAssetCategoryText(category) {
-  if (category === "bank") return "통장";
-  const categoryTextMap = {
-    stock: "주식",
-    saving: "적금",
-    savings: "적금",
-    deposit: "예금",
-    cash: "현금",
-    custom: "기타",
-  };
-
-  return categoryTextMap[category] || category || "기타";
-}
-
-function getAssetPurposeText(purpose) {
-  const purposeTextMap = {
-    living: "생활비 통장",
-    leisure: "여유자금 통장",
-    general: "일반 자산",
-  };
-
-  return purposeTextMap[purpose] || purposeTextMap.general;
-}
-
-function getFinanceAccountSplitSummary(assetSnapshots = buildFinanceAssetSnapshots()) {
-  const accounts = getFinanceAccounts();
-  const livingAccounts = accounts.filter((item) => item.type === "living");
-  const leisureAccounts = accounts.filter((item) => item.type === "leisure");
-  const livingTotal = livingAccounts.reduce(
-    (sum, item) => sum + (Number(item.balance) || 0),
-    0,
-  );
-  const leisureTotal = leisureAccounts.reduce(
-    (sum, item) => sum + (Number(item.balance) || 0),
-    0,
-  );
-  const leisureTarget = getCoinBalance(getRewardsData()) * COIN_KRW_VALUE;
-
-  return {
-    livingTotal,
-    leisureTotal,
-    leisureTarget,
-    leisureGap: leisureTarget - leisureTotal,
-    livingCount: livingAccounts.length,
-    leisureCount: leisureAccounts.length,
-  };
-}
-
-function renderFinanceAccountSplit(assetSnapshots) {
-  const refs = getRefs();
-  if (!refs.financeAccountSplitCard) return;
-
-  const summary = getFinanceAccountSplitSummary(assetSnapshots);
-  const gapText =
-    summary.leisureGap > 0
-      ? `${formatMoney(summary.leisureGap)} 모자람`
-      : summary.leisureGap < 0
-        ? `${formatMoney(Math.abs(summary.leisureGap))} 초과`
-        : "목표 금액 일치";
-
-  refs.financeAccountLivingText &&
-    (refs.financeAccountLivingText.textContent = formatMoney(summary.livingTotal));
-  refs.financeAccountLeisureText &&
-    (refs.financeAccountLeisureText.textContent = formatMoney(summary.leisureTotal));
-  refs.financeAccountLeisureTargetText &&
-    (refs.financeAccountLeisureTargetText.textContent = formatMoney(summary.leisureTarget));
-  refs.financeAccountLeisureGapText &&
-    (refs.financeAccountLeisureGapText.textContent = gapText);
-  refs.financeAccountSplitDesc &&
-    (refs.financeAccountSplitDesc.textContent =
-      `생활비 통장 ${summary.livingCount}개 · 여유자금 통장 ${summary.leisureCount}개 · AI 코인 기준`);
-}
-
-function getRecurringAssetOccurrenceCount(item, todayKey) {
-  if (!item?.baseDate || item.baseDate > todayKey) return 0;
-  if (item.repeat !== "monthly") return 1;
-
-  let count = 0;
-  let cursor = item.baseDate;
-
-  while (cursor && cursor <= todayKey) {
-    if (item.repeatUntil && cursor > item.repeatUntil) {
-      break;
-    }
-
-    count += 1;
-    cursor = moveFinanceMonth(cursor, 1);
-  }
-
-  return count;
-}
-
-function getNextAssetOccurrenceDate(item, todayKey) {
-  if (!item?.baseDate || item.repeat !== "monthly") return "";
-
-  let cursor = item.baseDate;
-
-  while (cursor && cursor <= todayKey) {
-    cursor = moveFinanceMonth(cursor, 1);
-  }
-
-  if (!cursor) return "";
-  if (item.repeatUntil && cursor > item.repeatUntil) return "";
-  return cursor;
-}
-
-function buildFinanceAssetSnapshots() {
-  const todayKey = formatDateKey(new Date());
-
-  return (Array.isArray(getFinanceData().assets) ? getFinanceData().assets : [])
-    .map((item) => {
-      const occurrenceCount = getRecurringAssetOccurrenceCount(item, todayKey);
-      const currentAmount = (Number(item.amount) || 0) * occurrenceCount;
-      const nextDate = getNextAssetOccurrenceDate(item, todayKey);
-      const lastAppliedDate =
-        occurrenceCount > 0
-          ? item.repeat === "monthly"
-            ? moveFinanceMonth(item.baseDate, occurrenceCount - 1)
-            : item.baseDate || ""
-          : "";
-
-      return {
-        ...item,
-        accountPurpose: item.accountPurpose || "general",
-        currentAmount,
-        occurrenceCount,
-        categoryText: getAssetCategoryText(item.category),
-        purposeText: getAssetPurposeText(item.accountPurpose || "general"),
-        lastAppliedDate,
-        nextDate,
-      };
-    })
-    .filter((item) => item.currentAmount > 0 || item.baseDate);
-}
-
-function renderFinanceAssetPopupCard(item) {
-  const repeatText =
-    item.repeat === "monthly" ? `<span class="tag-badge">매월 반복</span>` : "";
-  const dateText = item.lastAppliedDate
-    ? `최근 반영 ${formatKoreanDate(item.lastAppliedDate)}`
-    : item.baseDate
-      ? `기준일 ${formatKoreanDate(item.baseDate)}`
-      : "";
-  const nextDateText = item.nextDate
-    ? `다음 반영 ${formatKoreanDate(item.nextDate)}`
-    : item.repeat === "monthly"
-      ? "반복 종료"
-      : "추가 반복 없음";
-
-  return `
-    <div
-      class="selected-item-card clickable-item-card"
-      data-action="open-edit-finance-asset"
-      data-id="${item.id}"
-      role="button"
-      tabindex="0"
-      title="클릭해서 수정"
-    >
-      <div class="selected-item-content">
-        <div class="selected-item-title">${escapeHtml(item.title || "")}</div>
-        <div class="selected-item-meta">
-          <span class="tag-badge">${escapeHtml(item.categoryText || "")}</span>
-          <span class="meta-badge">${formatMoney(item.currentAmount)}</span>
-          ${dateText ? `<span class="meta-badge">${escapeHtml(dateText)}</span>` : ""}
-          <span class="meta-badge">${escapeHtml(nextDateText)}</span>
-          ${repeatText}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-export function renderFinanceAssetFilters() {
-  const refs = getRefs();
-  const snapshots = buildFinanceAssetSnapshots();
-
-  if (refs.financeAssetCategoryFilter) {
-    const categories = [...new Set(snapshots.map((item) => item.category || ""))]
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "ko"));
-
-    const currentValue = refs.financeAssetCategoryFilter.value || "";
-    refs.financeAssetCategoryFilter.innerHTML = `<option value="">전체</option>`;
-
-    categories.forEach((category) => {
-      const option = document.createElement("option");
-      option.value = category;
-      option.textContent = getAssetCategoryText(category);
-
-      if (currentValue === category) {
-        option.selected = true;
-      }
-
-      refs.financeAssetCategoryFilter.appendChild(option);
-    });
-
-    if (currentValue && !categories.includes(currentValue)) {
-      refs.financeAssetCategoryFilter.value = "";
-    }
-  }
-
-  if (refs.financeAssetSortFilter && !refs.financeAssetSortFilter.value) {
-    refs.financeAssetSortFilter.value = "current_high";
-  }
-}
-
-function getFilteredFinanceAssetSnapshots() {
-  const refs = getRefs();
-  let list = buildFinanceAssetSnapshots();
-
-  const searchValue = (refs.financeAssetSearchInput?.value || "")
-    .trim()
-    .toLowerCase();
-  const categoryValue = refs.financeAssetCategoryFilter?.value || "";
-  const sortValue = refs.financeAssetSortFilter?.value || "current_high";
-
-  if (categoryValue) {
-    list = list.filter((item) => (item.category || "") === categoryValue);
-  }
-
-  if (searchValue) {
-    list = list.filter((item) => {
-      const target = [item.title, item.categoryText, item.baseDate]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return target.includes(searchValue);
-    });
-  }
-
-  if (sortValue === "latest") {
-    list.sort((a, b) =>
-      String(b.lastAppliedDate || b.baseDate || "").localeCompare(
-        String(a.lastAppliedDate || a.baseDate || ""),
-        "ko",
-      ),
-    );
-    return list;
-  }
-
-  if (sortValue === "title_asc") {
-    list.sort((a, b) =>
-      String(a.title || "").localeCompare(String(b.title || ""), "ko"),
-    );
-    return list;
-  }
-
-  list.sort((a, b) => {
-    const byAmount =
-      (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0);
-
-    if (byAmount !== 0) return byAmount;
-
-    return String(b.lastAppliedDate || b.baseDate || "").localeCompare(
-      String(a.lastAppliedDate || a.baseDate || ""),
-      "ko",
-    );
-  });
-
-  return list;
-}
-
-export function renderFinanceAssetDashboard() {
-  const refs = getRefs();
-  const assetSnapshots = buildFinanceAssetSnapshots().filter((item) =>
-    String(item.title || "").trim(),
-  );
-  renderFinanceAccountSplit(assetSnapshots);
-  const accountsTotal = getFinanceAccounts().reduce(
-    (sum, item) => sum + (Number(item.balance) || 0),
-    0,
-  );
-  const filteredAssets = getFilteredFinanceAssetSnapshots();
-
-  const assetBaseAmount = getFinanceData().assets.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0,
-  );
-
-  const totalAssetAmount = accountsTotal + assetBaseAmount;
-  const assetCount = assetSnapshots.length;
-  const filteredAssetAmount = filteredAssets.reduce(
-    (sum, item) => sum + (Number(item.currentAmount) || 0),
-    0,
-  );
-  const recurringMonthlyAmount = (Array.isArray(getFinanceData().assets)
-    ? getFinanceData().assets
-    : []
-  )
-    .filter((item) => item?.repeat === "monthly")
-    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-
-  const largestAsset = [...assetSnapshots].sort(
-    (a, b) => (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0),
-  )[0];
-
-  [refs.financeDashboardTotalAssetText, refs.financeManageTotalAssetText]
-    .filter(Boolean)
-    .forEach((node) => {
-      node.textContent = formatFinanceSummaryTotalAsset(totalAssetAmount);
-    });
-
-  if (refs.financeAssetRegisteredTotalText) {
-    refs.financeAssetRegisteredTotalText.textContent = `${assetCount}개`;
-  }
-
-  if (refs.financeAssetTransactionNetText) {
-    refs.financeAssetTransactionNetText.textContent =
-      formatMoney(filteredAssetAmount);
-  }
-
-  if (refs.financeAssetRecurringMonthlyText) {
-    refs.financeAssetRecurringMonthlyText.textContent = formatMoney(
-      recurringMonthlyAmount,
-    );
-  }
-
-  if (refs.financeAssetLargestText) {
-    refs.financeAssetLargestText.textContent = largestAsset?.name || largestAsset?.title || "-";
-  }
-
-  if (refs.financeAssetLargestMetaText) {
-    refs.financeAssetLargestMetaText.textContent = largestAsset
-      ? `${formatMoney(largestAsset.currentAmount)} · ${largestAsset.categoryText}`
-      : "아직 자산이 없습니다.";
-  }
-
-  if (!refs.financeAssetList) return;
-
-  if (!filteredAssets.length) {
-    refs.financeAssetList.innerHTML =
-      `<div class="empty-message">조건에 맞는 자산이 없습니다.</div>`;
-    return;
-  }
-
-  refs.financeAssetList.innerHTML = filteredAssets
-    .map((item) => {
-      const repeatText =
-        item.repeat === "monthly"
-          ? `<span class="tag-badge">매월 반복</span>`
-          : "";
-      const share =
-        assetBaseAmount > 0
-          ? Math.round(
-              ((Number(item.currentAmount) || 0) / assetBaseAmount) * 100,
-            )
-          : 0;
-      const appliedText =
-        item.repeat === "monthly"
-          ? `누적 ${item.occurrenceCount}회 적용`
-          : "1회 등록 자산";
-      const dateText = item.lastAppliedDate
-        ? `최근 반영 ${formatKoreanDate(item.lastAppliedDate)}`
-        : item.baseDate
-          ? `기준일 ${formatKoreanDate(item.baseDate)}`
-          : "";
-      const nextDateText = item.nextDate
-        ? `다음 반영 ${formatKoreanDate(item.nextDate)}`
-        : item.repeat === "monthly"
-          ? "반복 종료"
-          : "추가 반복 없음";
-
-      return `
-        <div
-          class="item-card clickable-item-card finance-asset-card"
-          data-action="open-edit-finance-asset"
-          data-id="${item.id}"
-          data-category="${escapeHtml(item.category || "")}"
-          role="button"
-          tabindex="0"
-          title="클릭해서 수정"
-        >
-          <div class="item-content">
-            <div class="finance-asset-card-top">
-              <div class="finance-asset-main">
-                <div class="item-title">${escapeHtml(item.title || "")}</div>
-                <div class="finance-asset-subtext">
-                  ${escapeHtml(appliedText)} · ${escapeHtml(dateText)}
-                </div>
-              </div>
-              <div class="finance-asset-amount-block">
-                <div class="finance-amount-strong">${formatMoney(item.currentAmount)}</div>
-                <div class="finance-asset-share">총 자산 대비 ${share}%</div>
-              </div>
-            </div>
-            <div class="item-meta compact-meta">
-              <span class="tag-badge">${escapeHtml(item.categoryText)}</span>
-              <span class="tag-badge">${escapeHtml(item.purposeText)}</span>
-              ${
-                item.baseDate
-                  ? `<span class="meta-badge compact">시작 ${escapeHtml(formatKoreanDate(item.baseDate))}</span>`
-                  : ""
-              }
-              <span class="meta-badge compact">${escapeHtml(nextDateText)}</span>
-              ${repeatText}
-            </div>
-            <div class="finance-asset-progress">
-              <div
-                class="finance-asset-progress-fill"
-                style="width: ${Math.max(2, Math.min(100, share))}%"
-              ></div>
-            </div>
-            <div class="finance-asset-metrics">
-              <div class="finance-asset-metric">
-                <span class="finance-asset-metric-label">누적 적용</span>
-                <span class="finance-asset-metric-value">${escapeHtml(appliedText)}</span>
-              </div>
-              <div class="finance-asset-metric">
-                <span class="finance-asset-metric-label">다음 기준</span>
-                <span class="finance-asset-metric-value">${escapeHtml(nextDateText.replace("다음 반영 ", ""))}</span>
-              </div>
-            </div>
-            <div class="finance-asset-card-actions">
-              <button
-                type="button"
-                class="secondary-btn"
-                data-action="quick-asset-cashflow"
-                data-id="${item.id}"
-                data-flow-type="income"
-              >
-                입금 기록
-              </button>
-              <button
-                type="button"
-                class="secondary-btn"
-                data-action="quick-asset-cashflow"
-                data-id="${item.id}"
-                data-flow-type="expense"
-              >
-                출금 기록
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-export function openFinanceAssetSummaryPopup(type) {
-  const refs = getRefs();
-  const snapshots = buildFinanceAssetSnapshots().filter((item) =>
-    String(item.title || "").trim(),
-  );
-  const filteredAssets = getFilteredFinanceAssetSnapshots();
-  const recurringAssets = snapshots.filter((item) => item.repeat === "monthly");
-  const largestAsset = [...snapshots].sort(
-    (a, b) => (Number(b.currentAmount) || 0) - (Number(a.currentAmount) || 0),
-  )[0];
-
-  const popupMap = {
-    assets: {
-      label: "등록 자산 목록",
-      list: snapshots,
-      empty: "등록된 자산이 없습니다.",
-    },
-    visible_assets: {
-      label: "현재 필터 자산 목록",
-      list: filteredAssets,
-      empty: "현재 필터 조건에 맞는 자산이 없습니다.",
-    },
-    recurring_assets: {
-      label: "월 반복 자산 목록",
-      list: recurringAssets,
-      empty: "월 반복 자산이 없습니다.",
-    },
-    largest_asset: {
-      label: "가장 큰 자산",
-      list: largestAsset ? [largestAsset] : [],
-      empty: "표시할 자산이 없습니다.",
-    },
-  };
-
-  const target = popupMap[type] || popupMap.assets;
-
-  if (refs.summaryPopupLabel) {
-    refs.summaryPopupLabel.textContent = target.label;
-  }
-
-  if (!refs.summaryPopupList) return;
-
-  refs.summaryPopupList.innerHTML = target.list.length
-    ? target.list.map((item) => renderFinanceAssetPopupCard(item)).join("")
-    : `<div class="empty-message">${target.empty}</div>`;
-
-  refs.summaryPopupOverlay?.classList.remove("hidden");
-}
-
-export function openFinanceOverviewSummaryPopup(type) {
-  const refs = getRefs();
-  const monthKey = refs.financeMonthKey?.value || "";
-  const savedBudget = getFinanceBudgetByMonth(monthKey);
-  const startDay = Math.max(
-    1,
-    Math.min(
-      31,
-      Number(
-        refs.financePeriodStartDay?.value ||
-          savedBudget?.startDay ||
-          getFinanceData().budgetSettings?.defaultStartDay ||
-          1,
-      ),
-    ),
-  );
-
-  const period = monthKey ? getFinancePeriodRange(monthKey, startDay) : null;
-  const monthlyTransactions = period
-    ? getFinanceExpensesForPeriod(period.startKey, period.endKey)
-    : [];
-  const monthlyIncomeList = monthlyTransactions.filter(
-    (item) => item.flowType === "income",
-  );
-  const monthlyExpenseList = monthlyTransactions.filter(
-    (item) => (item.flowType || "expense") === "expense",
-  );
-  const assetSnapshots = buildFinanceAssetSnapshots().filter((item) =>
-    String(item.title || "").trim(),
-  );
-
-  const popupMap = {
-    dashboard_assets: {
-      label: "총 자산 구성 목록",
-      mode: "assets",
-      list: assetSnapshots,
-      empty: "등록된 자산이 없습니다.",
-    },
-    monthly_income: {
-      label: "월 수입 목록",
-      mode: "transactions",
-      list: monthlyIncomeList,
-      empty: "이번 기간 수입 내역이 없습니다.",
-    },
-    monthly_expense: {
-      label: "월 지출 목록",
-      mode: "transactions",
-      list: monthlyExpenseList,
-      empty: "이번 기간 지출 내역이 없습니다.",
-    },
-    monthly_net: {
-      label: "월 순변동 목록",
-      mode: "transactions",
-      list: monthlyTransactions,
-      empty: "이번 기간 입출금 내역이 없습니다.",
-    },
-  };
-
-  const target = popupMap[type] || popupMap.dashboard_assets;
-
-  if (refs.summaryPopupLabel) {
-    refs.summaryPopupLabel.textContent = target.label;
-  }
-
-  if (!refs.summaryPopupList) return;
-
-  if (!target.list.length) {
-    refs.summaryPopupList.innerHTML = `<div class="empty-message">${target.empty}</div>`;
-  } else if (target.mode === "assets") {
-    refs.summaryPopupList.innerHTML = target.list
-      .map((item) => renderFinanceAssetPopupCard(item))
-      .join("");
-  } else {
-    refs.summaryPopupList.innerHTML = target.list
-      .map((item) => renderFinanceExpenseCard(item))
-      .join("");
-  }
-
-  refs.summaryPopupOverlay?.classList.remove("hidden");
-}
-
-export function renderFinanceAssetCategorySummary() {
-  const refs = getRefs();
-  if (!refs.financeAssetCategorySummaryList) return;
-
-  const snapshots = buildFinanceAssetSnapshots().filter(
-    (item) => (Number(item.currentAmount) || 0) > 0,
-  );
-
-  if (!snapshots.length) {
-    refs.financeAssetCategorySummaryList.innerHTML =
-      `<div class="empty-message">아직 자산 분포를 계산할 데이터가 없습니다.</div>`;
-    return;
-  }
-
-  const total = snapshots.reduce(
-    (sum, item) => sum + (Number(item.currentAmount) || 0),
-    0,
-  );
-
-  const grouped = snapshots.reduce((acc, item) => {
-    const key = item.category || "other";
-    if (!acc[key]) {
-      acc[key] = {
-        label: item.categoryText || "기타",
-        amount: 0,
-      };
-    }
-    acc[key].amount += Number(item.currentAmount) || 0;
-    return acc;
-  }, {});
-
-  const sorted = Object.entries(grouped).sort(
-    (a, b) => b[1].amount - a[1].amount,
-  );
-
-  refs.financeAssetCategorySummaryList.innerHTML = sorted
-    .map(([categoryKey, entry]) => {
-      const amount = Number(entry.amount) || 0;
-      const share = total > 0 ? Math.round((amount / total) * 100) : 0;
-
-      return `
-        <div class="item-card finance-asset-category-card" data-category="${escapeHtml(categoryKey)}">
-          <div class="item-content">
-            <div class="finance-asset-category-row">
-              <div class="item-title">${escapeHtml(entry.label)}</div>
-              <div class="finance-asset-category-total">${formatMoney(amount)}</div>
-            </div>
-            <div class="finance-asset-category-progress">
-              <div
-                class="finance-asset-category-progress-fill"
-                style="width: ${Math.max(4, Math.min(100, share))}%"
-              ></div>
-            </div>
-            <div class="item-meta compact-meta">
-              <span class="meta-badge compact">비중 ${share}%</span>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-export function renderFinanceAssetTransactionList(transactionList = []) {
-  const refs = getRefs();
-  if (!refs.financeAssetTransactionList) return;
-
-  const list = Array.isArray(transactionList)
-    ? [...transactionList].sort((a, b) => {
-        const aKey = `${a.date || ""} ${a.time || ""}`;
-        const bKey = `${b.date || ""} ${b.time || ""}`;
-        return bKey.localeCompare(aKey, "ko");
-      })
-    : [];
-
-  if (!list.length) {
-    refs.financeAssetTransactionList.innerHTML =
-      `<div class="empty-message">등록된 입출금 내역이 없습니다.</div>`;
-    financeAssetTransactionPage = 1;
-    return;
-  }
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(list.length / FINANCE_ASSET_TRANSACTION_PAGE_SIZE),
-  );
-
-  financeAssetTransactionPage = Math.min(
-    Math.max(1, financeAssetTransactionPage),
-    totalPages,
-  );
-
-  const startIndex =
-    (financeAssetTransactionPage - 1) * FINANCE_ASSET_TRANSACTION_PAGE_SIZE;
-  const pageItems = list.slice(
-    startIndex,
-    startIndex + FINANCE_ASSET_TRANSACTION_PAGE_SIZE,
-  );
-  const pagination = `
-    <div class="planner-pagination finance-asset-transaction-pagination">
-      <button
-        class="secondary-btn"
-        type="button"
-        data-action="change-finance-asset-transaction-page"
-        data-direction="-1"
-        ${financeAssetTransactionPage <= 1 ? "disabled" : ""}
-      >
-        이전
-      </button>
-      <span class="planner-pagination-text">${financeAssetTransactionPage} / ${totalPages} · 총 ${list.length}개</span>
-      <button
-        class="secondary-btn"
-        type="button"
-        data-action="change-finance-asset-transaction-page"
-        data-direction="1"
-        ${financeAssetTransactionPage >= totalPages ? "disabled" : ""}
-      >
-        다음
-      </button>
-    </div>
-  `;
-
-  refs.financeAssetTransactionList.innerHTML = [
-    pagination,
-    pageItems.map((item) => renderFinanceExpenseCard(item)).join(""),
-    pagination,
-  ].join("");
+export function openFinanceOverviewSummaryPopup() {
+  renderLedgerHome();
 }
 
 export function handleFinanceAssetTransactionPageChange(direction) {
-  financeAssetTransactionPage += Number(direction) || 0;
-  renderFinance();
-
-  getRefs().financeAssetTransactionList?.scrollIntoView({
-    behavior: "smooth",
-    block: "start",
-  });
+  handleFinancePageChange(direction);
 }
-
-export function openFinanceEditPopup(mode = "expense") {
-  const refs = getRefs();
-
-  if (!refs.financeEditPopupOverlay || !refs.financeEditPopupMount) return;
-
-  const targetCard =
-    mode === "asset" ? refs.financeAssetFormCard : refs.financeExpenseFormCard;
-
-  if (!targetCard) return;
-
-  if (!targetCard.__originalParent) {
-    targetCard.__originalParent = targetCard.parentNode || null;
-    targetCard.__originalNextSibling = targetCard.nextSibling || null;
-  }
-
-  refs.financeEditPopupMount.innerHTML = "";
-  refs.financeEditPopupMount.dataset.financePopupMode = mode;
-  refs.financeEditPopupMount.appendChild(targetCard);
-
-  targetCard.classList.remove("hidden");
-  refs.financeEditPopupOverlay.classList.remove("hidden");
-
-  document.body.classList.add("modal-open");
-}
-
-export function closeFinanceEditPopup() {
-  const refs = getRefs();
-
-  if (!refs.financeEditPopupOverlay || !refs.financeEditPopupMount) return;
-
-  [refs.financeExpenseFormCard, refs.financeAssetFormCard].forEach((card) => {
-    if (!card) return;
-
-    const originalParent = card.__originalParent || null;
-    const originalNextSibling = card.__originalNextSibling || null;
-
-    if (originalParent) {
-      if (
-        originalNextSibling &&
-        originalNextSibling.parentNode === originalParent
-      ) {
-        originalParent.insertBefore(card, originalNextSibling);
-      } else {
-        originalParent.appendChild(card);
-      }
-    }
-
-    card.classList.add("hidden");
-  });
-
-  refs.financeEditPopupMount.innerHTML = "";
-  refs.financeEditPopupMount.dataset.financePopupMode = "";
-  refs.financeEditPopupOverlay.classList.add("hidden");
-
-  document.body.classList.remove("modal-open");
-}
-
-function isRecurringFinanceAssetMaster(item) {
-  return !!item && item.repeat === "monthly";
-}
-
-function buildRecurringFinanceAssetOccurrence(item, occurrenceDate) {
-  return {
-    ...item,
-    id: `${item.id}__${occurrenceDate}`,
-    sourceId: item.id,
-    occurrenceDateKey: occurrenceDate,
-    displayDate: occurrenceDate,
-    isVirtualOccurrence: true,
-  };
-}
-
-function expandRecurringAssetsInRange(sourceItems, rangeStartKey, rangeEndKey) {
-  const items = Array.isArray(sourceItems) ? sourceItems : [];
-  const expanded = [];
-  const todayKey = formatDateKey(new Date());
-
-  const effectiveEndKey =
-    rangeEndKey && rangeEndKey < todayKey ? rangeEndKey : todayKey;
-
-  items.forEach((item) => {
-    if (!item) return;
-
-    const baseDate = item.displayDate || item.baseDate || "";
-
-    if (!isRecurringFinanceAssetMaster(item)) {
-      if (!baseDate || baseDate <= effectiveEndKey) {
-        expanded.push(item);
-      }
-      return;
-    }
-
-    let cursor = item.baseDate || "";
-    if (!cursor) return;
-
-    while (cursor < rangeStartKey) {
-      cursor = moveFinanceMonth(cursor, 1);
-
-      if (item.repeatUntil && cursor > item.repeatUntil) {
-        break;
-      }
-
-      if (cursor > effectiveEndKey) {
-        break;
-      }
-    }
-
-    while (cursor && cursor <= effectiveEndKey) {
-      if (item.repeatUntil && cursor > item.repeatUntil) {
-        break;
-      }
-
-      expanded.push(buildRecurringFinanceAssetOccurrence(item, cursor));
-      cursor = moveFinanceMonth(cursor, 1);
-    }
-  });
-
-  return expanded;
-}
-
-function getAssetDisplayDateText(item) {
-  const targetDate = item.displayDate || item.baseDate || "";
-  if (!targetDate) return "";
-  return formatKoreanDate(targetDate);
-}
-
-function isRecurringFinanceMaster(item) {
-  return !!item && item.repeat === "monthly" && !item.groupId;
-}
-
-function moveFinanceMonth(dateKey, diffMonths = 1) {
-  const source = new Date(`${dateKey}T00:00`);
-  const originalDay = source.getDate();
-
-  source.setDate(1);
-  source.setMonth(source.getMonth() + diffMonths);
-
-  const lastDay = new Date(
-    source.getFullYear(),
-    source.getMonth() + 1,
-    0,
-  ).getDate();
-
-  source.setDate(Math.min(originalDay, lastDay));
-
-  return formatDateKey(source);
-}
-
-function buildRecurringFinanceOccurrence(item, occurrenceDate) {
-  return {
-    ...item,
-    id: `${item.id}__${occurrenceDate}`,
-    sourceId: item.id,
-    date: occurrenceDate,
-    isVirtualOccurrence: true,
-  };
-}
-
-function expandRecurringFinanceExpensesInRange(
-  sourceItems,
-  rangeStartKey,
-  rangeEndKey,
-) {
-  const items = Array.isArray(sourceItems) ? sourceItems : [];
-  const expanded = [];
-  const todayKey = formatDateKey(new Date());
-
-  const effectiveEndKey =
-    rangeEndKey && rangeEndKey < todayKey ? rangeEndKey : todayKey;
-
-  items.forEach((item) => {
-    if (!item) return;
-
-    if (!isRecurringFinanceMaster(item)) {
-      const itemDate = item.date || "";
-      if (!itemDate || itemDate <= effectiveEndKey) {
-        expanded.push(item);
-      }
-      return;
-    }
-
-    let cursor = item.date || "";
-    if (!cursor) return;
-
-    while (cursor < rangeStartKey) {
-      cursor = moveFinanceMonth(cursor, 1);
-
-      if (item.repeatUntil && cursor > item.repeatUntil) {
-        break;
-      }
-
-      if (cursor > effectiveEndKey) {
-        break;
-      }
-    }
-
-    while (cursor && cursor <= effectiveEndKey) {
-      if (item.repeatUntil && cursor > item.repeatUntil) {
-        break;
-      }
-
-      expanded.push(buildRecurringFinanceOccurrence(item, cursor));
-      cursor = moveFinanceMonth(cursor, 1);
-    }
-  });
-
-  return expanded;
-}
-
-export function openFinanceAssetForm() {
-  if (typeof window.showFinanceAssetManagePage === "function") {
-    window.showFinanceAssetManagePage();
-  }
-
-  resetFinanceAssetForm();
-  openFinanceEditPopup("asset");
-
-  setTimeout(() => {
-    getRefs().financeAssetTitle?.focus();
-  }, 100);
-}
-
-function renderFinanceExpenseForm(item) {
-  return `
-    <div class="form-grid-2">
-
-      <div class="form-group">
-        <label>유형</label>
-        <select id="financeEditFlow">
-          <option value="expense" ${item?.flow === "expense" ? "selected" : ""}>지출</option>
-          <option value="income" ${item?.flow === "income" ? "selected" : ""}>입금</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>금액</label>
-        <input id="financeEditAmount"
-          type="number"
-          value="${item?.amount || ""}">
-      </div>
-
-      <div class="form-group">
-        <label>카테고리</label>
-        <input id="financeEditCategory"
-          type="text"
-          value="${item?.category || ""}">
-      </div>
-
-      <div class="form-group">
-        <label>메모</label>
-        <input id="financeEditMemo"
-          type="text"
-          value="${item?.memo || ""}">
-      </div>
-
-    </div>
-
-    <div class="button-row">
-      <button id="financeUpdateExpenseBtn" class="primary-btn">
-        수정
-      </button>
-
-      <button id="financeDeleteExpenseBtn" class="danger-btn">
-        삭제
-      </button>
-    </div>
-  `;
-}
-
-function renderFinanceAssetForm(asset) {
-  return `
-    <div class="form-grid-2">
-
-      <div class="form-group">
-        <label>자산 이름</label>
-        <input id="financeEditAssetTitle"
-          value="${asset?.title || ""}">
-      </div>
-
-      <div class="form-group">
-        <label>금액</label>
-        <input id="financeEditAssetAmount"
-          type="number"
-          value="${asset?.amount || ""}">
-      </div>
-
-      <div class="form-group">
-        <label>유형</label>
-        <select id="financeEditAssetType">
-          <option value="stock" ${asset?.type === "stock" ? "selected" : ""}>주식</option>
-          <option value="saving" ${asset?.type === "saving" ? "selected" : ""}>적금</option>
-          <option value="deposit" ${asset?.type === "deposit" ? "selected" : ""}>예금</option>
-        </select>
-      </div>
-
-    </div>
-
-    <div class="button-row">
-      <button id="financeUpdateAssetBtn" class="primary-btn">
-        수정
-      </button>
-
-      <button id="financeDeleteAssetBtn" class="danger-btn">
-        삭제
-      </button>
-    </div>
-  `;
-}
-

@@ -53,6 +53,7 @@ import {
   getStatusText,
   toggleItemStatus,
   toggleRecurringSingleSlotStatus,
+  ensureNextRecurringItemAfterStatusChange,
   deleteItemById,
   applyRecurringScheduleEditScope,
   toggleRecurringScheduleSlotStatus,
@@ -223,6 +224,8 @@ let activePlaceSelectMode = "single";
 const now = new Date();
 let calendarYear = now.getFullYear();
 let calendarMonth = now.getMonth();
+let calendarPickerYear = calendarYear;
+let calendarPickerMonth = calendarMonth;
 
 let dashboardPage = 1;
 let hideCompletedDashboardItems = false;
@@ -235,6 +238,7 @@ let plannerProjectPage = 1;
 let plannerNotificationTimer = null;
 let editingInboxId = null;
 let editingProjectId = null;
+let pendingInboxConversion = null;
 let popupQuickAddProjectId = "";
 let collapsedProjectSections = loadProjectSectionCollapseState();
 
@@ -311,13 +315,13 @@ const HUB_TAB_MAP = {
   finance: {
     left: {
       tab: "finance",
-      label: "대쉬보드",
-      icon: "📊",
+      label: "자산 홈",
+      icon: "💰",
     },
     right: {
       tab: "salary",
-      label: "유틸",
-      icon: "🧰",
+      label: "가계부",
+      icon: "🧾",
     },
   },
 };
@@ -366,6 +370,7 @@ const openPlannerFormBtn = document.getElementById("openPlannerFormBtn");
 const plannerOverviewSection = document.getElementById(
   "plannerOverviewSection",
 );
+const plannerTabSection = document.getElementById("tab-planner");
 const plannerFormHome = document.getElementById("plannerFormHome");
 const plannerFormCard = document.getElementById("plannerFormCard");
 const plannerFormTitle = document.getElementById("plannerFormTitle");
@@ -503,6 +508,10 @@ const itemProjectId = document.getElementById("itemProjectId");
 const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
 const calendarTitle = document.getElementById("calendarTitle");
+const calendarTitleBtn = document.getElementById("calendarTitleBtn");
+const calendarDatePickerPanel = document.getElementById(
+  "calendarDatePickerPanel",
+);
 const calendarGrid = document.getElementById("calendarGrid");
 const plannerCalendarSection = document.getElementById(
   "plannerCalendarSection",
@@ -525,6 +534,7 @@ const popupItemType = document.getElementById("popupItemType");
 const popupTitleInput = document.getElementById("popupTitleInput");
 const popupItemColor = document.getElementById("popupItemColor");
 const popupItemTag = document.getElementById("popupItemTag");
+const popupReminderMinutes = document.getElementById("popupReminderMinutes");
 const popupTodoDate = document.getElementById("popupTodoDate");
 const popupScheduleStartDate = document.getElementById(
   "popupScheduleStartDate",
@@ -1656,6 +1666,7 @@ configurePlannerUiModule({
     popupTitleInput,
     popupItemColor,
     popupItemTag,
+    popupReminderMinutes,
     popupTodoDate,
     popupScheduleStartDate,
     popupQuickAddForm,
@@ -1720,6 +1731,46 @@ initAuth({ renderAll });
 registerPlannerServiceWorker();
 initAppOnce();
 
+const popupBackdropPointerState = new WeakMap();
+
+function bindPopupBackdropClose(overlay, onClose) {
+  if (!overlay || typeof onClose !== "function") return;
+
+  overlay.addEventListener("pointerdown", (event) => {
+    popupBackdropPointerState.set(overlay, {
+      startedOnBackdrop: event.target === overlay,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    });
+  });
+
+  overlay.addEventListener("pointermove", (event) => {
+    const state = popupBackdropPointerState.get(overlay);
+    if (!state) return;
+
+    const moveX = Math.abs(event.clientX - state.startX);
+    const moveY = Math.abs(event.clientY - state.startY);
+
+    if (moveX > 6 || moveY > 6) {
+      state.moved = true;
+    }
+  });
+
+  overlay.addEventListener("click", (event) => {
+    const state = popupBackdropPointerState.get(overlay);
+    popupBackdropPointerState.delete(overlay);
+
+    if (
+      event.target === overlay &&
+      state?.startedOnBackdrop &&
+      !state.moved
+    ) {
+      onClose(event);
+    }
+  });
+}
+
 function registerPlannerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
 
@@ -1760,11 +1811,7 @@ async function initAppOnce() {
     closeRecurringEditScopePopup,
   );
 
-  recurringEditScopeOverlay?.addEventListener("click", (e) => {
-    if (e.target === recurringEditScopeOverlay) {
-      closeRecurringEditScopePopup();
-    }
-  });
+  bindPopupBackdropClose(recurringEditScopeOverlay, closeRecurringEditScopePopup);
 
   scopeOnlyThisBtn?.addEventListener("click", () => {
     if (pendingRecurringEditPayload?.mode === "delete") {
@@ -1850,16 +1897,13 @@ async function initAppOnce() {
 
   openSettingsBtn?.addEventListener("click", openSettingsPopup);
   closeSettingsBtn?.addEventListener("click", closeSettingsPopup);
-  settingsPopupOverlay?.addEventListener("click", (e) => {
-    if (e.target === settingsPopupOverlay) {
-      closeSettingsPopup();
-    }
-  });
+  bindPopupBackdropClose(settingsPopupOverlay, closeSettingsPopup);
   settingsNotificationsToggle?.addEventListener("change", () => {
     togglePlannerNotifications(Boolean(settingsNotificationsToggle.checked));
   });
 
   closePlannerFormBtn?.addEventListener("click", () => {
+    clearPendingInboxConversion();
     resetPlannerForm();
 
     if (isEditingInPopup) {
@@ -1870,6 +1914,7 @@ async function initAppOnce() {
   });
 
   cancelEditBtn?.addEventListener("click", () => {
+    clearPendingInboxConversion();
     resetPlannerForm();
 
     if (isEditingInPopup) {
@@ -1882,22 +1927,18 @@ async function initAppOnce() {
   openPopupQuickAddBtn?.addEventListener("click", openPopupQuickAddForm);
 
   closeEditPopupBtn?.addEventListener("click", () => {
+    clearPendingInboxConversion();
     resetPlannerForm();
     closeEditPopup();
   });
 
-  editPopupOverlay?.addEventListener("click", (e) => {
-    if (e.target === editPopupOverlay) {
-      resetPlannerForm();
-      closeEditPopup();
-    }
+  bindPopupBackdropClose(editPopupOverlay, () => {
+    clearPendingInboxConversion();
+    resetPlannerForm();
+    closeEditPopup();
   });
   closeProjectDetailBtn?.addEventListener("click", closeProjectDetailPopup);
-  projectDetailOverlay?.addEventListener("click", (e) => {
-    if (e.target === projectDetailOverlay) {
-      closeProjectDetailPopup();
-    }
-  });
+  bindPopupBackdropClose(projectDetailOverlay, closeProjectDetailPopup);
 
   openScheduleHubBtn?.addEventListener("click", () => {
     openHubGroup("schedule");
@@ -2003,19 +2044,34 @@ async function initAppOnce() {
     renderCalendar();
   });
 
-  clearSelectedDateBtn?.addEventListener("click", closeDatePopupAndClearProjectContext);
-  calendarPopupOverlay?.addEventListener("click", (e) => {
-    if (e.target === calendarPopupOverlay) {
-      closeDatePopupAndClearProjectContext();
-    }
+  calendarTitleBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleCalendarDatePicker();
   });
 
-  closeSummaryPopupBtn?.addEventListener("click", closeSummaryPopup);
-  summaryPopupOverlay?.addEventListener("click", (e) => {
-    if (e.target === summaryPopupOverlay) {
-      closeSummaryPopup();
-    }
+  calendarDatePickerPanel?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const target = event.target.closest("[data-picker-action]");
+    if (!target) return;
+
+    handleCalendarPickerAction(target);
   });
+
+  document.addEventListener("click", (event) => {
+    if (calendarDatePickerPanel?.classList.contains("hidden")) return;
+    if (calendarDatePickerPanel?.contains(event.target)) return;
+    if (calendarTitleBtn?.contains(event.target)) return;
+    closeCalendarDatePicker();
+  });
+
+  clearSelectedDateBtn?.addEventListener("click", closeDatePopupAndClearProjectContext);
+  bindPopupBackdropClose(
+    calendarPopupOverlay,
+    closeDatePopupAndClearProjectContext,
+  );
+
+  closeSummaryPopupBtn?.addEventListener("click", closeSummaryPopup);
+  bindPopupBackdropClose(summaryPopupOverlay, closeSummaryPopup);
 
   summaryButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -2186,11 +2242,9 @@ async function initAppOnce() {
     closeFinanceEditPopup();
   });
 
-  financeEditPopupOverlay?.addEventListener("click", (e) => {
-    if (e.target === financeEditPopupOverlay) {
-      cancelFinanceOcrReview();
-      closeFinanceEditPopup();
-    }
+  bindPopupBackdropClose(financeEditPopupOverlay, () => {
+    cancelFinanceOcrReview();
+    closeFinanceEditPopup();
   });
 
   financeAnalyzeReceiptBtn?.addEventListener(
@@ -2252,9 +2306,120 @@ function renderAll() {
   renderTodayList();
   renderAiRecommendations();
   renderCalendar();
+  repairOrphanedInboxConversions();
   renderPlannerWorkspace();
   renderFinance();
   syncPlannerNotificationSettingsUi();
+  enforcePlannerWorkspaceVisibility();
+}
+
+function openCalendarDatePicker() {
+  if (!calendarDatePickerPanel) return;
+
+  calendarPickerYear = calendarYear;
+  calendarPickerMonth = calendarMonth;
+  renderCalendarDatePicker();
+  calendarDatePickerPanel.classList.remove("hidden");
+}
+
+function closeCalendarDatePicker() {
+  calendarDatePickerPanel?.classList.add("hidden");
+}
+
+function toggleCalendarDatePicker() {
+  if (!calendarDatePickerPanel) return;
+
+  if (calendarDatePickerPanel.classList.contains("hidden")) {
+    openCalendarDatePicker();
+  } else {
+    closeCalendarDatePicker();
+  }
+}
+
+function renderCalendarDatePicker() {
+  if (!calendarDatePickerPanel) return;
+
+  const monthLabel = `${calendarPickerYear}년`;
+  const monthButtons = Array.from({ length: 12 }, (_, index) => {
+    const isSelected =
+      calendarPickerYear === calendarYear && index === calendarMonth;
+
+    return `
+      <button
+        class="calendar-picker-month-btn ${isSelected ? "selected" : ""}"
+        type="button"
+        data-picker-action="select-month"
+        data-month="${index}"
+      >
+        ${index + 1}월
+      </button>
+    `;
+  });
+
+  calendarDatePickerPanel.innerHTML = `
+    <div class="calendar-picker-header">
+      <strong class="calendar-picker-month">${monthLabel}</strong>
+      <div>
+        <button class="calendar-picker-arrow" type="button" data-picker-action="prev-year" aria-label="이전 년도">↑</button>
+        <button class="calendar-picker-arrow" type="button" data-picker-action="next-year" aria-label="다음 년도">↓</button>
+      </div>
+    </div>
+    <div class="calendar-picker-month-grid">
+      ${monthButtons.join("")}
+    </div>
+    <div class="calendar-picker-footer">
+      <button class="calendar-picker-link" type="button" data-picker-action="clear">삭제</button>
+      <button class="calendar-picker-link" type="button" data-picker-action="today">오늘</button>
+    </div>
+  `;
+}
+
+function moveCalendarPickerYear(direction) {
+  calendarPickerYear += direction;
+  renderCalendarDatePicker();
+}
+
+function moveCalendarToMonth(year, month) {
+  if (!Number.isInteger(year) || !Number.isInteger(month)) return;
+  if (month < 0 || month > 11) return;
+
+  calendarYear = year;
+  calendarMonth = month;
+  selectedDate = "";
+  closeCalendarDatePicker();
+  closeDatePopup();
+  renderCalendar();
+}
+
+function handleCalendarPickerAction(target) {
+  const action = target.dataset.pickerAction || "";
+
+  if (action === "prev-year") {
+    moveCalendarPickerYear(-1);
+    return;
+  }
+
+  if (action === "next-year") {
+    moveCalendarPickerYear(1);
+    return;
+  }
+
+  if (action === "select-month") {
+    moveCalendarToMonth(calendarPickerYear, Number(target.dataset.month));
+    return;
+  }
+
+  if (action === "today") {
+    const today = new Date();
+    moveCalendarToMonth(today.getFullYear(), today.getMonth());
+    return;
+  }
+
+  if (action === "clear") {
+    closeCalendarDatePicker();
+    closeDatePopupAndClearProjectContext();
+    renderCalendar();
+  }
 }
 
 function loadDashboardHideCompletedPreference() {
@@ -2361,6 +2526,15 @@ function hideAllPlannerWorkspaceSections() {
   plannerProjectSection?.classList.add("hidden");
 }
 
+function setPlannerWorkspaceMode(mode) {
+  ["home", "inbox", "project"].forEach((name) => {
+    plannerTabSection?.classList.toggle(
+      `planner-workspace-mode-${name}`,
+      mode === name,
+    );
+  });
+}
+
 function setPlannerScheduleSectionsVisible(isVisible) {
   [plannerOverviewSection, plannerFormHome, plannerCalendarSection].forEach(
     (section) => {
@@ -2369,27 +2543,76 @@ function setPlannerScheduleSectionsVisible(isVisible) {
   );
 }
 
+function forceHidePlannerTaskForms() {
+  clearPendingInboxConversion();
+  if (!editPopupOverlay?.classList.contains("hidden")) {
+    closeEditPopup();
+  }
+  closePopupQuickAddFormAndClearProject();
+  closeDatePopup();
+  closePlannerFormCard();
+  plannerFormCard?.classList.add("hidden");
+  plannerFormCard?.classList.remove("selected-date-mode");
+  plannerFormHome?.classList.add("hidden");
+  popupQuickAddForm?.classList.add("hidden");
+  calendarPopupOverlay?.classList.add("hidden");
+}
+
+function enforcePlannerWorkspaceVisibility() {
+  setPlannerWorkspaceMode(plannerWorkspaceView);
+
+  if (plannerWorkspaceView === "inbox") {
+    setPlannerScheduleSectionsVisible(false);
+    hideAllPlannerWorkspaceSections();
+    plannerInboxSection?.classList.remove("hidden");
+    forceHidePlannerTaskForms();
+    return;
+  }
+
+  if (plannerWorkspaceView === "project") {
+    setPlannerScheduleSectionsVisible(false);
+    hideAllPlannerWorkspaceSections();
+    plannerProjectSection?.classList.remove("hidden");
+    forceHidePlannerTaskForms();
+    return;
+  }
+
+  setPlannerScheduleSectionsVisible(true);
+}
+
+function hidePlannerScheduleSections() {
+  setPlannerWorkspaceMode("home");
+  setPlannerScheduleSectionsVisible(false);
+  hideAllPlannerWorkspaceSections();
+  closePopupQuickAddFormAndClearProject();
+  closeDatePopup();
+  closePlannerFormCard();
+}
+
 function showPlannerWorkspaceHome() {
   hideAllPlannerWorkspaceSections();
   plannerWorkspaceView = "home";
+  setPlannerWorkspaceMode("home");
   setPlannerScheduleSectionsVisible(true);
   syncPlannerBottomShortcutState();
 }
 
 function showPlannerInboxView() {
   hideAllPlannerWorkspaceSections();
-  closeDatePopup();
   plannerWorkspaceView = "inbox";
+  setPlannerWorkspaceMode("inbox");
   setPlannerScheduleSectionsVisible(false);
+  forceHidePlannerTaskForms();
   plannerInboxSection?.classList.remove("hidden");
   syncPlannerBottomShortcutState();
 }
 
 function showPlannerProjectView() {
   hideAllPlannerWorkspaceSections();
-  closeDatePopup();
   plannerWorkspaceView = "project";
+  setPlannerWorkspaceMode("project");
   setPlannerScheduleSectionsVisible(false);
+  forceHidePlannerTaskForms();
   plannerProjectSection?.classList.remove("hidden");
   syncPlannerBottomShortcutState();
 }
@@ -2664,6 +2887,9 @@ function getDateKeyWithOffset(offsetDays) {
 
 function getPlannerNotificationDateTime(item) {
   if (!item) return null;
+  if (item.reminderMinutes == null || Number(item.reminderMinutes) < 0) {
+    return null;
+  }
   const reminderMinutes = Math.max(0, Number(item.reminderMinutes) || 0);
   let targetDateTime = null;
 
@@ -2678,6 +2904,11 @@ function getPlannerNotificationDateTime(item) {
   if (!targetDateTime) return null;
   targetDateTime.setMinutes(targetDateTime.getMinutes() - reminderMinutes);
   return targetDateTime;
+}
+
+function parseReminderMinutes(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : -1;
 }
 
 function getPlannerNotificationKey(item, targetDateTime) {
@@ -2913,7 +3144,7 @@ function renderProjectCard(project) {
           <strong>${escapeHtml(project.name || "")}</strong>
           ${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}
         </div>
-        <span class="meta-badge">${totalCount}? ??</span>
+        <span class="meta-badge">${totalCount}개</span>
       </div>
       <div class="item-meta compact-meta project-summary-meta">
         <span class="tag-badge">Inbox ${inboxCount}</span>
@@ -3014,7 +3245,7 @@ function renderProjectSection({ projectId, sectionKey, title, count, bodyHtml })
   const isCollapsed = Boolean(collapsedProjectSections[stateKey]);
 
   return `
-    <section class="project-section ${isCollapsed ? "\u25B8" : "\u25BE"}" data-project-section="${escapeHtml(sectionKey)}">
+    <section class="project-section ${isCollapsed ? "collapsed" : "expanded"}" data-project-section="${escapeHtml(sectionKey)}">
       <button
         class="project-section-header"
         type="button"
@@ -3023,7 +3254,7 @@ function renderProjectSection({ projectId, sectionKey, title, count, bodyHtml })
         data-section-key="${escapeHtml(sectionKey)}"
         aria-expanded="${isCollapsed ? "false" : "true"}"
       >
-        <span class="project-section-caret" aria-hidden="true">${isCollapsed ? "?" : "?"}</span>
+        <span class="project-section-caret" aria-hidden="true">${isCollapsed ? "+" : "-"}</span>
         <span class="project-section-title">${escapeHtml(title)}</span>
         <span class="project-section-count">${count}</span>
       </button>
@@ -3050,9 +3281,9 @@ function renderProjectInboxRow(item) {
         ${item.note ? `<span>${escapeHtml(item.note)}</span>` : `<span>${createdText}</span>`}
       </div>
       <div class="project-row-actions">
-        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">??</button>
-        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">??</button>
-        <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">??</button>
+        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">할일</button>
+        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">일정</button>
+        <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">수정</button>
       </div>
     </div>
   `;
@@ -3246,8 +3477,86 @@ function deletePlannerInboxItem(id) {
   if (editingInboxId === id) {
     resetPlannerInboxForm();
   }
+  if (pendingInboxConversion?.id === id) {
+    clearPendingInboxConversion();
+  }
   queueSavePlannerData();
   renderPlannerWorkspace();
+}
+
+function clearPendingInboxConversion() {
+  pendingInboxConversion = null;
+}
+
+function completePendingInboxConversion(savedType) {
+  if (!pendingInboxConversion?.id) return "";
+
+  const pending = pendingInboxConversion;
+  const inboxItem = inboxItems.find((item) => item.id === pending.id);
+  if (!inboxItem) {
+    clearPendingInboxConversion();
+    return "";
+  }
+
+  const convertedToType =
+    savedType === "schedule" || savedType === "todo"
+      ? savedType
+      : pending.targetType || "todo";
+
+  inboxItems = inboxItems.map((item) =>
+    item.id === pending.id
+      ? {
+          ...item,
+          convertedAt: Date.now(),
+          convertedToType,
+          updatedAt: Date.now(),
+        }
+      : item,
+  );
+  clearPendingInboxConversion();
+  return inboxItem.projectId || "";
+}
+
+function hasPlannerItemForConvertedInbox(inboxItem) {
+  const convertedType = inboxItem.convertedToType || "todo";
+  const sourceTitle = String(inboxItem.title || "").trim();
+  const sourceProjectId = inboxItem.projectId || "";
+  const convertedAt = Number(inboxItem.convertedAt) || 0;
+
+  if (!sourceTitle || !convertedAt) return false;
+
+  return items.some((item) => {
+    const itemCreatedAt = Number(item.createdAt) || 0;
+
+    return (
+      item.type === convertedType &&
+      String(item.title || "").trim() === sourceTitle &&
+      (item.projectId || "") === sourceProjectId &&
+      itemCreatedAt >= convertedAt - 60 * 1000
+    );
+  });
+}
+
+function repairOrphanedInboxConversions() {
+  let changed = false;
+
+  inboxItems = inboxItems.map((item) => {
+    if (!item.convertedAt || hasPlannerItemForConvertedInbox(item)) {
+      return item;
+    }
+
+    changed = true;
+    return {
+      ...item,
+      convertedAt: null,
+      convertedToType: "",
+      updatedAt: Date.now(),
+    };
+  });
+
+  if (changed) {
+    queueSavePlannerData();
+  }
 }
 
 function deletePlannerProject(id) {
@@ -3517,10 +3826,13 @@ function applyAiRecommendation(id) {
 function convertInboxItemToPlanner(id, targetType) {
   const inboxItem = inboxItems.find((item) => item.id === id);
   if (!inboxItem || inboxItem.convertedAt) return;
-  const projectId = inboxItem.projectId || "";
+  pendingInboxConversion = {
+    id,
+    targetType: targetType === "schedule" ? "schedule" : "todo",
+  };
 
   resetPlannerForm();
-  if (itemType) itemType.value = targetType === "schedule" ? "schedule" : "todo";
+  if (itemType) itemType.value = pendingInboxConversion.targetType;
   if (titleInput) titleInput.value = inboxItem.title || "";
   if (itemProjectId) itemProjectId.value = inboxItem.projectId || "";
   if (itemTag && !itemTag.value && inboxItem.note) {
@@ -3530,24 +3842,14 @@ function convertInboxItemToPlanner(id, targetType) {
   updatePlannerFields();
   openEditPopup();
   titleInput?.focus();
-
-  inboxItems = inboxItems.map((item) =>
-    item.id === id
-      ? {
-          ...item,
-          convertedAt: Date.now(),
-          convertedToType: targetType,
-          updatedAt: Date.now(),
-        }
-      : item,
-  );
-
-  queueSavePlannerData();
-  renderPlannerWorkspace();
-  refreshProjectDetailIfOpen(projectId);
 }
 
 function closeTopMostPopup() {
+  if (!calendarDatePickerPanel?.classList.contains("hidden")) {
+    closeCalendarDatePicker();
+    return true;
+  }
+
   if (!placeSearchModalOverlay?.classList.contains("hidden")) {
     closePlaceSearchModal();
     return true;
@@ -3565,6 +3867,7 @@ function closeTopMostPopup() {
   }
 
   if (!editPopupOverlay?.classList.contains("hidden")) {
+    clearPendingInboxConversion();
     closeEditPopup();
     return true;
   }
@@ -3623,6 +3926,7 @@ function enterHomeTab() {
   }
 
   setPlannerBottomShortcutsVisible(false);
+  hidePlannerScheduleSections();
   switchTab("home");
 }
 
@@ -4264,6 +4568,7 @@ function addItemFromSelectedDate() {
     popupTitleInput,
     popupItemColor,
     popupItemTag,
+    popupReminderMinutes,
     popupItemProjectId: { value: popupQuickAddProjectId },
     popupItemLocation: { value: primaryLocation.location || "" },
     popupItemLocationAddress: { value: primaryLocation.locationAddress || "" },
@@ -4303,7 +4608,7 @@ function saveEditedSingleItem(type, title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
-  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const reminderMinutes = parseReminderMinutes(itemReminderMinutes?.value);
   const rewardDifficulty = itemRewardDifficulty?.value || "auto";
 
   const isMultiDaySchedule =
@@ -4362,9 +4667,11 @@ function saveEditedSingleItem(type, title) {
   if (nextItems === items) return;
 
   items = nextItems;
+  const convertedProjectId = completePendingInboxConversion(type);
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+  if (convertedProjectId) refreshProjectDetailIfOpen(convertedProjectId);
 
   if (isEditingInPopup) {
     closeEditPopup();
@@ -4387,7 +4694,7 @@ function saveTodoSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
-  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const reminderMinutes = parseReminderMinutes(itemReminderMinutes?.value);
   const rewardDifficulty = itemRewardDifficulty?.value || "auto";
   const { location, locationAddress, locationPlaceId } = getLocationPayload(
     itemLocation,
@@ -4417,9 +4724,11 @@ function saveTodoSeries(title) {
   if (nextItems === items) return;
 
   items = nextItems;
+  const convertedProjectId = completePendingInboxConversion("todo");
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+  if (convertedProjectId) refreshProjectDetailIfOpen(convertedProjectId);
   if (isEditingInPopup) {
     closeEditPopup();
   } else {
@@ -4431,7 +4740,7 @@ function saveScheduleSeries(title) {
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
-  const reminderMinutes = Math.max(0, Number(itemReminderMinutes?.value) || 0);
+  const reminderMinutes = parseReminderMinutes(itemReminderMinutes?.value);
   const rewardDifficulty = itemRewardDifficulty?.value || "auto";
 
   const isMultiDaySchedule = isMultiDayScheduleRange(
@@ -4479,9 +4788,11 @@ function saveScheduleSeries(title) {
   if (nextItems === items) return;
 
   items = nextItems;
+  const convertedProjectId = completePendingInboxConversion("schedule");
   queueSavePlannerData();
   resetPlannerForm();
   renderAll();
+  if (convertedProjectId) refreshProjectDetailIfOpen(convertedProjectId);
   if (isEditingInPopup) {
     closeEditPopup();
   } else {
@@ -4939,7 +5250,7 @@ function toggleStatus(id) {
   const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
   const baseItem = items.find((item) => item.id === targetId);
   if (!baseItem) return;
-  const targetKey = occurrenceDateKey ? id : targetId;
+  const targetKey = targetId;
   let previousStatus = baseItem.status || "pending";
   let nextStatus = getNextStatus(previousStatus);
 
@@ -4973,6 +5284,8 @@ function toggleStatus(id) {
     previousStatus,
     nextStatus,
   });
+
+  items = ensureNextRecurringItemAfterStatusChange(items, targetId);
 
   queueSavePlannerData();
   renderAll();
@@ -5274,11 +5587,7 @@ function bindPlaceUiEvents() {
     closePlaceSearchModal();
   });
 
-  placeSearchModalOverlay?.addEventListener("click", (e) => {
-    if (e.target === placeSearchModalOverlay) {
-      closePlaceSearchModal();
-    }
-  });
+  bindPopupBackdropClose(placeSearchModalOverlay, closePlaceSearchModal);
 
   placeSearchKeywordInput?.addEventListener("input", (e) => {
     searchPlaceResults(e.target.value);
@@ -6156,7 +6465,7 @@ function getEditedSchedulePayload(title) {
     color: itemColor?.value || "blue",
     tag: itemTag?.value.trim() || "",
     projectId: itemProjectId?.value || "",
-    reminderMinutes: Math.max(0, Number(itemReminderMinutes?.value) || 0),
+    reminderMinutes: parseReminderMinutes(itemReminderMinutes?.value),
     rewardDifficulty: itemRewardDifficulty?.value || "auto",
     location: itemLocation?.value || "",
     locationAddress: itemLocationAddress?.value || "",

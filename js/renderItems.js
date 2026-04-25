@@ -92,10 +92,11 @@ export function renderCard(item, getStatusSymbol) {
       ${repeatIcon}
     `;
   } else {
+    const scheduleDateText = `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`;
+
     detailMeta = `
       <span class="meta-icon" title="시간 작업">🗓️</span>
-      <span class="meta-badge compact">${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""}</span>
-      <span class="meta-badge compact">~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}</span>
+      <span class="meta-badge compact schedule-range-badge">${escapeHtml(scheduleDateText)}</span>
       ${projectBadge}
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
       ${locationBadge}
@@ -104,7 +105,7 @@ export function renderCard(item, getStatusSymbol) {
   }
 
   const editTargetId = item.id;
-  const statusTargetId = item.sourceId || item.id;
+  const statusTargetId = item.id;
   const coinBadge = renderCoinBadge(item, statusTargetId);
 
   return `
@@ -147,7 +148,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
 
   const projectName = getProjectName(item.projectId);
   const editTargetId = item.id;
-  const statusTargetId = item.sourceId || item.id;
+  const statusTargetId = item.id;
   const isSchedule = item.type === "schedule";
   const dateText = isSchedule
     ? `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`
@@ -197,7 +198,7 @@ export function renderProjectTaskRow(item, getStatusSymbol) {
   const dateText = isSchedule
     ? `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""} ~ ${formatKoreanDate(secondaryDate)}${secondaryTime ? ` ${secondaryTime}` : ""}`
     : `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""}`;
-  const statusTargetId = item.sourceId || item.id;
+  const statusTargetId = item.id;
 
   return `
     <div

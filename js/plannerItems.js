@@ -6,8 +6,24 @@ import {
   getNextOccurrenceDateKey,
   cloneScheduleForOccurrence,
   buildWeeklySlotDates, 
-  moveWeeklySlotToNext
+  moveWeeklySlotToNext,
+  createNextRecurringMasterItem,
+  hasSameRepeatOccurrence,
+  isRecurringMasterItem,
 } from "./repeat.js";
+
+function parseReminderMinutes(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : -1;
+}
+
+function normalizePlannerColor(color) {
+  const value = String(color || "").trim();
+  const allowed = ["blue", "purple", "green", "orange", "red", "gray"];
+  if (allowed.includes(value)) return value;
+  if (value === "yellow") return "orange";
+  return "blue";
+}
 
 export function saveEditedSingleItem({
   type,
@@ -88,6 +104,12 @@ export function saveEditedSingleItem({
             weeklyDays,
             intervalDays,
             isRecurring: repeat !== "none",
+            repeatGroupId:
+              repeat !== "none"
+                ? item.repeatGroupId || item.groupId || `repeat-${item.id}`
+                : "",
+            occurrenceDate: dueDate,
+            isRepeatMaster: repeat !== "none" ? item.isRepeatMaster !== false : false,
           }
         : item,
     );
@@ -155,6 +177,12 @@ export function saveEditedSingleItem({
           weeklyDays,
           intervalDays,
           isRecurring: repeat !== "none",
+          repeatGroupId:
+            repeat !== "none"
+              ? item.repeatGroupId || item.groupId || `repeat-${item.id}`
+              : "",
+          occurrenceDate: startDate,
+          isRepeatMaster: repeat !== "none" ? item.isRepeatMaster !== false : false,
         }
       : item,
   );
@@ -227,6 +255,9 @@ export function saveTodoSeriesFromForm({
     intervalDays: repeat === "interval_days" ? intervalDays : null,
     status: "pending",
     isRecurring: repeat !== "none",
+    repeatGroupId: repeat !== "none" ? `repeat-${makeId()}` : "",
+    occurrenceDate: dueDate,
+    isRepeatMaster: repeat !== "none",
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -321,6 +352,9 @@ export function saveScheduleSeriesFromForm({
         : {},
     status: "pending",
     isRecurring: repeat !== "none",
+    repeatGroupId: repeat !== "none" ? `repeat-${makeId()}` : "",
+    occurrenceDate: startDate,
+    isRepeatMaster: repeat !== "none",
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -335,6 +369,7 @@ export function addItemFromSelectedDateData({
   popupTitleInput,
   popupItemColor,
   popupItemTag,
+  popupReminderMinutes,
   popupItemProjectId,
   popupItemLocation,
   popupItemLocationAddress,
@@ -360,8 +395,9 @@ export function addItemFromSelectedDateData({
 
   const type = popupItemType?.value;
   const title = popupTitleInput?.value.trim();
-  const color = popupItemColor?.value || "blue";
+  const color = normalizePlannerColor(popupItemColor?.value);
   const tag = popupItemTag?.value.trim() || "";
+  const reminderMinutes = parseReminderMinutes(popupReminderMinutes?.value);
   const projectId = popupItemProjectId?.value || "";
   const location = popupItemLocation?.value || "";
   const locationAddress = popupItemLocationAddress?.value || "";
@@ -412,6 +448,7 @@ export function addItemFromSelectedDateData({
         color,
         tag,
         projectId,
+        reminderMinutes,
         location,
         rewardDifficulty: "auto",
         locationAddress,
@@ -424,6 +461,9 @@ export function addItemFromSelectedDateData({
         intervalDays: repeat === "interval_days" ? intervalDays : null,
         status: "pending",
         isRecurring: repeat !== "none",
+        repeatGroupId: repeat !== "none" ? `repeat-${makeId()}` : "",
+        occurrenceDate: dueDate,
+        isRepeatMaster: repeat !== "none",
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
@@ -477,6 +517,7 @@ export function addItemFromSelectedDateData({
       color,
       tag,
       projectId,
+      reminderMinutes,
       location,
       rewardDifficulty: "auto",
       locationAddress,
@@ -500,6 +541,9 @@ export function addItemFromSelectedDateData({
           : {},
       status: "pending",
       isRecurring: repeat !== "none",
+      repeatGroupId: repeat !== "none" ? `repeat-${makeId()}` : "",
+      occurrenceDate: startDate,
+      isRepeatMaster: repeat !== "none",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     },
@@ -548,49 +592,52 @@ export function toggleRecurringSingleSlotStatus(items, id) {
 
     const nextStatus = getNextStatus(item.status || "pending");
 
-    if (nextStatus !== "success") {
-      return {
-        ...item,
-        status: nextStatus,
-        updatedAt: Date.now(),
-      };
-    }
-
-    const nextOccurrence = getNextOccurrenceDateKey(item, targetDate);
-
-    if (!nextOccurrence) {
-      return {
-        ...item,
-        status: nextStatus,
-        updatedAt: Date.now(),
-      };
-    }
-
-    if (item.type === "todo") {
-      return {
-        ...item,
-        dueDate: nextOccurrence,
-        status: "pending",
-        updatedAt: Date.now(),
-      };
-    }
-
-    const baseStart = new Date(`${item.startDate}T00:00`);
-    const baseEnd = new Date(`${item.endDate}T00:00`);
-    const nextStart = new Date(`${nextOccurrence}T00:00`);
-    const durationDays = Math.round(
-      (baseEnd - baseStart) / (1000 * 60 * 60 * 24),
-    );
-    nextStart.setDate(nextStart.getDate() + durationDays);
-
     return {
       ...item,
-      startDate: nextOccurrence,
-      endDate: formatDateKey(nextStart),
-      status: "pending",
+      status: nextStatus,
       updatedAt: Date.now(),
     };
   });
+}
+
+export function ensureNextRecurringItemAfterStatusChange(items, targetId) {
+  const list = Array.isArray(items) ? items : [];
+  const sourceId = String(targetId || "").split("__")[0];
+  const changedItem = list.find((item) => item.id === sourceId);
+
+  if (!changedItem) return list;
+  if (!isRecurringMasterItem(changedItem)) return list;
+  if ((changedItem.status || "pending") === "pending") return list;
+
+  const nextItem = createNextRecurringMasterItem(changedItem);
+  if (!nextItem) {
+    return list.map((item) =>
+      item.id === changedItem.id
+        ? {
+            ...item,
+            isRepeatMaster: false,
+            updatedAt: Date.now(),
+          }
+        : item,
+    );
+  }
+
+  const hasExistingNext = list.some((item) =>
+    hasSameRepeatOccurrence(item, nextItem),
+  );
+
+  return [
+    ...list.map((item) =>
+      item.id === changedItem.id
+        ? {
+            ...item,
+            isRepeatMaster: false,
+            updatedAt: Date.now(),
+          }
+        : item,
+    ),
+    ...(hasExistingNext ? [] : [nextItem]),
+  ];
 }
 
 export function deleteItemById(items, id) {
@@ -885,13 +932,9 @@ export function toggleRecurringScheduleSlotStatus(items, id) {
       ...(item.repeatSlotDates || {}),
     };
 
-    if (nextStatus === "success") {
-      nextSlotDates[weekday] = moveWeeklySlotToNext(currentSlotDate);
-      nextSlotStatuses[weekday] = "pending";
-    }
-
     return {
       ...item,
+      status: nextStatus,
       repeatSlotDates: nextSlotDates,
       repeatSlotStatuses: nextSlotStatuses,
       updatedAt: Date.now(),

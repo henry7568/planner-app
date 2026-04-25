@@ -239,7 +239,14 @@ export function isRecurringItem(item) {
 }
 
 export function isRecurringMasterItem(item) {
-  return isRecurringItem(item) && !item.groupId;
+  if (!isRecurringItem(item)) return false;
+  if (item.isRepeatMaster === false) return false;
+  if (item.isRepeatMaster === true) return true;
+  if (item.repeatSourceId || item.parentRepeatId) return false;
+  if (item.groupId && !item.repeatGroupId && item.isRepeatMaster !== true) {
+    return false;
+  }
+  return !item.groupId;
 }
 
 export function getRecurringItemBaseDate(item) {
@@ -355,6 +362,9 @@ export function expandRecurringPlannerItemsInRange(
     if (!item) return;
 
     if (!isRecurringMasterItem(item)) {
+      if (isRecurringItem(item) && (item.status || "pending") === "pending") {
+        return;
+      }
       expanded.push(item);
       return;
     }
@@ -454,7 +464,56 @@ export function getNextOccurrenceDateKey(baseItem, pivotDateKey) {
     ? baseItem.startDate
     : baseItem.dueDate;
 
+  if (!startDate) return "";
+
   const safeUntil = baseItem.repeatUntil || "9999-12-31";
+  const pivot = new Date(`${pivotDateKey}T00:00`);
+  let next = new Date(pivot);
+
+  if (baseItem.repeat === "daily") {
+    next.setDate(next.getDate() + 1);
+    const nextKey = formatDateKey(next);
+    return nextKey <= safeUntil ? nextKey : "";
+  }
+
+  if (baseItem.repeat === "weekly") {
+    next.setDate(next.getDate() + 7);
+    const nextKey = formatDateKey(next);
+    return nextKey <= safeUntil ? nextKey : "";
+  }
+
+  if (baseItem.repeat === "monthly") {
+    next = moveCursor(next, "monthly");
+    const nextKey = formatDateKey(next);
+    return nextKey <= safeUntil ? nextKey : "";
+  }
+
+  if (baseItem.repeat === "interval_days") {
+    const intervalDays = Math.max(1, Number(baseItem.intervalDays) || 1);
+    next.setDate(next.getDate() + intervalDays);
+    const nextKey = formatDateKey(next);
+    return nextKey <= safeUntil ? nextKey : "";
+  }
+
+  if (baseItem.repeat === "weekly_days") {
+    const weeklyDays = Array.isArray(baseItem.weeklyDays)
+      ? baseItem.weeklyDays.map(Number)
+      : [];
+
+    if (weeklyDays.length === 0) return "";
+
+    for (let offset = 1; offset <= 7; offset += 1) {
+      next = new Date(pivot);
+      next.setDate(next.getDate() + offset);
+
+      if (weeklyDays.includes(next.getDay())) {
+        const nextKey = formatDateKey(next);
+        return nextKey <= safeUntil ? nextKey : "";
+      }
+    }
+
+    return "";
+  }
 
   const candidates = getOccurrenceDateKeys(
     startDate,
@@ -465,6 +524,102 @@ export function getNextOccurrenceDateKey(baseItem, pivotDateKey) {
   ).filter((dateKey) => dateKey > pivotDateKey);
 
   return candidates.length ? candidates[0] : "";
+}
+
+export function getRepeatOccurrenceDateKey(item) {
+  return getRecurringItemBaseDate(item);
+}
+
+export function getNextRepeatOccurrence(item) {
+  if (!isRecurringItem(item)) return null;
+
+  const currentDateKey = getRepeatOccurrenceDateKey(item);
+  if (!currentDateKey) return null;
+
+  const nextDateKey = getNextOccurrenceDateKey(item, currentDateKey);
+  if (!nextDateKey) return null;
+
+  if (item.type === "todo") {
+    return {
+      occurrenceDate: nextDateKey,
+      dueDate: nextDateKey,
+    };
+  }
+
+  if (item.type === "schedule") {
+    const baseStart = new Date(`${item.startDate}T00:00`);
+    const baseEnd = new Date(`${item.endDate}T00:00`);
+    const nextStart = new Date(`${nextDateKey}T00:00`);
+    const durationDays = dateDiffDays(baseStart, baseEnd);
+    const nextEnd = addDays(nextStart, durationDays);
+
+    return {
+      occurrenceDate: nextDateKey,
+      startDate: nextDateKey,
+      endDate: formatDateKey(nextEnd),
+    };
+  }
+
+  return null;
+}
+
+export function createNextRecurringMasterItem(item) {
+  const nextOccurrence = getNextRepeatOccurrence(item);
+  if (!nextOccurrence) return null;
+
+  const repeatGroupId =
+    item.repeatGroupId || item.groupId || `repeat-${item.id || makeId()}`;
+  const createdAt = Date.now();
+  const nextItem = {
+    ...item,
+    ...nextOccurrence,
+    id: makeId(),
+    repeatGroupId,
+    repeatSourceId: item.id || "",
+    parentRepeatId: item.id || "",
+    occurrenceDate: nextOccurrence.occurrenceDate,
+    isRepeatMaster: true,
+    status: "pending",
+    createdAt,
+    updatedAt: createdAt,
+    completedAt: null,
+    failedAt: null,
+    rewardPaidAt: null,
+    rewardLedgerId: "",
+    earnedCoins: 0,
+  };
+
+  delete nextItem.sourceId;
+  delete nextItem.occurrenceDateKey;
+  delete nextItem.isVirtualOccurrence;
+  delete nextItem.slotWeekday;
+
+  if (nextItem.type === "todo") {
+    delete nextItem.startDate;
+    delete nextItem.endDate;
+    delete nextItem.startTime;
+    delete nextItem.endTime;
+  }
+
+  return nextItem;
+}
+
+export function hasSameRepeatOccurrence(item, nextItem) {
+  if (!item || !nextItem) return false;
+  if (item.type !== nextItem.type) return false;
+  if ((item.repeatGroupId || item.groupId || "") !== nextItem.repeatGroupId) {
+    return false;
+  }
+  if (item.isRepeatMaster !== true) return false;
+  if ((item.status || "pending") !== "pending") return false;
+
+  const itemDate =
+    item.occurrenceDate || (item.type === "todo" ? item.dueDate : item.startDate);
+  const nextDate =
+    nextItem.occurrenceDate ||
+    (nextItem.type === "todo" ? nextItem.dueDate : nextItem.startDate);
+
+  return itemDate === nextDate;
 }
 
 export function cloneScheduleForOccurrence(baseItem, occurrenceDateKey, overrides = {}) {

@@ -1,45 +1,18 @@
 // storage.js
-
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 let financeSaveTimer = null;
-const FINANCE_BUDGET_VERSION = 2;
+const FINANCE_BUDGET_VERSION = 3;
+
 const DEFAULT_FINANCE_ACCOUNT_TEMPLATES = [
-  { type: "living", name: "생활비 통장", color: "blue" },
-  { type: "leisure", name: "여유자금 통장", color: "green" },
-  { type: "emergency", name: "비상금 통장", color: "orange" },
+  { type: "living", name: "생활비 계좌", color: "#2563eb" },
+  { type: "savings", name: "적금계좌", color: "#0f766e" },
+  { type: "investment", name: "투자계좌", color: "#7c3aed" },
+  { type: "leisure", name: "여가비 계좌", color: "#f59e0b" },
 ];
 
-export function normalizePlannerData(data) {
-  if (Array.isArray(data)) {
-    return {
-      items: data,
-      projects: [],
-      inboxItems: [],
-      routines: [],
-      ignoredRecommendationIds: [],
-      rewards: {
-        coinVersion: 1,
-        ledger: [],
-      },
-    };
-  }
-
-  const source = data && typeof data === "object" ? data : {};
-
-  return {
-    items: Array.isArray(source.items) ? source.items : [],
-    projects: Array.isArray(source.projects) ? source.projects : [],
-    inboxItems: Array.isArray(source.inboxItems) ? source.inboxItems : [],
-    routines: Array.isArray(source.routines) ? source.routines : [],
-    ignoredRecommendationIds: Array.isArray(source.ignoredRecommendationIds)
-      ? source.ignoredRecommendationIds
-      : [],
-    rewards: {
-      coinVersion: Number(source.rewards?.coinVersion) || 1,
-      ledger: Array.isArray(source.rewards?.ledger) ? source.rewards.ledger : [],
-    },
-  };
+function makePlannerItemId(prefix = "item") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function getState() {
@@ -54,6 +27,123 @@ function getConfig() {
   return window.AppConfig;
 }
 
+export function normalizePlannerData(data) {
+  if (Array.isArray(data)) {
+    return {
+      items: normalizePlannerItems(data),
+      projects: [],
+      inboxItems: [],
+      routines: [],
+      ignoredRecommendationIds: [],
+      rewards: {
+        coinVersion: 1,
+        ledger: [],
+      },
+    };
+  }
+
+  const source = data && typeof data === "object" ? data : {};
+
+  return {
+    items: normalizePlannerItems(source.items),
+    projects: Array.isArray(source.projects) ? source.projects : [],
+    inboxItems: Array.isArray(source.inboxItems) ? source.inboxItems : [],
+    routines: Array.isArray(source.routines) ? source.routines : [],
+    ignoredRecommendationIds: Array.isArray(source.ignoredRecommendationIds)
+      ? source.ignoredRecommendationIds
+      : [],
+    rewards: {
+      coinVersion: Number(source.rewards?.coinVersion) || 1,
+      ledger: Array.isArray(source.rewards?.ledger) ? source.rewards.ledger : [],
+    },
+  };
+}
+
+function getPlannerItemDateKey(item) {
+  if (!item) return "";
+  return item.type === "todo" ? item.dueDate || "" : item.startDate || "";
+}
+
+function normalizePlannerColor(color) {
+  const value = String(color || "").trim();
+  const allowed = ["blue", "purple", "green", "orange", "red", "gray"];
+  if (allowed.includes(value)) return value;
+  if (value === "yellow") return "orange";
+  return value || "blue";
+}
+
+function isPlannerRecurringItem(item) {
+  return Boolean(item?.repeat && item.repeat !== "none");
+}
+
+function normalizePlannerItem(item) {
+  const source = item && typeof item === "object" ? item : {};
+  const id = source.id || makePlannerItemId("planner");
+  const repeatGroupId = isPlannerRecurringItem(source)
+    ? source.repeatGroupId || source.groupId || `repeat-${id}`
+    : source.repeatGroupId || "";
+  const occurrenceDate =
+    source.occurrenceDate ||
+    source.occurrenceDateKey ||
+    getPlannerItemDateKey(source);
+
+  return {
+    ...source,
+    id,
+    color: normalizePlannerColor(source.color),
+    repeatGroupId,
+    occurrenceDate,
+    isRepeatMaster: isPlannerRecurringItem(source)
+      ? source.isRepeatMaster !== false
+      : false,
+  };
+}
+
+function normalizePlannerItems(items) {
+  const normalized = Array.isArray(items) ? items.map(normalizePlannerItem) : [];
+  const recurringGroups = normalized.reduce((acc, item) => {
+    if (!isPlannerRecurringItem(item) || !item.repeatGroupId) return acc;
+    acc[item.repeatGroupId] = acc[item.repeatGroupId] || [];
+    acc[item.repeatGroupId].push(item);
+    return acc;
+  }, {});
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const masterIds = new Set();
+
+  Object.values(recurringGroups).forEach((groupItems) => {
+    const explicitMasters = groupItems.filter(
+      (item) => item.isRepeatMaster === true && (item.status || "pending") === "pending",
+    );
+    const pendingItems = groupItems.filter(
+      (item) => (item.status || "pending") === "pending",
+    );
+    const candidates = explicitMasters.length ? explicitMasters : pendingItems;
+
+    if (candidates.length === 0) return;
+
+    const sorted = [...candidates].sort((a, b) => {
+      const aDate = getPlannerItemDateKey(a) || "9999-12-31";
+      const bDate = getPlannerItemDateKey(b) || "9999-12-31";
+      const aPast = aDate < todayKey;
+      const bPast = bDate < todayKey;
+
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return aDate.localeCompare(bDate);
+    });
+
+    masterIds.add(sorted[0].id);
+  });
+
+  return normalized.map((item) => {
+    if (!isPlannerRecurringItem(item)) return item;
+
+    return {
+      ...item,
+      isRepeatMaster: masterIds.has(item.id),
+    };
+  });
+}
+
 function buildLegacyMonthlyBudgets(budgetEntries) {
   return Object.entries(
     budgetEntries && typeof budgetEntries === "object" ? budgetEntries : {},
@@ -63,10 +153,7 @@ function buildLegacyMonthlyBudgets(budgetEntries) {
     acc[monthKey] = {
       monthKey,
       startDay: Math.max(1, Math.min(31, Number(entry.startDay) || 1)),
-      budget: Math.max(
-        0,
-        Number(entry.totalBudget ?? entry.budget ?? 0) || 0,
-      ),
+      budget: Math.max(0, Number(entry.totalBudget ?? entry.budget ?? 0) || 0),
       updatedAt: Number(entry.updatedAt) || Date.now(),
     };
 
@@ -112,10 +199,10 @@ function normalizeFinanceAccount(item, fallback = {}) {
 
   return {
     id: item?.id || fallback.id || makeDefaultFinanceAccountId(type),
-    name: item?.name || fallback.name || "새 통장",
+    name: item?.name || fallback.name || "사용자 계좌",
     type,
     balance: Number(item?.balance) || 0,
-    color: item?.color || fallback.color || "blue",
+    color: item?.color || fallback.color || "#2563eb",
     memo: typeof item?.memo === "string" ? item.memo : "",
     createdAt,
     updatedAt: Number(item?.updatedAt) || createdAt,
@@ -167,19 +254,30 @@ function getDefaultFinanceAccountId(accounts, type = "living") {
 function normalizeFinanceTransaction(item, accounts) {
   const now = Date.now();
   const createdAt = Number(item?.createdAt) || Number(item?.updatedAt) || now;
-  const flowType = ["income", "expense", "transfer"].includes(item?.flowType)
-    ? item.flowType
+  const rawType = item?.type || item?.flowType || "expense";
+  const type = [
+    "income",
+    "withdrawal",
+    "transfer",
+    "expense",
+    "investment",
+    "saving",
+  ].includes(rawType)
+    ? rawType
     : "expense";
+  const flowType =
+    type === "income" || type === "transfer" ? type : "expense";
 
   return {
     ...(item && typeof item === "object" ? item : {}),
     id: item?.id || `transaction-${now}-${Math.random().toString(36).slice(2)}`,
+    type,
     flowType,
-    title: item?.title || "",
+    title: item?.title || item?.merchant || "",
     amount: Math.max(0, Number(item?.amount) || 0),
     date: item?.date || "",
     time: item?.time || "",
-    category: item?.category || "",
+    category: item?.category || "기타",
     subCategory: item?.subCategory || "",
     accountId: item?.accountId || getDefaultFinanceAccountId(accounts, "living"),
     targetAccountId: item?.targetAccountId || "",
@@ -187,11 +285,25 @@ function normalizeFinanceTransaction(item, accounts) {
     paymentMethod: item?.paymentMethod || "",
     merchant: item?.merchant || "",
     tag: item?.tag || "",
-    color: item?.color || "blue",
+    color: item?.color || "#2563eb",
     memo: item?.memo || "",
     repeat: item?.repeat || "none",
     repeatUntil: item?.repeatUntil || "",
     isRecurring: Boolean(item?.isRecurring ?? item?.repeat !== "none"),
+    relationshipLedger:
+      item?.relationshipLedger && typeof item.relationshipLedger === "object"
+        ? {
+            withWhom: item.relationshipLedger.withWhom || item.withWhom || "나",
+            what: item.relationshipLedger.what || item.what || "",
+            how: item.relationshipLedger.how || item.how || "",
+            memo: item.relationshipLedger.memo || item.relationshipMemo || "",
+          }
+        : {
+            withWhom: item?.withWhom || "나",
+            what: item?.what || "",
+            how: item?.how || "",
+            memo: item?.relationshipMemo || "",
+          },
     createdAt,
     updatedAt: Number(item?.updatedAt) || createdAt,
   };
@@ -201,15 +313,30 @@ function normalizeFinanceAsset(item, accounts) {
   const now = Date.now();
   const createdAt = Number(item?.createdAt) || Number(item?.updatedAt) || now;
   const name = item?.name || item?.title || "";
+  const rawType = item?.type || item?.category || "other";
+  const type =
+    rawType === "stock" || rawType === "investment"
+      ? "investment"
+      : rawType === "deposit" || rawType === "saving" || rawType === "savings"
+        ? "deposit_saving"
+        : rawType || "other";
 
   return {
     ...(item && typeof item === "object" ? item : {}),
     id: item?.id || `asset-${now}-${Math.random().toString(36).slice(2)}`,
+    financeAssetSchemaVersion: Number(item?.financeAssetSchemaVersion) || 3,
+    source: item?.source || "finance-v2",
+    type,
+    category: type,
     name,
     title: item?.title || name,
-    category: item?.category || "custom",
     amount: Math.max(0, Number(item?.amount) || 0),
-    accountId: item?.accountId || getDefaultFinanceAccountId(accounts, "leisure"),
+    accountId:
+      item?.accountId ||
+      getDefaultFinanceAccountId(
+        accounts,
+        type === "investment" ? "investment" : "savings",
+      ),
     purpose: item?.purpose || item?.accountPurpose || "general",
     accountPurpose: item?.accountPurpose || item?.purpose || "general",
     memo: item?.memo || "",
@@ -220,6 +347,13 @@ function normalizeFinanceAsset(item, accounts) {
     createdAt,
     updatedAt: Number(item?.updatedAt) || createdAt,
   };
+}
+
+function isFinanceV2Asset(item) {
+  return (
+    Number(item?.financeAssetSchemaVersion) >= 3 ||
+    item?.source === "finance-v2"
+  );
 }
 
 export function normalizeFinanceData(data) {
@@ -248,6 +382,14 @@ export function normalizeFinanceData(data) {
   const accounts = source.accounts
     ? ensureDefaultFinanceAccounts(source.accounts)
     : buildDefaultFinanceAccounts();
+  const rawTransactions = Array.isArray(source?.transactions)
+    ? source.transactions
+    : Array.isArray(source?.expenses)
+      ? source.expenses
+      : [];
+  const transactions = rawTransactions.map((item) =>
+    normalizeFinanceTransaction(item, accounts),
+  );
 
   return {
     budgetVersion: FINANCE_BUDGET_VERSION,
@@ -259,11 +401,16 @@ export function normalizeFinanceData(data) {
     budgetEntries,
     monthlyBudgets: buildLegacyMonthlyBudgets(budgetEntries),
     accounts,
-    expenses: Array.isArray(source?.expenses)
-      ? source.expenses.map((item) => normalizeFinanceTransaction(item, accounts))
-      : [],
+    transactions,
+    expenses: transactions,
+    relationshipLedger:
+      source?.relationshipLedger && typeof source.relationshipLedger === "object"
+        ? source.relationshipLedger
+        : {},
     assets: Array.isArray(source?.assets)
-      ? source.assets.map((item) => normalizeFinanceAsset(item, accounts))
+      ? source.assets
+          .filter((item) => isFinanceV2Asset(item))
+          .map((item) => normalizeFinanceAsset(item, accounts))
       : [],
     subscriptions: Array.isArray(source?.subscriptions)
       ? source.subscriptions
@@ -304,7 +451,7 @@ export async function loadRemotePlannerData(uid) {
       await savePlannerDataToCloud();
     }
   } catch (error) {
-    console.error("원격 데이터 불러오기 오류:", error);
+    console.error("원격 planner 데이터 불러오기 오류:", error);
     const localData = loadLocalBackup();
     state.items = localData.items;
     state.projects = localData.projects;
@@ -336,7 +483,7 @@ export async function loadRemoteFinanceData(uid) {
       await saveFinanceDataToCloud();
     }
   } catch (error) {
-    console.error("원격 가계부 데이터 불러오기 오류:", error);
+    console.error("원격 finance 데이터 불러오기 오류:", error);
     state.financeData = loadFinanceLocal();
   } finally {
     state.isRemoteLoading = false;
@@ -371,21 +518,13 @@ export async function saveFinanceDataToCloud() {
         budgetSettings: financeData.budgetSettings,
         budgetEntries: financeData.budgetEntries,
         monthlyBudgets: financeData.monthlyBudgets,
-        accounts: Array.isArray(financeData?.accounts)
-          ? financeData.accounts
-          : [],
-        expenses: Array.isArray(financeData?.expenses)
-          ? financeData.expenses
-          : [],
-        assets: Array.isArray(financeData?.assets)
-          ? financeData.assets
-          : [],
-        subscriptions: Array.isArray(financeData?.subscriptions)
-          ? financeData.subscriptions
-          : [],
-        assetGoals: Array.isArray(financeData?.assetGoals)
-          ? financeData.assetGoals
-          : [],
+        accounts: financeData.accounts,
+        transactions: financeData.transactions,
+        expenses: financeData.expenses,
+        relationshipLedger: financeData.relationshipLedger,
+        assets: financeData.assets,
+        subscriptions: financeData.subscriptions,
+        assetGoals: financeData.assetGoals,
         accountsMigratedAt: financeData.accountsMigratedAt || Date.now(),
         balanceSyncedAt: financeData.balanceSyncedAt || null,
         updatedAt: Date.now(),
@@ -393,7 +532,7 @@ export async function saveFinanceDataToCloud() {
       { merge: true },
     );
   } catch (error) {
-    console.error("원격 가계부 데이터 저장 오류:", error);
+    console.error("원격 finance 데이터 저장 오류:", error);
   }
 }
 
@@ -433,7 +572,7 @@ export async function savePlannerDataToCloud() {
       { merge: true },
     );
   } catch (error) {
-    console.error("원격 데이터 저장 오류:", error);
+    console.error("원격 planner 데이터 저장 오류:", error);
   }
 }
 
@@ -456,7 +595,7 @@ export function saveLocalBackup() {
       ),
     );
   } catch (error) {
-    console.error("로컬 백업 저장 오류:", error);
+    console.error("로컬 planner 백업 저장 오류:", error);
   }
 }
 
@@ -466,10 +605,9 @@ export function loadLocalBackup() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return normalizePlannerData();
-    const parsed = JSON.parse(raw);
-    return normalizePlannerData(parsed);
+    return normalizePlannerData(JSON.parse(raw));
   } catch (error) {
-    console.error("로컬 백업 불러오기 오류:", error);
+    console.error("로컬 planner 백업 불러오기 오류:", error);
     return normalizePlannerData();
   }
 }
@@ -479,14 +617,10 @@ export function loadFinanceLocal() {
 
   try {
     const raw = localStorage.getItem(FINANCE_STORAGE_KEY);
-
-    if (!raw) {
-      return normalizeFinanceData();
-    }
-
+    if (!raw) return normalizeFinanceData();
     return normalizeFinanceData(JSON.parse(raw));
   } catch (error) {
-    console.error("가계부 로컬 데이터 불러오기 오류:", error);
+    console.error("로컬 finance 데이터 불러오기 오류:", error);
     return normalizeFinanceData();
   }
 }
@@ -498,7 +632,7 @@ export function saveFinanceLocal(financeData) {
   try {
     localStorage.setItem(FINANCE_STORAGE_KEY, JSON.stringify(normalized));
   } catch (error) {
-    console.error("가계부 로컬 데이터 저장 오류:", error);
+    console.error("로컬 finance 데이터 저장 오류:", error);
   }
 
   try {
@@ -507,7 +641,7 @@ export function saveFinanceLocal(financeData) {
       state.financeData = normalized;
     }
   } catch (error) {
-    console.error("가계부 상태 동기화 오류:", error);
+    console.error("finance 상태 동기화 오류:", error);
   }
 
   queueSaveFinanceData();

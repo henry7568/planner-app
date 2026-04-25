@@ -1,5 +1,5 @@
 // dashboard.js
-import { escapeHtml, formatDateKey, makeDateTime } from "./utils.js";
+import { escapeHtml, formatDateKey, formatKoreanDate, makeDateTime } from "./utils.js";
 import { renderCard, renderSelectedCard } from "./renderItems.js";
 import { getStatusSymbol } from "./plannerItems.js";
 import {
@@ -169,7 +169,7 @@ export function renderDashboard() {
   }
 
   const visibleList = shouldHideCompletedDashboardItems()
-    ? filtered.filter((item) => item.status !== "success")
+    ? filtered.filter((item) => (item.status || "pending") === "pending")
     : filtered;
 
   if (visibleList.length === 0) {
@@ -571,7 +571,7 @@ function getCoinAmountHtml(amount, sign = "") {
 function getFilteredRewardTargetKeys(filteredItems) {
   return new Set(
     (filteredItems || [])
-      .map((item) => item.sourceId || item.id)
+      .map((item) => item.id)
       .filter(Boolean),
   );
 }
@@ -904,9 +904,7 @@ export function openSummaryPopup(type) {
   if (list.length === 0) {
     summaryPopupList.innerHTML = `<div class="empty-message">표시할 항목이 없습니다.</div>`;
   } else {
-    summaryPopupList.innerHTML = list
-      .map((item) => renderSelectedCard(item, getStatusSymbol))
-      .join("");
+    summaryPopupList.innerHTML = renderSummaryPopupSections(list);
   }
 
   summaryPopupOverlay?.classList.remove("hidden");
@@ -915,6 +913,92 @@ export function openSummaryPopup(type) {
 export function closeSummaryPopup() {
   const { summaryPopupOverlay } = getRefs();
   summaryPopupOverlay?.classList.add("hidden");
+}
+
+function getSummaryItemDateKey(item) {
+  if (!item) return "";
+  return item.type === "todo" ? item.dueDate || "" : item.startDate || "";
+}
+
+function getSummaryDateLabel(dateKey) {
+  return dateKey ? formatKoreanDate(dateKey) : "날짜 없음";
+}
+
+function getSummaryRowDateText(item) {
+  if (!item) return "";
+
+  if (item.type === "todo") {
+    return `${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}`;
+  }
+
+  return `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`;
+}
+
+function renderSummaryItemRow(item) {
+  const statusTargetId = item.id;
+  const typeText = item.type === "schedule" ? "일정" : "할일";
+  const dateText = getSummaryRowDateText(item);
+
+  return `
+    <div
+      class="summary-popup-row clickable-item-card"
+      data-action="open-edit-item"
+      data-id="${item.id}"
+      role="button"
+      tabindex="0"
+      title="클릭해서 수정"
+    >
+      <button
+        class="status-btn ${item.status || "pending"}"
+        data-action="toggle-status"
+        data-id="${statusTargetId}"
+        title="상태 변경"
+        type="button"
+      >
+        ${getStatusSymbol(item.status)}
+      </button>
+      <div class="summary-popup-row-main">
+        <strong>${escapeHtml(item.title || "")}</strong>
+        <div class="summary-popup-row-meta">
+          <span class="timeline-type ${item.type === "todo" ? "todo" : "schedule"}">${typeText}</span>
+          <span>${escapeHtml(dateText)}</span>
+          ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSummaryPopupSections(list) {
+  const grouped = list.reduce((acc, item) => {
+    const key = getSummaryItemDateKey(item) || "none";
+    acc[key] = acc[key] || [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  return Object.keys(grouped)
+    .sort((a, b) => {
+      if (a === "none") return 1;
+      if (b === "none") return -1;
+      return a.localeCompare(b);
+    })
+    .map((key) => {
+      const sectionItems = grouped[key];
+
+      return `
+        <details class="summary-weekday-section" open>
+          <summary class="summary-weekday-header">
+            <span>${getSummaryDateLabel(key === "none" ? "" : key)}</span>
+            <strong>${sectionItems.length}</strong>
+          </summary>
+          <div class="summary-weekday-body">
+            ${sectionItems.map(renderSummaryItemRow).join("")}
+          </div>
+        </details>
+      `;
+    })
+    .join("");
 }
 
 export function renderMonthOptions() {

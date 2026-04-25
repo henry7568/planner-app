@@ -8,10 +8,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Life-Planner</title>
+    <script>
+      window.addEventListener("unhandledrejection", (event) => {
+        const message = String(event.reason?.message || event.reason || "");
+        if (
+          message.includes("A listener indicated an asynchronous response") &&
+          message.includes("message channel closed before a response was received")
+        ) {
+          event.preventDefault();
+        }
+      });
+    </script>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=44" />
+    <link rel="stylesheet" href="style.css?v=120" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -2154,10 +2165,11 @@
                 <label for="popupItemColor">색상</label>
                 <select id="popupItemColor" class="form-control">
                   <option value="blue">파랑</option>
-                  <option value="green">초록</option>
-                  <option value="yellow">노랑</option>
-                  <option value="red">빨강</option>
                   <option value="purple">보라</option>
+                  <option value="green">초록</option>
+                  <option value="orange">주황</option>
+                  <option value="red">빨강</option>
+                  <option value="gray">회색</option>
                 </select>
               </div>
 
@@ -2804,6 +2816,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=44"></script>
+    <script type="module" src="./js/app.js?v=120"></script>
   </body>
 </html>

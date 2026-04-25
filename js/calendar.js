@@ -106,7 +106,7 @@ export function createCalendarCell(dateObj, isOtherMonth) {
           .map((item) => {
             const locationText = getScheduleLocationTextForDate(dateKey, item);
             const timeText = getCalendarItemTime(item);
-            const statusTargetId = item.sourceId || item.id;
+            const statusTargetId = item.id;
             const coinBadge = renderCoinBadge(item, statusTargetId);
 
             const typeIcon =
@@ -577,14 +577,14 @@ export function layoutTimelineBlocks(blocks) {
 export function renderPositionedTimelineBlock(block) {
   const item = block.item;
   const colorClass = `item-color-${item.color || "blue"}`;
-  const coinBadge = renderCoinBadge(item, item.sourceId || item.id);
+  const coinBadge = renderCoinBadge(item, item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="timeline-repeat">↻</span>`
       : "";
 
   const top = block.startMinutes;
-  const height = Math.max(block.endMinutes - block.startMinutes, 28);
+  const height = Math.max(block.endMinutes - block.startMinutes, 44);
 
   const widthPercent = 100 / block.totalColumns;
   const leftPercent = widthPercent * block.column;
@@ -724,7 +724,7 @@ export function formatHourLabel(hour) {
 
 export function renderTimelineItem(dateKey, item) {
   const colorClass = `item-color-${item.color || "blue"}`;
-  const coinBadge = renderCoinBadge(item, item.sourceId || item.id);
+  const coinBadge = renderCoinBadge(item, item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="timeline-repeat">↻</span>`
@@ -841,7 +841,12 @@ export function getSortDateTime(item) {
     return new Date(makeDateTime(item.dueDate, item.dueTime || "23:59"));
   }
 
-  return new Date(makeDateTime(item.startDate, item.startTime || "00:00"));
+  return new Date(
+    makeDateTime(
+      item.endDate || item.startDate,
+      item.endTime || item.startTime || "23:59",
+    ),
+  );
 }
 
 export function getTodoDiffMinutes(item) {
