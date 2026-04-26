@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/fireba
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import {
-  makeDateTime,
   formatDateKey,
   formatKoreanDate,
   makeId,
@@ -20,6 +19,22 @@ import {
   saveFinanceLocal,
 } from "./storage.js";
 import { initAuth } from "./auth.js";
+import {
+  bindPopupBackdropClose,
+  setupFormAccessibilityGuard,
+} from "./popupGuards.js";
+import {
+  createPlaceAutocompleteWidget,
+  loadGoogleMapsPlacesLibrary,
+} from "./placeAutocomplete.js";
+import {
+  getEffectiveDailyLocationForDate,
+  getLocationPayload,
+  getPrimaryLocationFromDailyLocations,
+  isMultiDayScheduleRange,
+  normalizeDailyLocationEntries,
+} from "./placeUtils.js";
+import { registerPlannerServiceWorker } from "./serviceWorkerRegistration.js";
 
 import {
   setupTimePickers,
@@ -40,8 +55,17 @@ import {
 import {
   renderCard,
   renderSelectedCard,
-  renderProjectTaskRow,
 } from "./renderItems.js";
+
+import {
+  clampPage,
+  getPlannerProjectAccent,
+  getPlannerProjectColorKeyByAccent,
+  getProjectSectionStateKey,
+  renderPlannerInboxListHtml,
+  renderPlannerProjectsListHtml,
+  renderProjectDetailHtml,
+} from "./plannerProjects.js";
 
 import {
   saveEditedSingleItem as saveEditedSingleItemModule,
@@ -54,6 +78,7 @@ import {
   toggleItemStatus,
   toggleRecurringSingleSlotStatus,
   ensureNextRecurringItemAfterStatusChange,
+  restoreRecurringItemAsPendingMaster,
   deleteItemById,
   applyRecurringScheduleEditScope,
   toggleRecurringScheduleSlotStatus,
@@ -68,9 +93,22 @@ import {
   closeDatePopup,
   getItemsForDate,
   isItemOnDate,
-  sortItems,
   getTodoDiffMinutes,
 } from "./calendar.js";
+import {
+  closeCalendarDatePicker,
+  configureCalendarPickerModule,
+  handleCalendarPickerAction,
+  toggleCalendarDatePicker,
+} from "./calendarPicker.js";
+
+import {
+  configurePlannerNotifications,
+  parseReminderMinutes,
+  startPlannerNotificationLoop,
+  syncPlannerNotificationSettingsUi,
+  togglePlannerNotifications,
+} from "./plannerNotifications.js";
 
 import {
   configureDashboardModule,
@@ -124,10 +162,22 @@ import {
 import {
   normalizeRewardsData,
   applyStatusRewardTransition,
-  deleteCoinSpendEntry,
-  spendCoins,
-  updateCoinSpendEntry,
 } from "./rewards.js";
+
+import {
+  closeCoinLedgerEditPopup,
+  configureCoinLedgerEditor,
+  deleteEditingCoinLedger,
+  openCoinLedgerEditPopup,
+  saveCoinLedgerEdit,
+} from "./coinLedgerEditor.js";
+
+import {
+  loadDashboardHideCompletedPreference,
+  loadProjectSectionCollapseState,
+  saveDashboardHideCompletedPreference,
+  saveProjectSectionCollapseState,
+} from "./plannerPreferences.js";
 
 import { parseQuickInput } from "./quickInput.js";
 
@@ -197,10 +247,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const STORAGE_KEY = "planner_items_tabs_local_backup_v1";
-const DASHBOARD_HIDE_COMPLETED_KEY = "planner_dashboard_hide_completed_v1";
-const PLANNER_NOTIFICATION_ENABLED_KEY = "planner_notifications_enabled_v1";
-const PLANNER_NOTIFICATION_SENT_KEY = "planner_notifications_sent_v1";
-const PROJECT_SECTION_COLLAPSE_KEY = "planner_project_section_collapsed_v1";
 
 let selectedFilterType = "";
 let selectedFilterYear = "";
@@ -224,18 +270,14 @@ let activePlaceSelectMode = "single";
 const now = new Date();
 let calendarYear = now.getFullYear();
 let calendarMonth = now.getMonth();
-let calendarPickerYear = calendarYear;
-let calendarPickerMonth = calendarMonth;
 
 let dashboardPage = 1;
 let hideCompletedDashboardItems = false;
 const DASHBOARD_PAGE_SIZE = 5;
-const PLANNER_INBOX_PAGE_SIZE = 5;
+const PLANNER_INBOX_PAGE_SIZE = 3;
 const PLANNER_PROJECT_PAGE_SIZE = 2;
-const PLANNER_NOTIFICATION_CHECK_MS = 30 * 1000;
 let plannerInboxPage = 1;
 let plannerProjectPage = 1;
-let plannerNotificationTimer = null;
 let editingInboxId = null;
 let editingProjectId = null;
 let pendingInboxConversion = null;
@@ -279,6 +321,7 @@ const authMessage = document.getElementById("authMessage");
 const bottomTabButtons = document.querySelectorAll(".bottom-tab-btn");
 const dynamicLeftTabBtn = document.getElementById("dynamicLeftTabBtn");
 const plannerInboxTabBtn = document.getElementById("plannerInboxTabBtn");
+const plannerInboxTabBadge = document.getElementById("plannerInboxTabBadge");
 const homeTabBtn = document.getElementById("homeTabBtn");
 const plannerProjectTabBtn = document.getElementById("plannerProjectTabBtn");
 const dynamicRightTabBtn = document.getElementById("dynamicRightTabBtn");
@@ -348,10 +391,15 @@ const achievementDesc = document.getElementById("achievementDesc");
 const coinBalanceText = document.getElementById("coinBalanceText");
 const hobbyBudgetText = document.getElementById("hobbyBudgetText");
 const coinLedgerList = document.getElementById("coinLedgerList");
-const coinSpendAmount = document.getElementById("coinSpendAmount");
-const coinSpendMemo = document.getElementById("coinSpendMemo");
-const coinSpendBtn = document.getElementById("coinSpendBtn");
-const coinSpendCancelBtn = document.getElementById("coinSpendCancelBtn");
+const coinLedgerEditOverlay = document.getElementById("coinLedgerEditOverlay");
+const closeCoinLedgerEditBtn = document.getElementById("closeCoinLedgerEditBtn");
+const coinLedgerEditForm = document.getElementById("coinLedgerEditForm");
+const coinLedgerDirectionInput = document.getElementById("coinLedgerDirectionInput");
+const coinLedgerAmountInput = document.getElementById("coinLedgerAmountInput");
+const coinLedgerMemoInput = document.getElementById("coinLedgerMemoInput");
+const coinLedgerSaveBtn = document.getElementById("coinLedgerSaveBtn");
+const coinLedgerCancelBtn = document.getElementById("coinLedgerCancelBtn");
+const coinLedgerDeleteBtn = document.getElementById("coinLedgerDeleteBtn");
 const productivityReportRange = document.getElementById(
   "productivityReportRange",
 );
@@ -535,6 +583,7 @@ const popupTitleInput = document.getElementById("popupTitleInput");
 const popupItemColor = document.getElementById("popupItemColor");
 const popupItemTag = document.getElementById("popupItemTag");
 const popupReminderMinutes = document.getElementById("popupReminderMinutes");
+const popupItemProjectId = document.getElementById("popupItemProjectId");
 const popupTodoDate = document.getElementById("popupTodoDate");
 const popupScheduleStartDate = document.getElementById(
   "popupScheduleStartDate",
@@ -1092,7 +1141,6 @@ let projects = [];
 let inboxItems = [];
 let ignoredRecommendationIds = [];
 let rewardsData = normalizeRewardsData();
-let editingCoinSpendId = null;
 let isRemoteLoading = false;
 let saveTimer = null;
 let editingOccurrenceDateKey = "";
@@ -1290,6 +1338,51 @@ configureCalendarModule({
 
   resetPopupQuickAddForm,
   renderAll,
+});
+
+configureCalendarPickerModule({
+  refs: {
+    calendarDatePickerPanel,
+  },
+  getCalendarState: () => ({
+    year: calendarYear,
+    month: calendarMonth,
+  }),
+  setCalendarMonth: (year, month) => {
+    calendarYear = year;
+    calendarMonth = month;
+  },
+  clearSelectedDate: () => {
+    selectedDate = "";
+  },
+  closeDatePopup,
+  closeDatePopupAndClearProjectContext,
+  renderCalendar,
+});
+
+configurePlannerNotifications({
+  refs: {
+    settingsNotificationsToggle,
+    settingsNotificationStatus,
+  },
+  getItemsForDate,
+});
+
+configureCoinLedgerEditor({
+  refs: {
+    coinLedgerEditOverlay,
+    coinLedgerEditForm,
+    coinLedgerDirectionInput,
+    coinLedgerAmountInput,
+    coinLedgerMemoInput,
+  },
+  getRewardsData: () => rewardsData,
+  setRewardsData: (nextData) => {
+    rewardsData = nextData;
+  },
+  queueSavePlannerData,
+  renderDashboard,
+  renderFinance,
 });
 
 configureDashboardModule({
@@ -1667,6 +1760,7 @@ configurePlannerUiModule({
     popupItemColor,
     popupItemTag,
     popupReminderMinutes,
+    popupItemProjectId,
     popupTodoDate,
     popupScheduleStartDate,
     popupQuickAddForm,
@@ -1731,60 +1825,6 @@ initAuth({ renderAll });
 registerPlannerServiceWorker();
 initAppOnce();
 
-const popupBackdropPointerState = new WeakMap();
-
-function bindPopupBackdropClose(overlay, onClose) {
-  if (!overlay || typeof onClose !== "function") return;
-
-  overlay.addEventListener("pointerdown", (event) => {
-    popupBackdropPointerState.set(overlay, {
-      startedOnBackdrop: event.target === overlay,
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-    });
-  });
-
-  overlay.addEventListener("pointermove", (event) => {
-    const state = popupBackdropPointerState.get(overlay);
-    if (!state) return;
-
-    const moveX = Math.abs(event.clientX - state.startX);
-    const moveY = Math.abs(event.clientY - state.startY);
-
-    if (moveX > 6 || moveY > 6) {
-      state.moved = true;
-    }
-  });
-
-  overlay.addEventListener("click", (event) => {
-    const state = popupBackdropPointerState.get(overlay);
-    popupBackdropPointerState.delete(overlay);
-
-    if (
-      event.target === overlay &&
-      state?.startedOnBackdrop &&
-      !state.moved
-    ) {
-      onClose(event);
-    }
-  });
-}
-
-function registerPlannerServiceWorker() {
-  if (!("serviceWorker" in navigator)) return;
-
-  window.addEventListener("load", () => {
-    const serviceWorkerUrl = new URL("../service-worker.js", import.meta.url);
-
-    navigator.serviceWorker
-      .register(serviceWorkerUrl, { scope: "../" })
-      .catch((error) => {
-        console.error("서비스 워커 등록 오류:", error);
-      });
-  });
-}
-
 async function initAppOnce() {
   if (isAppInitialized) return;
   isAppInitialized = true;
@@ -1792,6 +1832,7 @@ async function initAppOnce() {
   setupTabs();
   setupTimePickers();
   setupPlannerForm();
+  setupFormAccessibilityGuard();
 
   initFinance();
   await initPlaceAutocompleteWidgets();
@@ -1984,8 +2025,15 @@ async function initAppOnce() {
   plannerInboxCancelEditBtn?.addEventListener("click", resetPlannerInboxForm);
   plannerProjectAddBtn?.addEventListener("click", addPlannerProject);
   plannerProjectCancelEditBtn?.addEventListener("click", resetPlannerProjectForm);
-  coinSpendBtn?.addEventListener("click", handleCoinSpend);
-  coinSpendCancelBtn?.addEventListener("click", resetCoinSpendForm);
+  closeCoinLedgerEditBtn?.addEventListener("click", closeCoinLedgerEditPopup);
+  coinLedgerCancelBtn?.addEventListener("click", closeCoinLedgerEditPopup);
+  coinLedgerSaveBtn?.addEventListener("click", saveCoinLedgerEdit);
+  coinLedgerDeleteBtn?.addEventListener("click", deleteEditingCoinLedger);
+  coinLedgerEditForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveCoinLedgerEdit();
+  });
+  bindPopupBackdropClose(coinLedgerEditOverlay, closeCoinLedgerEditPopup);
   productivityReportRange?.addEventListener("change", (e) => {
     setProductivityReportRange(e.target.value);
     renderProductivityReport();
@@ -2313,213 +2361,6 @@ function renderAll() {
   enforcePlannerWorkspaceVisibility();
 }
 
-function openCalendarDatePicker() {
-  if (!calendarDatePickerPanel) return;
-
-  calendarPickerYear = calendarYear;
-  calendarPickerMonth = calendarMonth;
-  renderCalendarDatePicker();
-  calendarDatePickerPanel.classList.remove("hidden");
-}
-
-function closeCalendarDatePicker() {
-  calendarDatePickerPanel?.classList.add("hidden");
-}
-
-function toggleCalendarDatePicker() {
-  if (!calendarDatePickerPanel) return;
-
-  if (calendarDatePickerPanel.classList.contains("hidden")) {
-    openCalendarDatePicker();
-  } else {
-    closeCalendarDatePicker();
-  }
-}
-
-function renderCalendarDatePicker() {
-  if (!calendarDatePickerPanel) return;
-
-  const monthLabel = `${calendarPickerYear}년`;
-  const monthButtons = Array.from({ length: 12 }, (_, index) => {
-    const isSelected =
-      calendarPickerYear === calendarYear && index === calendarMonth;
-
-    return `
-      <button
-        class="calendar-picker-month-btn ${isSelected ? "selected" : ""}"
-        type="button"
-        data-picker-action="select-month"
-        data-month="${index}"
-      >
-        ${index + 1}월
-      </button>
-    `;
-  });
-
-  calendarDatePickerPanel.innerHTML = `
-    <div class="calendar-picker-header">
-      <strong class="calendar-picker-month">${monthLabel}</strong>
-      <div>
-        <button class="calendar-picker-arrow" type="button" data-picker-action="prev-year" aria-label="이전 년도">↑</button>
-        <button class="calendar-picker-arrow" type="button" data-picker-action="next-year" aria-label="다음 년도">↓</button>
-      </div>
-    </div>
-    <div class="calendar-picker-month-grid">
-      ${monthButtons.join("")}
-    </div>
-    <div class="calendar-picker-footer">
-      <button class="calendar-picker-link" type="button" data-picker-action="clear">삭제</button>
-      <button class="calendar-picker-link" type="button" data-picker-action="today">오늘</button>
-    </div>
-  `;
-}
-
-function moveCalendarPickerYear(direction) {
-  calendarPickerYear += direction;
-  renderCalendarDatePicker();
-}
-
-function moveCalendarToMonth(year, month) {
-  if (!Number.isInteger(year) || !Number.isInteger(month)) return;
-  if (month < 0 || month > 11) return;
-
-  calendarYear = year;
-  calendarMonth = month;
-  selectedDate = "";
-  closeCalendarDatePicker();
-  closeDatePopup();
-  renderCalendar();
-}
-
-function handleCalendarPickerAction(target) {
-  const action = target.dataset.pickerAction || "";
-
-  if (action === "prev-year") {
-    moveCalendarPickerYear(-1);
-    return;
-  }
-
-  if (action === "next-year") {
-    moveCalendarPickerYear(1);
-    return;
-  }
-
-  if (action === "select-month") {
-    moveCalendarToMonth(calendarPickerYear, Number(target.dataset.month));
-    return;
-  }
-
-  if (action === "today") {
-    const today = new Date();
-    moveCalendarToMonth(today.getFullYear(), today.getMonth());
-    return;
-  }
-
-  if (action === "clear") {
-    closeCalendarDatePicker();
-    closeDatePopupAndClearProjectContext();
-    renderCalendar();
-  }
-}
-
-function loadDashboardHideCompletedPreference() {
-  try {
-    return localStorage.getItem(DASHBOARD_HIDE_COMPLETED_KEY) === "true";
-  } catch (error) {
-    console.error("완료 숨기기 설정을 불러오지 못했습니다:", error);
-    return false;
-  }
-}
-
-function saveDashboardHideCompletedPreference(value) {
-  try {
-    localStorage.setItem(DASHBOARD_HIDE_COMPLETED_KEY, value ? "true" : "false");
-  } catch (error) {
-    console.error("완료 숨기기 설정을 저장하지 못했습니다:", error);
-  }
-}
-
-function loadProjectSectionCollapseState() {
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem(PROJECT_SECTION_COLLAPSE_KEY) || "{}",
-    );
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    console.error("Project section state load failed.", error);
-    return {};
-  }
-}
-
-function saveProjectSectionCollapseState() {
-  try {
-    localStorage.setItem(
-      PROJECT_SECTION_COLLAPSE_KEY,
-      JSON.stringify(collapsedProjectSections),
-    );
-  } catch (error) {
-    console.error("Project section state save failed.", error);
-  }
-}
-
-function getProjectSectionStateKey(projectId, sectionKey) {
-  return `${projectId || "unknown"}:${sectionKey || "section"}`;
-}
-
-function handleCoinSpend() {
-  const amount = Number(coinSpendAmount?.value || 0);
-  const memo = coinSpendMemo?.value.trim() || "취미생활 사용";
-
-  try {
-    rewardsData = editingCoinSpendId
-      ? updateCoinSpendEntry(rewardsData, editingCoinSpendId, amount, memo)
-      : spendCoins(rewardsData, amount, memo);
-  } catch (error) {
-    alert(error.message || "코인을 사용할 수 없습니다.");
-    return;
-  }
-
-  resetCoinSpendForm();
-
-  queueSavePlannerData();
-  renderDashboard();
-}
-
-function resetCoinSpendForm() {
-  editingCoinSpendId = null;
-  if (coinSpendAmount) coinSpendAmount.value = "";
-  if (coinSpendMemo) coinSpendMemo.value = "";
-  if (coinSpendBtn) coinSpendBtn.textContent = "사용 기록";
-  coinSpendCancelBtn?.classList.add("hidden");
-}
-
-function startEditCoinSpend(id) {
-  const entry = normalizeRewardsData(rewardsData).ledger.find(
-    (item) => item.id === id && item.type === "spend",
-  );
-  if (!entry) return;
-
-  editingCoinSpendId = id;
-  if (coinSpendAmount) coinSpendAmount.value = Math.abs(Number(entry.amount) || 0);
-  if (coinSpendMemo) coinSpendMemo.value = entry.itemTitle || "";
-  if (coinSpendBtn) coinSpendBtn.textContent = "사용 수정";
-  coinSpendCancelBtn?.classList.remove("hidden");
-  coinSpendAmount?.focus();
-}
-
-function deleteCoinSpend(id) {
-  const ok = confirm("이 코인 사용 기록을 삭제할까요?");
-  if (!ok) return;
-
-  rewardsData = deleteCoinSpendEntry(rewardsData, id);
-  if (editingCoinSpendId === id) {
-    resetCoinSpendForm();
-  }
-
-  queueSavePlannerData();
-  renderDashboard();
-}
-
 function hideAllPlannerWorkspaceSections() {
   plannerWorkspaceHubSection?.classList.add("hidden");
   plannerInboxSection?.classList.add("hidden");
@@ -2627,12 +2468,21 @@ function getProjectLabel(projectId) {
 
 function renderPlannerWorkspace() {
   renderPlannerProjectSelectOptions();
+  updatePlannerInboxTabBadge();
   renderPlannerInbox();
   renderPlannerProjects();
 }
 
+function updatePlannerInboxTabBadge() {
+  if (!plannerInboxTabBadge) return;
+
+  const count = inboxItems.filter((item) => !item.convertedAt).length;
+  plannerInboxTabBadge.textContent = count > 99 ? "99+" : String(count);
+  plannerInboxTabBadge.classList.toggle("hidden", count === 0);
+}
+
 function renderPlannerProjectSelectOptions() {
-  [itemProjectId, plannerInboxProjectSelect].forEach((select) => {
+  [itemProjectId, plannerInboxProjectSelect, popupItemProjectId].forEach((select) => {
     if (!select) return;
 
     const currentValue = select.value || "";
@@ -2652,55 +2502,6 @@ function renderPlannerProjectSelectOptions() {
       ? currentValue
       : "";
   });
-}
-
-function clampPage(page, totalPages) {
-  return Math.min(Math.max(1, page), Math.max(1, totalPages));
-}
-
-function getPageSlice(list, page, pageSize) {
-  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
-  const safePage = clampPage(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-
-  return {
-    page: safePage,
-    totalPages,
-    visibleItems: list.slice(start, start + pageSize),
-  };
-}
-
-function renderPlannerPagination({
-  page,
-  totalPages,
-  totalCount,
-  action,
-}) {
-  if (totalPages <= 1) return "";
-
-  return `
-    <div class="planner-pagination">
-      <button
-        class="secondary-btn"
-        type="button"
-        data-action="${action}"
-        data-direction="-1"
-        ${page <= 1 ? "disabled" : ""}
-      >
-        이전
-      </button>
-      <span class="planner-pagination-text">${page} / ${totalPages} · 총 ${totalCount}\uAC1C \uC5F0\uACB0</span>
-      <button
-        class="secondary-btn"
-        type="button"
-        data-action="${action}"
-        data-direction="1"
-        ${page >= totalPages ? "disabled" : ""}
-      >
-        다음
-      </button>
-    </div>
-  `;
 }
 
 function changePlannerInboxPage(direction) {
@@ -2730,505 +2531,54 @@ function closeSettingsPopup() {
   settingsPopupOverlay?.classList.add("hidden");
 }
 
-function isPlannerNotificationSupported() {
-  return typeof window !== "undefined" && "Notification" in window;
-}
-
-function arePlannerNotificationsEnabled() {
-  try {
-    return localStorage.getItem(PLANNER_NOTIFICATION_ENABLED_KEY) === "true";
-  } catch (error) {
-    console.error("알림 설정을 불러오지 못했습니다.", error);
-    return false;
-  }
-}
-
-function setPlannerNotificationsEnabled(isEnabled) {
-  try {
-    localStorage.setItem(
-      PLANNER_NOTIFICATION_ENABLED_KEY,
-      isEnabled ? "true" : "false",
-    );
-  } catch (error) {
-    console.error("알림 설정을 저장하지 못했습니다.", error);
-  }
-}
-
-function loadPlannerNotificationSentMap() {
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem(PLANNER_NOTIFICATION_SENT_KEY) || "{}",
-    );
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    console.error("알림 기록을 불러오지 못했습니다.", error);
-    return {};
-  }
-}
-
-function savePlannerNotificationSentMap(sentMap) {
-  try {
-    localStorage.setItem(
-      PLANNER_NOTIFICATION_SENT_KEY,
-      JSON.stringify(sentMap || {}),
-    );
-  } catch (error) {
-    console.error("알림 기록을 저장하지 못했습니다.", error);
-  }
-}
-
-function syncPlannerNotificationSettingsUi() {
-  if (!settingsNotificationsToggle && !settingsNotificationStatus) return;
-
-  if (!isPlannerNotificationSupported()) {
-    if (settingsNotificationsToggle) {
-      settingsNotificationsToggle.checked = false;
-      settingsNotificationsToggle.disabled = true;
-    }
-    if (settingsNotificationStatus) {
-      settingsNotificationStatus.textContent =
-        "이 브라우저에서는 알림을 지원하지 않습니다.";
-    }
-    return;
-  }
-
-  if (Notification.permission === "denied") {
-    if (settingsNotificationsToggle) {
-      settingsNotificationsToggle.checked = false;
-      settingsNotificationsToggle.disabled = true;
-    }
-    if (settingsNotificationStatus) {
-      settingsNotificationStatus.textContent =
-        "브라우저 설정에서 알림이 차단되어 있습니다.";
-    }
-    return;
-  }
-
-  const isEnabled =
-    arePlannerNotificationsEnabled() && Notification.permission === "granted";
-
-  if (settingsNotificationsToggle) {
-    settingsNotificationsToggle.disabled = false;
-    settingsNotificationsToggle.checked = isEnabled;
-  }
-
-  if (settingsNotificationStatus) {
-    settingsNotificationStatus.textContent = isEnabled
-      ? "작업별 알림 시간에 맞춰 브라우저 알림을 보냅니다."
-      : "알림을 사용하려면 토글을 켜고 권한을 허용해 주세요.";
-  }
-}
-
-async function togglePlannerNotifications(shouldEnable) {
-  if (!isPlannerNotificationSupported()) {
-    alert("이 브라우저에서는 알림을 지원하지 않습니다.");
-    syncPlannerNotificationSettingsUi();
-    return;
-  }
-
-  if (!shouldEnable) {
-    setPlannerNotificationsEnabled(false);
-    stopPlannerNotificationLoop();
-    syncPlannerNotificationSettingsUi();
-    return;
-  }
-
-  const permission =
-    Notification.permission === "granted"
-      ? "granted"
-      : await Notification.requestPermission();
-
-  if (permission !== "granted") {
-    setPlannerNotificationsEnabled(false);
-    syncPlannerNotificationSettingsUi();
-    alert("브라우저에서 알림 권한이 허용되지 않았습니다.");
-    return;
-  }
-
-  setPlannerNotificationsEnabled(true);
-  startPlannerNotificationLoop();
-  checkPlannerNotifications();
-  syncPlannerNotificationSettingsUi();
-}
-
-function stopPlannerNotificationLoop() {
-  if (!plannerNotificationTimer) return;
-  clearInterval(plannerNotificationTimer);
-  plannerNotificationTimer = null;
-}
-
-function startPlannerNotificationLoop() {
-  syncPlannerNotificationSettingsUi();
-
-  if (
-    !isPlannerNotificationSupported() ||
-    !arePlannerNotificationsEnabled() ||
-    Notification.permission !== "granted"
-  ) {
-    stopPlannerNotificationLoop();
-    return;
-  }
-
-  if (!plannerNotificationTimer) {
-    plannerNotificationTimer = setInterval(
-      checkPlannerNotifications,
-      PLANNER_NOTIFICATION_CHECK_MS,
-    );
-  }
-
-  checkPlannerNotifications();
-}
-
-function getDateKeyWithOffset(offsetDays) {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-  return formatDateKey(date);
-}
-
-function getPlannerNotificationDateTime(item) {
-  if (!item) return null;
-  if (item.reminderMinutes == null || Number(item.reminderMinutes) < 0) {
-    return null;
-  }
-  const reminderMinutes = Math.max(0, Number(item.reminderMinutes) || 0);
-  let targetDateTime = null;
-
-  if (item.type === "todo") {
-    if (!item.dueDate) return null;
-    targetDateTime = new Date(makeDateTime(item.dueDate, item.dueTime || "09:00"));
-  } else if (item.type === "schedule") {
-    if (!item.startDate) return null;
-    targetDateTime = new Date(makeDateTime(item.startDate, item.startTime || "09:00"));
-  }
-
-  if (!targetDateTime) return null;
-  targetDateTime.setMinutes(targetDateTime.getMinutes() - reminderMinutes);
-  return targetDateTime;
-}
-
-function parseReminderMinutes(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : -1;
-}
-
-function getPlannerNotificationKey(item, targetDateTime) {
-  return [
-    item.sourceId || item.id,
-    item.id,
-    item.type,
-    targetDateTime.getTime(),
-  ].join("|");
-}
-
-function collectPlannerNotificationCandidates() {
-  const dateKeys = [
-    getDateKeyWithOffset(-1),
-    getDateKeyWithOffset(0),
-    getDateKeyWithOffset(1),
-  ];
-  const seen = new Set();
-
-  return dateKeys
-    .flatMap((dateKey) => getItemsForDate(dateKey))
-    .filter((item) => {
-      const key = item.id || `${item.type}-${item.title}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return item.status !== "success" && item.status !== "fail";
-    });
-}
-
-function checkPlannerNotifications() {
-  if (
-    !isPlannerNotificationSupported() ||
-    !arePlannerNotificationsEnabled() ||
-    Notification.permission !== "granted"
-  ) {
-    return;
-  }
-
-  const nowMs = Date.now();
-  const sentMap = loadPlannerNotificationSentMap();
-  const staleBefore = nowMs - 7 * 24 * 60 * 60 * 1000;
-  let changed = false;
-
-  Object.entries(sentMap).forEach(([key, sentAt]) => {
-    if (Number(sentAt) < staleBefore) {
-      delete sentMap[key];
-      changed = true;
-    }
-  });
-
-  collectPlannerNotificationCandidates().forEach((item) => {
-    const targetDateTime = getPlannerNotificationDateTime(item);
-    if (!targetDateTime || Number.isNaN(targetDateTime.getTime())) return;
-
-    const targetMs = targetDateTime.getTime();
-    const diffMs = nowMs - targetMs;
-
-    if (diffMs < 0 || diffMs > 5 * 60 * 1000) return;
-
-    const notificationKey = getPlannerNotificationKey(item, targetDateTime);
-    if (sentMap[notificationKey]) return;
-
-    const typeText = item.type === "schedule" ? "시간 작업" : "마감 작업";
-    const timeText = targetDateTime.toLocaleString("ko-KR", {
-      month: "numeric",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    try {
-      const notification = new Notification(`${typeText} 알림`, {
-        body: `${item.title || "제목 없음"}\n${timeText}`,
-        tag: notificationKey,
-        renotify: false,
-      });
-
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-    } catch (error) {
-      console.error("알림을 표시하지 못했습니다.", error);
-      return;
-    }
-
-    sentMap[notificationKey] = nowMs;
-    changed = true;
-  });
-
-  if (changed) {
-    savePlannerNotificationSentMap(sentMap);
-  }
-}
-
 function renderPlannerInbox() {
   if (!plannerInboxList) return;
 
-  const sortedInbox = inboxItems
-    .slice()
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-  const pagedInbox = getPageSlice(
-    sortedInbox,
-    plannerInboxPage,
-    PLANNER_INBOX_PAGE_SIZE,
-  );
-  plannerInboxPage = pagedInbox.page;
+  const rendered = renderPlannerInboxListHtml({
+    inboxItems,
+    projects,
+    page: plannerInboxPage,
+    pageSize: PLANNER_INBOX_PAGE_SIZE,
+  });
 
-  if (!sortedInbox.length) {
-    plannerInboxList.innerHTML =
-      '<div class="empty-message">\uD504\uB85C\uC81D\uD2B8\uB97C \uCD94\uAC00\uD558\uBA74 \uC791\uC5C5\uACFC Inbox\uB97C \uBB36\uC5B4\uC11C \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.</div>';
-    return;
-  }
-
-  plannerInboxList.innerHTML = [
-    pagedInbox.visibleItems
-    .map((item) => {
-      const converted = Boolean(item.convertedAt);
-      const projectName = item.projectId ? getProjectLabel(item.projectId) : "";
-
-      return `
-        <div class="planner-inbox-entry ${converted ? "converted" : ""}">
-          <div class="planner-inbox-entry-top">
-            <div>
-              <strong>${escapeHtml(item.title || "")}</strong>
-              ${item.note ? `<p class="planner-inbox-note">${escapeHtml(item.note)}</p>` : ""}
-            </div>
-            <span class="meta-badge">${converted ? "전환 완료" : "수집됨"}</span>
-          </div>
-          <div class="item-meta compact-meta">
-            ${projectName ? `<span class="tag-badge">${escapeHtml(projectName)}</span>` : ""}
-            <span class="meta-badge compact">${formatKoreanDate(formatDateKey(new Date(item.createdAt || Date.now())))}</span>
-          </div>
-          <div class="planner-inbox-actions">
-            ${
-              converted
-                ? `<span class="meta-badge">완료 ${item.convertedToType === "schedule" ? "시간 작업" : "마감 작업"}</span>`
-                : `
-                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">\uD560\uC77C</button>
-                  <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">\uC77C\uC815</button>
-                `
-            }
-            <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">\uC218\uC815</button>
-            <button class="secondary-btn" type="button" data-action="delete-inbox-item" data-id="${item.id}">삭제</button>
-          </div>
-        </div>
-      `;
-    })
-    .join(""),
-    renderPlannerPagination({
-      page: pagedInbox.page,
-      totalPages: pagedInbox.totalPages,
-      totalCount: sortedInbox.length,
-      action: "change-inbox-page",
-    }),
-  ].join("");
-}
-
-function getProjectInboxItems(projectId) {
-  return inboxItems
-    .filter((item) => (item.projectId || "") === projectId && !item.convertedAt)
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-}
-
-function getProjectTodos(projectId) {
-  return sortItems(
-    items.filter((item) => (item.projectId || "") === projectId && item.type === "todo"),
-  );
-}
-
-function getProjectSchedules(projectId) {
-  return sortItems(
-    items.filter(
-      (item) => (item.projectId || "") === projectId && item.type === "schedule",
-    ),
-  );
-}
-
-function getProjectResources(projectId) {
-  const project = getProjectById(projectId);
-  return Array.isArray(project?.resources) ? project.resources : [];
+  plannerInboxPage = rendered.page;
+  plannerInboxList.innerHTML = rendered.html;
 }
 
 function renderPlannerProjects() {
   if (!plannerProjectList) return;
 
-  if (!projects.length) {
-    plannerProjectList.innerHTML =
-      '<div class="empty-message">????? ???? ??? Inbox? ??? ? ? ????.</div>';
-    return;
-  }
+  const rendered = renderPlannerProjectsListHtml({
+    projects,
+    inboxItems,
+    items,
+    page: plannerProjectPage,
+    pageSize: PLANNER_PROJECT_PAGE_SIZE,
+  });
 
-  const sortedProjects = projects
-    .slice()
-    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-  const pagedProjects = getPageSlice(
-    sortedProjects,
-    plannerProjectPage,
-    PLANNER_PROJECT_PAGE_SIZE,
-  );
-  plannerProjectPage = pagedProjects.page;
-
-  plannerProjectList.innerHTML = [
-    pagedProjects.visibleItems.map(renderProjectCard).join(""),
-    renderPlannerPagination({
-      page: pagedProjects.page,
-      totalPages: pagedProjects.totalPages,
-      totalCount: sortedProjects.length,
-      action: "change-project-page",
-    }),
-  ].join("");
-}
-
-function renderProjectCard(project) {
-  const projectId = project.id;
-  const inboxCount = getProjectInboxItems(projectId).length;
-  const todoCount = getProjectTodos(projectId).length;
-  const scheduleCount = getProjectSchedules(projectId).length;
-  const resourceCount = getProjectResources(projectId).length;
-  const totalCount = inboxCount + todoCount + scheduleCount + resourceCount;
-
-  return `
-    <article
-      class="planner-project-entry project-summary-card clickable-item-card"
-      style="--project-accent: ${escapeHtml(project.color || "#2563eb")}"
-      data-action="open-project-detail"
-      data-id="${escapeHtml(projectId)}"
-      role="button"
-      tabindex="0"
-    >
-      <div class="planner-project-entry-top">
-        <div>
-          <strong>${escapeHtml(project.name || "")}</strong>
-          ${project.description ? `<p>${escapeHtml(project.description)}</p>` : ""}
-        </div>
-        <span class="meta-badge">${totalCount}개</span>
-      </div>
-      <div class="item-meta compact-meta project-summary-meta">
-        <span class="tag-badge">Inbox ${inboxCount}</span>
-        <span class="tag-badge">\uD560\uC77C ${todoCount}</span>
-        <span class="tag-badge">\uC77C\uC815 ${scheduleCount}</span>
-        <span class="tag-badge">\uB9AC\uC18C\uC2A4 ${resourceCount}</span>
-      </div>
-      <div class="planner-project-actions">
-        <button class="secondary-btn" type="button" data-action="open-project-detail" data-id="${escapeHtml(projectId)}">\uC5F4\uAE30</button>
-        <button class="secondary-btn" type="button" data-action="edit-project" data-id="${escapeHtml(projectId)}">\uC218\uC815</button>
-        <button class="secondary-btn" type="button" data-action="delete-project" data-id="${escapeHtml(projectId)}">\uC0AD\uC81C</button>
-      </div>
-    </article>
-  `;
+  plannerProjectPage = rendered.page;
+  plannerProjectList.innerHTML = rendered.html;
 }
 
 function openProjectDetailPopup(projectId) {
   const project = getProjectById(projectId);
   if (!project || !projectDetailOverlay || !projectDetailBody) return;
 
-  if (projectDetailTitle) projectDetailTitle.textContent = project.name || "????";
+  if (projectDetailTitle) projectDetailTitle.textContent = project.name || "프로젝트";
   if (projectDetailDesc) projectDetailDesc.textContent = project.description || "";
-  projectDetailBody.innerHTML = renderProjectDetail(project);
+  projectDetailBody.innerHTML = renderProjectDetailHtml({
+    project,
+    inboxItems,
+    items,
+    collapsedProjectSections,
+    getStatusSymbol,
+  });
   projectDetailOverlay.classList.remove("hidden");
 }
 
 function closeProjectDetailPopup() {
   projectDetailOverlay?.classList.add("hidden");
   if (projectDetailBody) projectDetailBody.innerHTML = "";
-}
-
-function renderProjectDetail(project) {
-  const projectId = project.id;
-  const projectInboxItems = getProjectInboxItems(projectId);
-  const projectTodos = getProjectTodos(projectId);
-  const projectSchedules = getProjectSchedules(projectId);
-  const projectResources = getProjectResources(projectId);
-
-  return `
-    <div class="project-section-actions">
-      <button class="secondary-btn" type="button" data-action="project-add-inbox" data-id="${projectId}">Inbox \uCD94\uAC00</button>
-      <button class="secondary-btn" type="button" data-action="project-add-task" data-id="${projectId}" data-target-type="todo">\uD560\uC77C \uCD94\uAC00</button>
-      <button class="secondary-btn" type="button" data-action="project-add-task" data-id="${projectId}" data-target-type="schedule">\uC77C\uC815 \uCD94\uAC00</button>
-      <button class="secondary-btn" type="button" data-action="add-project-resource" data-id="${projectId}">\uB9AC\uC18C\uC2A4 \uCD94\uAC00</button>
-    </div>
-    <div class="project-section-list">
-      ${renderProjectSection({
-        projectId,
-        sectionKey: "inbox",
-        title: "Inbox",
-        count: projectInboxItems.length,
-        bodyHtml: projectInboxItems.length
-          ? projectInboxItems.map(renderProjectInboxRow).join("")
-          : renderProjectEmptyRow(),
-      })}
-      ${renderProjectSection({
-        projectId,
-        sectionKey: "todo",
-        title: "\uD560\uC77C",
-        count: projectTodos.length,
-        bodyHtml: projectTodos.length
-          ? projectTodos.map((item) => renderProjectTaskRow(item, getStatusSymbol)).join("")
-          : renderProjectEmptyRow(),
-      })}
-      ${renderProjectSection({
-        projectId,
-        sectionKey: "schedule",
-        title: "\uC77C\uC815",
-        count: projectSchedules.length,
-        bodyHtml: projectSchedules.length
-          ? projectSchedules.map((item) => renderProjectTaskRow(item, getStatusSymbol)).join("")
-          : renderProjectEmptyRow(),
-      })}
-      ${renderProjectSection({
-        projectId,
-        sectionKey: "resources",
-        title: "\uB9AC\uC18C\uC2A4/\uB9C1\uD06C",
-        count: projectResources.length,
-        bodyHtml: projectResources.length
-          ? projectResources.map((resource) => renderProjectResourceRow(projectId, resource)).join("")
-          : renderProjectEmptyRow(),
-      })}
-    </div>
-  `;
 }
 
 function refreshProjectDetailIfOpen(projectId) {
@@ -3238,94 +2588,6 @@ function refreshProjectDetailIfOpen(projectId) {
     return;
   }
   openProjectDetailPopup(projectId);
-}
-
-function renderProjectSection({ projectId, sectionKey, title, count, bodyHtml }) {
-  const stateKey = getProjectSectionStateKey(projectId, sectionKey);
-  const isCollapsed = Boolean(collapsedProjectSections[stateKey]);
-
-  return `
-    <section class="project-section ${isCollapsed ? "collapsed" : "expanded"}" data-project-section="${escapeHtml(sectionKey)}">
-      <button
-        class="project-section-header"
-        type="button"
-        data-action="toggle-project-section"
-        data-project-id="${escapeHtml(projectId)}"
-        data-section-key="${escapeHtml(sectionKey)}"
-        aria-expanded="${isCollapsed ? "false" : "true"}"
-      >
-        <span class="project-section-caret" aria-hidden="true">${isCollapsed ? "+" : "-"}</span>
-        <span class="project-section-title">${escapeHtml(title)}</span>
-        <span class="project-section-count">${count}</span>
-      </button>
-      <div class="project-section-body ${isCollapsed ? "hidden" : ""}">
-        ${bodyHtml}
-      </div>
-    </section>
-  `;
-}
-
-function renderProjectEmptyRow() {
-  return '<div class="project-section-empty">\uC544\uC9C1 \uD56D\uBAA9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</div>';
-}
-
-function renderProjectInboxRow(item) {
-  const createdText = formatKoreanDate(
-    formatDateKey(new Date(item.createdAt || Date.now())),
-  );
-
-  return `
-    <div class="project-section-row project-inbox-row">
-      <div class="project-row-main">
-        <strong>${escapeHtml(item.title || "")}</strong>
-        ${item.note ? `<span>${escapeHtml(item.note)}</span>` : `<span>${createdText}</span>`}
-      </div>
-      <div class="project-row-actions">
-        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="todo">할일</button>
-        <button class="secondary-btn" type="button" data-action="convert-inbox-item" data-id="${item.id}" data-target-type="schedule">일정</button>
-        <button class="secondary-btn" type="button" data-action="edit-inbox-item" data-id="${item.id}">수정</button>
-      </div>
-    </div>
-  `;
-}
-
-function renderProjectResourceRow(projectId, resource) {
-  const resourceId = resource.id || "";
-  const label = resource.label || resource.title || resource.url || "\uB9AC\uC18C\uC2A4";
-  const url = resource.url || "";
-
-  return `
-    <div class="project-section-row project-resource-row">
-      <div class="project-row-main">
-        <strong>${escapeHtml(label)}</strong>
-        ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>` : ""}
-      </div>
-      <button class="secondary-btn" type="button" data-action="delete-project-resource" data-id="${escapeHtml(projectId)}" data-resource-id="${escapeHtml(resourceId)}">\uC0AD\uC81C</button>
-    </div>
-  `;
-}
-function getPlannerProjectAccent(colorKey) {
-  const map = {
-    blue: "#2563eb",
-    teal: "#0f766e",
-    green: "#16a34a",
-    orange: "#ea580c",
-    red: "#dc2626",
-    slate: "#475569",
-  };
-
-  return map[colorKey] || map.blue;
-}
-
-function getPlannerProjectColorKeyByAccent(accent) {
-  const normalizedAccent = String(accent || "").toLowerCase();
-  const colorKeys = ["blue", "teal", "green", "orange", "red", "slate"];
-  return (
-    colorKeys.find(
-      (colorKey) =>
-        getPlannerProjectAccent(colorKey).toLowerCase() === normalizedAccent,
-    ) || "blue"
-  );
 }
 
 function addPlannerProject() {
@@ -3607,6 +2869,7 @@ function openProjectTaskPopup(projectId, targetType = "todo") {
   selectedDate = formatDateKey(new Date());
   popupQuickAddProjectId = projectId;
   resetPopupQuickAddForm();
+  if (popupItemProjectId) popupItemProjectId.value = projectId;
   openDatePopup(selectedDate);
   openPopupQuickAddForm();
   if (popupItemType) popupItemType.value = targetType === "schedule" ? "schedule" : "todo";
@@ -3696,7 +2959,7 @@ function toggleProjectSection(projectId, sectionKey) {
     ...collapsedProjectSections,
     [stateKey]: !collapsedProjectSections[stateKey],
   };
-  saveProjectSectionCollapseState();
+  saveProjectSectionCollapseState(collapsedProjectSections);
   renderPlannerProjects();
   refreshProjectDetailIfOpen(projectId);
 }
@@ -4262,17 +3525,10 @@ function handleDocumentClick(e) {
     return;
   }
 
-  if (action === "edit-coin-spend") {
+  if (action === "open-coin-ledger-edit") {
     const id = actionTarget.dataset.id;
     if (!id) return;
-    startEditCoinSpend(id);
-    return;
-  }
-
-  if (action === "delete-coin-spend") {
-    const id = actionTarget.dataset.id;
-    if (!id) return;
-    deleteCoinSpend(id);
+    openCoinLedgerEditPopup(id);
     return;
   }
 
@@ -4569,7 +3825,9 @@ function addItemFromSelectedDate() {
     popupItemColor,
     popupItemTag,
     popupReminderMinutes,
-    popupItemProjectId: { value: popupQuickAddProjectId },
+    popupItemProjectId: {
+      value: popupQuickAddProjectId || popupItemProjectId?.value || "",
+    },
     popupItemLocation: { value: primaryLocation.location || "" },
     popupItemLocationAddress: { value: primaryLocation.locationAddress || "" },
     popupItemLocationPlaceId: { value: primaryLocation.locationPlaceId || "" },
@@ -5250,7 +4508,9 @@ function toggleStatus(id) {
   const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
   const baseItem = items.find((item) => item.id === targetId);
   if (!baseItem) return;
-  const targetKey = targetId;
+  const targetKey = occurrenceDateKey
+    ? `${targetId}__${occurrenceDateKey}`
+    : targetId;
   let previousStatus = baseItem.status || "pending";
   let nextStatus = getNextStatus(previousStatus);
 
@@ -5285,7 +4545,10 @@ function toggleStatus(id) {
     nextStatus,
   });
 
-  items = ensureNextRecurringItemAfterStatusChange(items, targetId);
+  items =
+    nextStatus === "pending"
+      ? restoreRecurringItemAsPendingMaster(items, targetId)
+      : ensureNextRecurringItemAfterStatusChange(items, targetId);
 
   queueSavePlannerData();
   renderAll();
@@ -5319,193 +4582,102 @@ function deleteItem(id) {
   }
 }
 
-async function loadGoogleMapsPlacesLibrary() {
-  if (window.google?.maps?.places?.PlaceAutocompleteElement) {
-    return true;
-  }
-
-  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "여기에_구글맵_API_KEY") {
-    console.warn("Google Maps API 키가 설정되지 않았습니다.");
-    return false;
-  }
-
-  if (!document.getElementById("googleMapsScript")) {
-    const script = document.createElement("script");
-    script.id = "googleMapsScript";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&loading=async&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    document.head.appendChild(script);
-
-    await new Promise((resolve, reject) => {
-      script.onload = resolve;
-      script.onerror = reject;
-    });
-  }
-
-  if (window.google?.maps?.importLibrary) {
-    await google.maps.importLibrary("places");
-  }
-
-  return !!window.google?.maps?.places?.PlaceAutocompleteElement;
-}
-
 async function initPlaceAutocompleteWidgets() {
-  const loaded = await loadGoogleMapsPlacesLibrary();
+  const loaded = await loadGoogleMapsPlacesLibrary(GOOGLE_MAPS_API_KEY);
   if (!loaded) return;
 
   createPlaceAutocompleteWidget({
     mode: "main",
     mountEl: itemLocationAutocompleteMount,
-    locationInput: itemLocation,
-    addressInput: itemLocationAddress,
-    placeIdInput: itemLocationPlaceId,
     placeholder: "장소 검색",
+    onPlaceSelected: handleAutocompletePlaceSelection,
   });
 
   createPlaceAutocompleteWidget({
     mode: "popup",
     mountEl: popupItemLocationAutocompleteMount,
-    locationInput: popupItemLocation,
-    addressInput: popupItemLocationAddress,
-    placeIdInput: popupItemLocationPlaceId,
     placeholder: "장소 검색",
+    onPlaceSelected: handleAutocompletePlaceSelection,
   });
 
   createPlaceAutocompleteWidget({
     mode: "modal",
     mountEl: placeModalAutocompleteMount,
-    locationInput:
-      activePlaceTarget === "popup" ? popupItemLocation : itemLocation,
-    addressInput:
-      activePlaceTarget === "popup"
-        ? popupItemLocationAddress
-        : itemLocationAddress,
-    placeIdInput:
-      activePlaceTarget === "popup"
-        ? popupItemLocationPlaceId
-        : itemLocationPlaceId,
     placeholder: "장소 검색",
+    onPlaceSelected: handleAutocompletePlaceSelection,
   });
 }
 
-function createPlaceAutocompleteWidget({
-  mode,
-  mountEl,
-  locationInput,
-  addressInput,
-  placeIdInput,
-  placeholder = "장소 검색",
-}) {
-  if (!mountEl || !window.google?.maps?.places?.PlaceAutocompleteElement) {
-    return;
-  }
+function handleAutocompletePlaceSelection({ mode, selectedPlace }) {
+  if (mode === "modal") {
+    const targetMode = activePlaceTarget === "popup" ? "popup" : "main";
 
-  mountEl.innerHTML = "";
+    if (activePlaceSelectMode === "daily") {
+      const dateInput = document.getElementById("placeSearchDateInput");
+      const selectedDate = dateInput?.value || "";
+      const { startDate, endDate } = getScheduleDateRange(targetMode);
 
-  const autocompleteEl = new google.maps.places.PlaceAutocompleteElement({
-    placeholder,
-  });
-
-  mountEl.appendChild(autocompleteEl);
-
-  autocompleteEl.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
-  autocompleteEl.addEventListener("gmp-select", async (e) => {
-    e.stopPropagation();
-
-    const placePrediction = e.placePrediction;
-    if (!placePrediction) return;
-
-    const place = placePrediction.toPlace();
-    await place.fetchFields({
-      fields: ["displayName", "formattedAddress", "id"],
-    });
-
-    const selectedPlace = {
-      label: place.displayName || "",
-      address: place.formattedAddress || "",
-      placeId: place.id || "",
-    };
-
-    if (mode === "modal") {
-      const targetMode = activePlaceTarget === "popup" ? "popup" : "main";
-
-      if (activePlaceSelectMode === "daily") {
-        const dateInput = document.getElementById("placeSearchDateInput");
-        const selectedDate = dateInput?.value || "";
-        const { startDate, endDate } = getScheduleDateRange(targetMode);
-
-        if (!selectedDate) {
-          alert("적용 시작 날짜를 선택하세요.");
-          dateInput?.focus();
-          return;
-        }
-
-        const target = getScheduleDailyLocationsTarget(targetMode);
-        const current = Array.isArray(target.list) ? [...target.list] : [];
-
-        const next = normalizeDailyLocationEntries(
-          [
-            ...current.filter((item) => item.date !== selectedDate),
-            {
-              date: selectedDate,
-              label: selectedPlace.label,
-              address: selectedPlace.address,
-              placeId: selectedPlace.placeId,
-            },
-          ],
-          startDate,
-          endDate,
-        );
-
-        target.set(next);
-        renderScheduleDailyLocationList(targetMode);
-        closePlaceSearchModal();
+      if (!selectedDate) {
+        alert("적용 시작 날짜를 선택하세요.");
+        dateInput?.focus();
         return;
       }
 
-      const uiRefs = getPlaceUiRefs(targetMode);
+      const target = getScheduleDailyLocationsTarget(targetMode);
+      const current = Array.isArray(target.list) ? [...target.list] : [];
 
-      if (uiRefs.locationInput) {
-        uiRefs.locationInput.value = selectedPlace.label;
-      }
-      if (uiRefs.addressInput) {
-        uiRefs.addressInput.value = selectedPlace.address;
-      }
-      if (uiRefs.placeIdInput) {
-        uiRefs.placeIdInput.value = selectedPlace.placeId;
-      }
+      const next = normalizeDailyLocationEntries(
+        [
+          ...current.filter((item) => item.date !== selectedDate),
+          {
+            date: selectedDate,
+            label: selectedPlace.label,
+            address: selectedPlace.address,
+            placeId: selectedPlace.placeId,
+          },
+        ],
+        startDate,
+        endDate,
+      );
 
-      syncPlaceUi(targetMode);
+      target.set(next);
+      renderScheduleDailyLocationList(targetMode);
       closePlaceSearchModal();
       return;
     }
 
-    if (locationInput) {
-      locationInput.value = selectedPlace.label;
+    const uiRefs = getPlaceUiRefs(targetMode);
+
+    if (uiRefs.locationInput) {
+      uiRefs.locationInput.value = selectedPlace.label;
+    }
+    if (uiRefs.addressInput) {
+      uiRefs.addressInput.value = selectedPlace.address;
+    }
+    if (uiRefs.placeIdInput) {
+      uiRefs.placeIdInput.value = selectedPlace.placeId;
     }
 
-    if (addressInput) {
-      addressInput.value = selectedPlace.address;
-    }
+    syncPlaceUi(targetMode);
+    closePlaceSearchModal();
+    return;
+  }
 
-    if (placeIdInput) {
-      placeIdInput.value = selectedPlace.placeId;
-    }
+  const uiRefs = getPlaceUiRefs(mode);
 
-    finalizePlaceSelection(mode);
-  });
-}
+  if (uiRefs.locationInput) {
+    uiRefs.locationInput.value = selectedPlace.label;
+  }
 
-function getLocationPayload(inputEl, addressEl, placeIdEl) {
-  return {
-    location: inputEl?.value || "",
-    locationAddress: addressEl?.value || "",
-    locationPlaceId: placeIdEl?.value || "",
-  };
+  if (uiRefs.addressInput) {
+    uiRefs.addressInput.value = selectedPlace.address;
+  }
+
+  if (uiRefs.placeIdInput) {
+    uiRefs.placeIdInput.value = selectedPlace.placeId;
+  }
+
+  finalizePlaceSelection(mode);
 }
 
 function bindPlaceUiEvents() {
@@ -6195,32 +5367,6 @@ async function searchPlaceResults(keyword) {
   }
 }
 
-function isMultiDayScheduleRange(startDate, endDate) {
-  if (!startDate || !endDate) return false;
-  return startDate !== endDate;
-}
-
-function getPrimaryLocationFromDailyLocations(dailyLocations) {
-  if (!Array.isArray(dailyLocations) || dailyLocations.length === 0) {
-    return {
-      location: "",
-      locationAddress: "",
-      locationPlaceId: "",
-    };
-  }
-
-  const sorted = [...dailyLocations].sort((a, b) =>
-    a.date.localeCompare(b.date),
-  );
-  const first = sorted[0] || {};
-
-  return {
-    location: first.label || "",
-    locationAddress: first.address || "",
-    locationPlaceId: first.placeId || "",
-  };
-}
-
 function syncScheduleLocationMode(mode) {
   const isPopup = mode === "popup";
 
@@ -6321,53 +5467,6 @@ function getScheduleDateRange(mode) {
     startDate: scheduleStartDate?.value || "",
     endDate: scheduleEndDate?.value || "",
   };
-}
-
-function normalizeDailyLocationEntries(entries, startDate, endDate) {
-  if (!Array.isArray(entries)) return [];
-
-  const map = new Map();
-
-  entries.forEach((entry) => {
-    if (!entry || !entry.date) return;
-    if (startDate && entry.date < startDate) return;
-    if (endDate && entry.date > endDate) return;
-
-    map.set(entry.date, {
-      date: entry.date,
-      label: entry.label || "",
-      address: entry.address || "",
-      placeId: entry.placeId || "",
-    });
-  });
-
-  return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function getEffectiveDailyLocationForDate(dailyLocations, dateKey) {
-  if (
-    !Array.isArray(dailyLocations) ||
-    dailyLocations.length === 0 ||
-    !dateKey
-  ) {
-    return null;
-  }
-
-  const sorted = [...dailyLocations].sort((a, b) =>
-    a.date.localeCompare(b.date),
-  );
-
-  let current = null;
-
-  for (const entry of sorted) {
-    if (entry.date <= dateKey) {
-      current = entry;
-      continue;
-    }
-    break;
-  }
-
-  return current;
 }
 
 function syncRepeatNoEndInput(repeatSelect, repeatUntilInput, noEndCheckbox) {

@@ -9,6 +9,7 @@ import {
   moveWeeklySlotToNext,
   createNextRecurringMasterItem,
   hasSameRepeatOccurrence,
+  isRecurringItem,
   isRecurringMasterItem,
 } from "./repeat.js";
 
@@ -638,6 +639,48 @@ export function ensureNextRecurringItemAfterStatusChange(items, targetId) {
     ),
     ...(hasExistingNext ? [] : [nextItem]),
   ];
+}
+
+export function restoreRecurringItemAsPendingMaster(items, targetId) {
+  const list = Array.isArray(items) ? items : [];
+  const sourceId = String(targetId || "").split("__")[0];
+  const changedItem = list.find((item) => item.id === sourceId);
+
+  if (!changedItem) return list;
+  if (!isRecurringItem(changedItem)) return list;
+  if ((changedItem.status || "pending") !== "pending") return list;
+
+  const repeatGroupId =
+    changedItem.repeatGroupId || changedItem.groupId || `repeat-${changedItem.id}`;
+  const changedDate =
+    changedItem.occurrenceDate ||
+    (changedItem.type === "todo" ? changedItem.dueDate : changedItem.startDate) ||
+    "";
+
+  return list
+    .filter((item) => {
+      if (item.id === changedItem.id) return true;
+      if ((item.repeatGroupId || item.groupId || "") !== repeatGroupId) return true;
+      if (item.isRepeatMaster !== true) return true;
+      if ((item.status || "pending") !== "pending") return true;
+
+      const itemDate =
+        item.occurrenceDate ||
+        (item.type === "todo" ? item.dueDate : item.startDate) ||
+        "";
+
+      return !changedDate || itemDate <= changedDate;
+    })
+    .map((item) =>
+      item.id === changedItem.id
+        ? {
+            ...item,
+            repeatGroupId,
+            isRepeatMaster: true,
+            updatedAt: Date.now(),
+          }
+        : item,
+    );
 }
 
 export function deleteItemById(items, id) {

@@ -12,7 +12,6 @@ const BANK_CAPTURE_CATEGORY_RULES = [
   { category: "\uCE74\uD398", keywords: ["\uCE74\uD398", "\uCEE4\uD53C", "\uC2A4\uD0C0\uBC85\uC2A4", "\uBA54\uAC00\uCEE4\uD53C", "\uC774\uB514\uC57C", "\uD22C\uC378"] },
   { category: "\uC678\uC2DD", keywords: ["\uC678\uC2DD", "\uC544\uB07C\uC694\uC2DC\uC57C", "\uC57C\uB07C", "\uADDC\uB3D9", "\uC74C\uC2DD\uC810", "\uC2DD\uB2F9", "\uBD84\uC2DD", "\uCE58\uD0A8", "\uD53C\uC790"] },
   { category: "\uBC30\uB2EC\uC74C\uC2DD", keywords: ["\uCFE0\uD321\uC774\uCE20", "\uBC30\uB2EC", "\uBC30\uB2EC\uC74C\uC2DD", "\uC694\uAE30\uC694", "\uBC30\uB2EC\uC758\uBBFC\uC871"] },
-  { category: "\uC2DD\uBE44", keywords: ["\uC74C\uC2DD", "\uC2DD\uBE44"] },
   { category: "\uC2DD\uB8CC\uD488", keywords: ["\uD648\uD50C\uB7EC\uC2A4", "\uB9C8\uD2B8", "\uC2DD\uB8CC\uD488", "\uC774\uB9C8\uD2B8", "\uB86F\uB370\uB9C8\uD2B8"] },
   { category: "\uAC04\uC2DD", keywords: ["\uAC04\uC2DD", "\uB514\uC800\uD2B8", "\uBE75", "\uBCA0\uC774\uCEE4\uB9AC", "\uC544\uC774\uC2A4\uD06C\uB9BC"] },
   { category: "\uC220/\uC720\uD765", keywords: ["\uC220", "\uD638\uD504", "\uC8FC\uC810", "\uC720\uD765"] },
@@ -385,7 +384,7 @@ function inferBankCaptureType(amountInfo, meta) {
 }
 
 function getBankCaptureMerchant(title, category, paymentMethod, meta) {
-  if (/\uCD9C\uAE08\uC774\uCCB4/.test(meta?.rawText || "") && /\uC2DD\uBE44/.test(category)) return title;
+  if (/\uCD9C\uAE08\uC774\uCCB4/.test(meta?.rawText || "") && /\uC678\uC2DD|\uBC30\uB2EC\uC74C\uC2DD|\uC2DD\uB8CC\uD488/.test(category)) return title;
   return paymentMethod || title;
 }
 

@@ -6,12 +6,20 @@ import {
   escapeHtml,
 } from "./utils.js";
 import { renderCoinBadge, renderSelectedCard } from "./renderItems.js";
+import { getItemTimeStateClass } from "./itemTimeState.js";
 import { getStatusSymbol } from "./plannerItems.js";
 import {
   expandRecurringPlannerItemsInRange,
 } from "./repeat.js";
 
 let deps = {};
+const TIMELINE_MINUTE_PX = 1.35;
+const TIMELINE_DAY_HEIGHT = 1440 * TIMELINE_MINUTE_PX;
+const TIMELINE_HOUR_HEIGHT = 60 * TIMELINE_MINUTE_PX;
+
+function getTimelineOffset(minutes) {
+  return Math.round(minutes * TIMELINE_MINUTE_PX);
+}
 
 export function configureCalendarModule(config) {
   deps = config;
@@ -106,6 +114,7 @@ export function createCalendarCell(dateObj, isOtherMonth) {
           .map((item) => {
             const locationText = getScheduleLocationTextForDate(dateKey, item);
             const timeText = getCalendarItemTime(item);
+            const timeStateClass = getItemTimeStateClass(item);
             const statusTargetId = item.id;
             const coinBadge = renderCoinBadge(item, statusTargetId);
 
@@ -119,7 +128,7 @@ export function createCalendarCell(dateObj, isOtherMonth) {
               : "calendar-event-bottom no-time";
 
             return `
-              <div class="calendar-event ${item.type} ${item.status} item-color-${item.color || "blue"}"
+              <div class="calendar-event ${item.type} ${item.status} item-color-${item.color || "blue"} ${timeStateClass}"
                 title="${escapeHtml(item.title)}${timeText ? ` · ${escapeHtml(timeText)}` : ""}${locationText ? ` · ${escapeHtml(locationText)}` : ""}">
                 <div class="calendar-event-top">
                   ${typeIcon}
@@ -292,6 +301,7 @@ export function isAllDayTimelineItem(dateKey, item) {
 
 export function renderAllDayItem(dateKey, item) {
   const colorClass = `item-color-${item.color || "blue"}`;
+  const timeStateClass = getItemTimeStateClass(item);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="all-day-repeat">↻</span>`
@@ -301,7 +311,7 @@ export function renderAllDayItem(dateKey, item) {
 
   return `
     <div
-      class="all-day-item ${colorClass} clickable-item-card"
+      class="all-day-item ${colorClass} ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${item.id}"
       role="button"
@@ -339,7 +349,11 @@ export function renderSelectedDateTimeline(dateKey, itemsForDate) {
   const nowLineHtml = buildCurrentTimeLine(dateKey);
 
   selectedDateTimeline.innerHTML = `
-    <div id="timelineBoard" class="timeline-board">
+    <div
+      id="timelineBoard"
+      class="timeline-board"
+      style="--timeline-day-height: ${TIMELINE_DAY_HEIGHT}px; --timeline-hour-height: ${TIMELINE_HOUR_HEIGHT}px;"
+    >
       <div class="timeline-scroll-area">
         <div class="timeline-hour-column">
           ${hours
@@ -377,10 +391,11 @@ export function buildCurrentTimeLine(dateKey) {
 
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTop = getTimelineOffset(currentMinutes);
   const currentTimeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return `
-    <div id="timelineNowLine" class="timeline-now-line" style="top: ${currentMinutes}px;">
+    <div id="timelineNowLine" class="timeline-now-line" style="top: ${currentTop}px;">
       <div class="timeline-now-dot"></div>
       <div class="timeline-now-stroke"></div>
       <div class="timeline-now-label">${currentTimeText}</div>
@@ -397,9 +412,10 @@ export function updateTimelineNowLine(dateKey) {
 
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTop = getTimelineOffset(currentMinutes);
   const currentTimeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  nowLine.style.top = `${currentMinutes}px`;
+  nowLine.style.top = `${currentTop}px`;
 
   const label = nowLine.querySelector(".timeline-now-label");
   if (label) {
@@ -438,7 +454,7 @@ export function scrollTimelineToNow(dateKey) {
 
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const targetScrollTop = Math.max(currentMinutes - 180, 0);
+    const targetScrollTop = Math.max(getTimelineOffset(currentMinutes - 180), 0);
 
     scrollArea.scrollTo({
       top: targetScrollTop,
@@ -577,14 +593,18 @@ export function layoutTimelineBlocks(blocks) {
 export function renderPositionedTimelineBlock(block) {
   const item = block.item;
   const colorClass = `item-color-${item.color || "blue"}`;
+  const timeStateClass = getItemTimeStateClass(item);
   const coinBadge = renderCoinBadge(item, item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="timeline-repeat">↻</span>`
       : "";
 
-  const top = block.startMinutes;
-  const height = Math.max(block.endMinutes - block.startMinutes, 44);
+  const top = getTimelineOffset(block.startMinutes);
+  const height = Math.max(
+    getTimelineOffset(block.endMinutes) - getTimelineOffset(block.startMinutes),
+    44,
+  );
 
   const widthPercent = 100 / block.totalColumns;
   const leftPercent = widthPercent * block.column;
@@ -604,7 +624,7 @@ export function renderPositionedTimelineBlock(block) {
   if (block.isTodoPoint) {
     return `
       <div
-        class="timeline-point ${colorClass} clickable-item-card"
+        class="timeline-point ${colorClass} ${timeStateClass} clickable-item-card"
         data-action="open-edit-item"
         data-id="${item.id}"
         role="button"
@@ -636,7 +656,7 @@ export function renderPositionedTimelineBlock(block) {
 
   return `
     <div
-      class="timeline-block ${colorClass} clickable-item-card"
+      class="timeline-block ${colorClass} ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${item.id}"
       role="button"
@@ -724,6 +744,7 @@ export function formatHourLabel(hour) {
 
 export function renderTimelineItem(dateKey, item) {
   const colorClass = `item-color-${item.color || "blue"}`;
+  const timeStateClass = getItemTimeStateClass(item);
   const coinBadge = renderCoinBadge(item, item.id);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
@@ -746,7 +767,7 @@ export function renderTimelineItem(dateKey, item) {
 
   return `
     <div
-      class="timeline-item ${colorClass} clickable-item-card"
+      class="timeline-item ${colorClass} ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${item.id}"
       role="button"

@@ -432,8 +432,28 @@ export function getRewardTargetKey(itemId, occurrenceDateKey = "") {
   return occurrenceDateKey ? `${itemId}__${occurrenceDateKey}` : itemId;
 }
 
-export function getCoinBalance(rewardsData) {
-  return normalizeRewardsData(rewardsData).ledger.reduce((sum, entry) => {
+export function getCoinLedgerMonthKey(timestamp = Date.now()) {
+  const date = new Date(Number(timestamp) || Date.now());
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function getCoinLedgerEntriesForMonth(ledger = [], monthKey = getCoinLedgerMonthKey()) {
+  const entries = Array.isArray(ledger) ? ledger : [];
+  if (!monthKey) return entries;
+
+  return entries.filter((entry) => {
+    return getCoinLedgerMonthKey(entry.createdAt) === monthKey;
+  });
+}
+
+export function getCoinBalance(rewardsData, monthKey = getCoinLedgerMonthKey()) {
+  const ledger = getCoinLedgerEntriesForMonth(
+    normalizeRewardsData(rewardsData).ledger,
+    monthKey,
+  );
+
+  return ledger.reduce((sum, entry) => {
     return sum + (Number(entry.amount) || 0);
   }, 0);
 }
@@ -526,65 +546,5 @@ export function applyStatusRewardTransition({
   return {
     ...nextRewards,
     ledger: ledger.slice(0, REWARD_LEDGER_LIMIT),
-  };
-}
-
-export function spendCoins(rewardsData, amount, memo = "") {
-  const normalized = normalizeRewardsData(rewardsData);
-  const spendAmount = Math.max(0, Math.floor(Number(amount) || 0));
-
-  if (spendAmount <= 0) return normalized;
-  if (spendAmount > getCoinBalance(normalized)) {
-    throw new Error("보유 코인보다 많이 사용할 수 없습니다.");
-  }
-
-  return {
-    ...normalized,
-    ledger: [
-      {
-        id: makeId(),
-        type: "spend",
-        targetKey: "",
-        itemId: "",
-        itemTitle: memo || "취미생활 사용",
-        amount: -spendAmount,
-        createdAt: Date.now(),
-      },
-      ...normalized.ledger,
-    ].slice(0, REWARD_LEDGER_LIMIT),
-  };
-}
-
-export function updateCoinSpendEntry(rewardsData, entryId, amount, memo = "") {
-  const normalized = normalizeRewardsData(rewardsData);
-  const spendAmount = Math.max(0, Math.floor(Number(amount) || 0));
-
-  if (!entryId || spendAmount <= 0) return normalized;
-
-  return {
-    ...normalized,
-    ledger: normalized.ledger.map((entry) =>
-      entry.id === entryId && entry.type === "spend"
-        ? {
-            ...entry,
-            itemTitle: memo || "취미생활 사용",
-            amount: -spendAmount,
-            updatedAt: Date.now(),
-          }
-        : entry,
-    ),
-  };
-}
-
-export function deleteCoinSpendEntry(rewardsData, entryId) {
-  const normalized = normalizeRewardsData(rewardsData);
-
-  if (!entryId) return normalized;
-
-  return {
-    ...normalized,
-    ledger: normalized.ledger.filter(
-      (entry) => !(entry.id === entryId && entry.type === "spend"),
-    ),
   };
 }

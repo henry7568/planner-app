@@ -1,6 +1,7 @@
 ﻿// renderItems.js
 import { formatKoreanDate, escapeHtml } from "./utils.js";
 import { getRepeatText } from "./repeat.js";
+import { getItemTimeStateClass } from "./itemTimeState.js";
 import {
   FAILURE_PENALTY_RATE,
   assessTaskReward,
@@ -11,6 +12,26 @@ function getProjectName(projectId) {
   const projects = window.AppState?.projects;
   if (!projectId || !Array.isArray(projects)) return "";
   return projects.find((project) => project.id === projectId)?.name || "";
+}
+
+function getReminderText(item) {
+  const minutes = Number(item?.reminderMinutes);
+  if (!Number.isFinite(minutes) || minutes < 0) return "";
+  if (minutes === 0) return "알림 정시";
+  if (minutes < 60) return `알림 ${minutes}분 전`;
+
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return restMinutes
+    ? `알림 ${hours}시간 ${restMinutes}분 전`
+    : `알림 ${hours}시간 전`;
+}
+
+function renderReminderBadge(item) {
+  const reminderText = getReminderText(item);
+  return reminderText
+    ? `<span class="meta-badge reminder-badge">${escapeHtml(reminderText)}</span>`
+    : "";
 }
 
 export function renderCoinBadge(item, statusTargetId) {
@@ -52,6 +73,7 @@ export function renderCoinBadge(item, statusTargetId) {
 }
 
 export function renderCard(item, getStatusSymbol) {
+  const timeStateClass = getItemTimeStateClass(item);
   const repeatIcon =
     item.repeat && item.repeat !== "none"
       ? `<span class="meta-icon repeat" title="${escapeHtml(
@@ -79,6 +101,7 @@ export function renderCard(item, getStatusSymbol) {
   const projectBadge = projectName
     ? `<span class="tag-badge">${escapeHtml(projectName)}</span>`
     : "";
+  const reminderBadge = renderReminderBadge(item);
 
   let detailMeta = "";
 
@@ -90,6 +113,7 @@ export function renderCard(item, getStatusSymbol) {
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
       ${locationBadge}
       ${repeatIcon}
+      ${reminderBadge}
     `;
   } else {
     const scheduleDateText = `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`;
@@ -101,6 +125,7 @@ export function renderCard(item, getStatusSymbol) {
       ${item.tag ? `<span class="tag-badge">${escapeHtml(item.tag)}</span>` : ""}
       ${locationBadge}
       ${repeatIcon}
+      ${reminderBadge}
     `;
   }
 
@@ -110,7 +135,7 @@ export function renderCard(item, getStatusSymbol) {
 
   return `
     <div
-      class="item-card item-color-${item.color || "blue"} clickable-item-card"
+      class="item-card item-color-${item.color || "blue"} ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${editTargetId}"
       role="button"
@@ -139,6 +164,7 @@ export function renderCard(item, getStatusSymbol) {
 }
 
 export function renderSelectedCard(item, getStatusSymbol) {
+  const timeStateClass = getItemTimeStateClass(item);
   const locationText =
     Array.isArray(item.dailyLocations) && item.dailyLocations.length > 0
       ? item.dailyLocations
@@ -154,10 +180,11 @@ export function renderSelectedCard(item, getStatusSymbol) {
     ? `${formatKoreanDate(item.startDate)}${item.startTime ? ` ${item.startTime}` : ""} ~ ${formatKoreanDate(item.endDate)}${item.endTime ? ` ${item.endTime}` : ""}`
     : `${formatKoreanDate(item.dueDate)}${item.dueTime ? ` ${item.dueTime}` : ""}`;
   const typeText = isSchedule ? "일정" : "할일";
+  const reminderBadge = renderReminderBadge(item);
 
   return `
     <div
-      class="selected-item-card selected-item-row project-section-row clickable-item-card"
+      class="selected-item-card selected-item-row project-section-row ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${editTargetId}"
       role="button"
@@ -180,6 +207,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
           <span class="timeline-type ${item.type === "todo" ? "todo" : "schedule"}">${typeText}</span>
           <span>${escapeHtml(dateText)}</span>
           ${item.repeat && item.repeat !== "none" ? `<span>↻ ${escapeHtml(getRepeatText(item.repeat, item.repeatUntil, item.weeklyDays, item.intervalDays))}</span>` : ""}
+          ${reminderBadge}
           ${projectName ? `<span>${escapeHtml(projectName)}</span>` : ""}
           ${locationText ? `<span>📍 ${escapeHtml(locationText)}</span>` : ""}
           ${item.tag ? `<span class="timeline-tag">${escapeHtml(item.tag)}</span>` : ""}
@@ -190,6 +218,7 @@ export function renderSelectedCard(item, getStatusSymbol) {
 }
 
 export function renderProjectTaskRow(item, getStatusSymbol) {
+  const timeStateClass = getItemTimeStateClass(item);
   const isSchedule = item.type === "schedule";
   const primaryDate = isSchedule ? item.startDate : item.dueDate;
   const primaryTime = isSchedule ? item.startTime : item.dueTime;
@@ -199,10 +228,11 @@ export function renderProjectTaskRow(item, getStatusSymbol) {
     ? `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""} ~ ${formatKoreanDate(secondaryDate)}${secondaryTime ? ` ${secondaryTime}` : ""}`
     : `${formatKoreanDate(primaryDate)}${primaryTime ? ` ${primaryTime}` : ""}`;
   const statusTargetId = item.id;
+  const reminderBadge = renderReminderBadge(item);
 
   return `
     <div
-      class="project-section-row project-task-row clickable-item-card"
+      class="project-section-row project-task-row ${timeStateClass} clickable-item-card"
       data-action="open-edit-item"
       data-id="${escapeHtml(item.id)}"
       role="button"
@@ -221,6 +251,7 @@ export function renderProjectTaskRow(item, getStatusSymbol) {
       <div class="project-row-main">
         <strong>${escapeHtml(item.title || "")}</strong>
         <span>${escapeHtml(dateText)}</span>
+        ${reminderBadge}
       </div>
       ${item.tag ? `<span class="tag-badge project-row-tag">${escapeHtml(item.tag)}</span>` : ""}
     </div>

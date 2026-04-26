@@ -335,6 +335,7 @@ export function resetPopupQuickAddForm() {
     popupItemColor,
     popupItemTag,
     popupReminderMinutes,
+    popupItemProjectId,
     popupItemLocation,
     popupItemLocationAddress,
     popupItemLocationPlaceId,
@@ -360,6 +361,7 @@ export function resetPopupQuickAddForm() {
   if (popupItemColor) popupItemColor.value = "blue";
   if (popupItemTag) popupItemTag.value = "";
   if (popupReminderMinutes) popupReminderMinutes.value = "-1";
+  if (popupItemProjectId) popupItemProjectId.value = "";
   if (popupItemLocation) popupItemLocation.value = "";
   if (popupItemLocationAddress) popupItemLocationAddress.value = "";
   if (popupItemLocationPlaceId) popupItemLocationPlaceId.value = "";

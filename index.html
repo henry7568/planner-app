@@ -9,20 +9,30 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Life-Planner</title>
     <script>
-      window.addEventListener("unhandledrejection", (event) => {
-        const message = String(event.reason?.message || event.reason || "");
-        if (
+      function shouldIgnoreAsyncMessageChannelError(error) {
+        const message = String(error?.message || error || "");
+        return (
           message.includes("A listener indicated an asynchronous response") &&
           message.includes("message channel closed before a response was received")
-        ) {
+        );
+      }
+
+      window.addEventListener("unhandledrejection", (event) => {
+        if (shouldIgnoreAsyncMessageChannelError(event.reason)) {
           event.preventDefault();
         }
-      });
+      }, true);
+
+      window.addEventListener("error", (event) => {
+        if (shouldIgnoreAsyncMessageChannelError(event.error || event.message)) {
+          event.preventDefault();
+        }
+      }, true);
     </script>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=120" />
+    <link rel="stylesheet" href="style.css?v=162" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -58,6 +68,7 @@
               type="email"
               id="loginEmail"
               placeholder="example@email.com"
+              autocomplete="username"
             />
           </div>
 
@@ -67,6 +78,7 @@
               type="password"
               id="loginPassword"
               placeholder="비밀번호 입력"
+              autocomplete="current-password"
             />
           </div>
 
@@ -88,6 +100,7 @@
               type="email"
               id="signupEmail"
               placeholder="example@email.com"
+              autocomplete="username"
             />
           </div>
 
@@ -97,6 +110,7 @@
               type="password"
               id="signupPassword"
               placeholder="비밀번호 입력"
+              autocomplete="new-password"
             />
           </div>
 
@@ -106,6 +120,7 @@
               type="password"
               id="signupPasswordConfirm"
               placeholder="비밀번호 다시 입력"
+              autocomplete="new-password"
             />
           </div>
 
@@ -204,7 +219,7 @@
                 </div>
               </div>
             </div>
-            <div class="coin-panel">
+            <div id="financeRewardWalletSection" class="coin-panel">
               <div class="coin-wallet">
                 <div class="coin-wallet-main">
                   <span class="coin-wallet-kicker">AI 보상 지갑</span>
@@ -212,7 +227,7 @@
                     <strong id="coinBalanceText"><span class="coin-icon" aria-hidden="true"></span>0</strong>
                     <span id="hobbyBudgetText">0원</span>
                   </div>
-                  <p>1코인 = 1,000원 기준으로 취미 예산을 계산합니다.</p>
+                  <p>이번 달 코인만 1코인 = 1,000원 기준으로 계산합니다.</p>
                 </div>
 
                 <div class="coin-wallet-side">
@@ -220,26 +235,6 @@
                   <strong>완료할 때 지급</strong>
                   <small>되돌리면 자동 회수</small>
                 </div>
-              </div>
-
-              <div class="coin-spend-row">
-                <label>
-                  <span>사용 코인</span>
-                  <input
-                    id="coinSpendAmount"
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="예: 5"
-                  />
-                </label>
-                <label>
-                  <span>사용처</span>
-                  <input id="coinSpendMemo" type="text" placeholder="영화, 게임, 카페" />
-                </label>
-                <button id="coinSpendBtn" class="primary-btn coin-spend-btn" type="button">
-                  사용 기록
-                </button>
               </div>
 
               <div id="coinLedgerList" class="coin-ledger-list"></div>
@@ -298,7 +293,7 @@
                 type="button"
               >
                 <span class="home-icon">📝</span>
-                <h3>마감 작업</h3>
+                <h3>할일</h3>
                 <p class="home-number" id="dashboardTodoCount">0</p>
               </button>
 
@@ -308,7 +303,7 @@
                 type="button"
               >
                 <span class="home-icon">🗓️</span>
-                <h3>시간 작업</h3>
+                <h3>일정</h3>
                 <p class="home-number" id="dashboardScheduleCount">0</p>
               </button>
 
@@ -318,7 +313,7 @@
                 type="button"
               >
                 <span class="home-icon">📍</span>
-                <h3>오늘 포함 항목</h3>
+                <h3>오늘까지 작업</h3>
                 <p class="home-number" id="dashboardTodayCount">0</p>
               </button>
 
@@ -619,12 +614,25 @@
                   </div>
 
                   <div class="form-group">
+                    <label for="itemReminderMinutes">알림</label>
+                    <select id="itemReminderMinutes">
+                      <option value="-1">알림 없음</option>
+                      <option value="0">정시</option>
+                      <option value="5">5분 전</option>
+                      <option value="10">10분 전</option>
+                      <option value="30">30분 전</option>
+                      <option value="60">1시간 전</option>
+                      <option value="1440">하루 전</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
                     <label for="itemProjectId">프로젝트</label>
                     <select id="itemProjectId"></select>
                   </div>
 
                   <div id="singleLocationSection" class="form-group">
-                    <label>장소</label>
+                    <div class="form-label">장소</div>
 
                     <div id="itemPlaceEmptyState" class="place-empty-state">
                       <button
@@ -697,7 +705,7 @@
                   </div>
 
                   <div class="form-group">
-                    <label>기한 시간</label>
+                    <label for="todoDueTimeTrigger">기한 시간</label>
                     <div class="time-picker" data-time-picker="todoDue">
                       <button
                         type="button"
@@ -761,7 +769,7 @@
                 </div>
 
                 <div id="todoWeeklyDaysWrap" class="form-group hidden">
-                  <label>반복 요일</label>
+                  <div class="form-label">반복 요일</div>
                   <div class="weekday-check-grid">
                     <label class="weekday-check"
                       ><input type="checkbox" value="1" class="todo-weekday" />
@@ -814,7 +822,7 @@
                   </div>
 
                   <div class="form-group">
-                    <label>시작 시간</label>
+                    <label for="scheduleStartTimeTrigger">시작 시간</label>
                     <div class="time-picker" data-time-picker="scheduleStart">
                       <button
                         type="button"
@@ -857,7 +865,7 @@
                   </div>
 
                   <div class="form-group">
-                    <label>종료 시간</label>
+                    <label for="scheduleEndTimeTrigger">종료 시간</label>
                     <div class="time-picker" data-time-picker="scheduleEnd">
                       <button
                         type="button"
@@ -928,7 +936,7 @@
                 </div>
 
                 <div id="scheduleWeeklyDaysWrap" class="form-group hidden">
-                  <label>반복 요일</label>
+                  <div class="form-label">반복 요일</div>
                   <div class="weekday-check-grid">
                     <label class="weekday-check"
                       ><input
@@ -1000,7 +1008,7 @@
                   />
                 </div>
                 <div id="scheduleDailyLocationsSection" class="form-group">
-                  <label>날짜별 장소</label>
+                  <div class="form-label">날짜별 장소</div>
 
                   <div class="small-text" style="margin-bottom: 8px">
                     여행처럼 여러 날 작업일 경우 날짜마다 다른 장소를 지정할 수
@@ -2067,7 +2075,10 @@
           class="bottom-tab-btn hidden"
           type="button"
         >
-          <span class="tab-icon">📥</span>
+          <span class="tab-icon tab-icon-with-badge">
+            📥
+            <span id="plannerInboxTabBadge" class="tab-count-badge hidden">0</span>
+          </span>
           <span class="tab-text">Inbox</span>
         </button>
 
@@ -2117,6 +2128,48 @@
       </div>
     </div>
 
+    <div id="coinLedgerEditOverlay" class="popup-overlay hidden">
+      <div class="popup-panel popup-shell compact-popup-panel coin-ledger-edit-panel">
+        <div class="popup-header">
+          <div>
+            <h3 class="popup-title">코인 로그 수정</h3>
+            <p class="popup-subtext">획득/차감 기록을 바로 수정할 수 있습니다.</p>
+          </div>
+          <button id="closeCoinLedgerEditBtn" class="secondary-btn popup-close-btn" type="button">
+            닫기
+          </button>
+        </div>
+
+        <form id="coinLedgerEditForm" class="coin-ledger-edit-form">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="coinLedgerDirectionInput">종류</label>
+              <select id="coinLedgerDirectionInput">
+                <option value="positive">획득</option>
+                <option value="negative">차감</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="coinLedgerAmountInput">코인</label>
+              <input id="coinLedgerAmountInput" type="number" min="1" step="1" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="coinLedgerMemoInput">내용</label>
+            <input id="coinLedgerMemoInput" type="text" placeholder="로그 내용" />
+          </div>
+
+          <div class="button-row coin-ledger-edit-actions">
+            <button id="coinLedgerSaveBtn" class="primary-btn" type="submit">수정 저장</button>
+            <button id="coinLedgerCancelBtn" class="secondary-btn" type="button">수정 취소</button>
+            <button id="coinLedgerDeleteBtn" class="delete-btn" type="button">삭제</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div id="calendarPopupOverlay" class="popup-overlay hidden">
       <div class="popup-panel popup-shell calendar-popup-panel">
         <div class="popup-header">
@@ -2162,7 +2215,7 @@
 
             <div class="form-row two-cols">
               <div class="form-group">
-                <label for="popupItemColor">색상</label>
+                  <label for="popupItemColor">색상</label>
                 <select id="popupItemColor" class="form-control">
                   <option value="blue">파랑</option>
                   <option value="purple">보라</option>
@@ -2184,8 +2237,26 @@
                   />
                 </div>
 
+                <div class="form-group">
+                  <label for="popupReminderMinutes">알림</label>
+                  <select id="popupReminderMinutes" class="form-control">
+                    <option value="-1">알림 없음</option>
+                    <option value="0">정시</option>
+                    <option value="5">5분 전</option>
+                    <option value="10">10분 전</option>
+                    <option value="30">30분 전</option>
+                    <option value="60">1시간 전</option>
+                    <option value="1440">하루 전</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="popupItemProjectId">프로젝트</label>
+                  <select id="popupItemProjectId" class="form-control"></select>
+                </div>
+
                 <div id="popupSingleLocationSection" class="form-group">
-                  <label>장소</label>
+                  <div class="form-label">장소</div>
 
                   <div id="popupPlaceEmptyState" class="place-empty-state">
                     <button
@@ -2331,7 +2402,7 @@
               </div>
 
               <div id="popupTodoWeeklyDaysWrap" class="form-group hidden">
-                <label>반복 요일</label>
+                <div class="form-label">반복 요일</div>
                 <div class="weekday-check-grid">
                   <label class="weekday-check">
                     <input
@@ -2538,7 +2609,7 @@
               </div>
 
               <div id="popupScheduleWeeklyDaysWrap" class="form-group hidden">
-                <label>반복 요일</label>
+                <div class="form-label">반복 요일</div>
                 <div class="weekday-check-grid">
                   <label class="weekday-check">
                     <input
@@ -2613,7 +2684,7 @@
                 />
               </div>
               <div id="popupScheduleDailyLocationsSection" class="form-group">
-                <label>날짜별 장소</label>
+                <div class="form-label">날짜별 장소</div>
 
                 <div class="small-text" style="margin-bottom: 8px">
                   여러 날 작업이면 날짜별로 장소를 다르게 지정할 수 있습니다.
@@ -2816,6 +2887,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=120"></script>
+    <script type="module" src="./js/app.js?v=162"></script>
   </body>
 </html>

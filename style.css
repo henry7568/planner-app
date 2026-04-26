@@ -32,9 +32,18 @@ body {
   padding-bottom: 92px;
 }
 
-button {
+button,
+input,
+select,
+textarea {
   font: inherit;
   min-width: 0;
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
 }
 
 h1,
@@ -450,6 +459,10 @@ span {
   overflow: hidden;
 }
 
+.finance-reward-wallet-slot .coin-panel {
+  margin-top: 0;
+}
+
 .coin-wallet {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 190px;
@@ -579,35 +592,6 @@ span {
   font-size: 24px;
 }
 
-.coin-spend-row {
-  display: grid;
-  grid-template-columns: 150px minmax(160px, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-  padding: 14px;
-  background: #f8fbff;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.coin-spend-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.coin-spend-row input {
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--line-default);
-  border-radius: 8px;
-  font-size: 15px;
-  background: #ffffff;
-}
-
 .coin-spend-btn {
   min-height: 43px;
   border-radius: 8px;
@@ -623,11 +607,12 @@ span {
 
 .coin-ledger-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 12px 0;
   border-top: 1px solid #e2e8f0;
+  cursor: pointer;
 }
 
 .coin-ledger-row strong,
@@ -656,11 +641,27 @@ span {
 }
 
 .coin-ledger-amount.positive {
-  color: #047857;
+  color: #2563eb;
 }
 
 .coin-ledger-amount.negative {
-  color: #b91c1c;
+  color: #dc2626;
+}
+
+.coin-ledger-amount.positive .coin-amount {
+  color: #2563eb;
+}
+
+.coin-ledger-amount.negative .coin-amount {
+  color: #dc2626;
+}
+
+.coin-ledger-row.positive strong {
+  color: #2563eb;
+}
+
+.coin-ledger-row.negative strong {
+  color: #dc2626;
 }
 
 .coin-ledger-actions {
@@ -822,6 +823,99 @@ span {
   gap: 12px;
 }
 
+.dashboard-date-section {
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  overflow: visible;
+}
+
+.dashboard-date-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 2px 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
+.dashboard-date-header::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-date-header::before {
+  content: "-";
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dashboard-date-section:not([open]) .dashboard-date-header::before {
+  content: "+";
+}
+
+.dashboard-date-header span {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-date-header strong {
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  text-align: center;
+  font-size: 12px;
+}
+
+.dashboard-date-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 12px;
+}
+
+.dashboard-date-body .item-card {
+  align-items: center;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 12px 2px 12px 14px;
+}
+
+.dashboard-date-body .item-card:first-child {
+  border-top: 0;
+}
+
+.dashboard-date-body .item-card.item-color-blue {
+  border-left-color: #2563eb;
+}
+
+.dashboard-date-body .item-card.item-color-purple {
+  border-left-color: #7c3aed;
+}
+
+.dashboard-date-body .item-card.item-color-green {
+  border-left-color: #16a34a;
+}
+
+.dashboard-date-body .item-card.item-color-orange {
+  border-left-color: #f59e0b;
+}
+
+.dashboard-date-body .item-card.item-color-red {
+  border-left-color: #ef4444;
+}
+
+.dashboard-date-body .item-card.item-color-gray {
+  border-left-color: #64748b;
+}
+
 #todayList.item-list {
   gap: 8px;
 }
@@ -847,13 +941,13 @@ span {
 }
 
 .status-btn {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border: 2px solid #b8c2d6;
-  border-radius: 10px;
+  border-radius: 999px;
   background: #fff;
   cursor: pointer;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: bold;
   display: flex;
   align-items: center;
@@ -910,6 +1004,11 @@ span {
   color: #3730a3;
 }
 
+.reminder-badge {
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
 .compact-meta {
   display: flex;
   align-items: center;
@@ -926,10 +1025,10 @@ span {
 }
 
 #todayList .status-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  font-size: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 16px;
 }
 
 #todayList .item-title {
@@ -1447,6 +1546,9 @@ body.modal-open {
 }
 
 .popup-panel {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
   width: min(920px, calc(100vw - 24px));
   max-height: min(50dvh, calc(100dvh - 24px));
   margin: auto;
@@ -1465,7 +1567,7 @@ body.modal-open {
 .popup-header {
   position: sticky;
   top: calc(clamp(18px, 2vw, 24px) * -1);
-  z-index: 2;
+  z-index: 30;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -1491,8 +1593,54 @@ body.modal-open {
 }
 
 .popup-close-btn {
+  position: relative;
+  z-index: 31;
+  pointer-events: auto;
   min-width: 88px;
   align-self: flex-start;
+}
+
+#editPopupOverlay,
+#financeEditPopupOverlay,
+#coinLedgerEditOverlay,
+#projectDetailOverlay,
+#settingsPopupOverlay,
+#recurringEditScopeOverlay,
+#placeSearchModalOverlay {
+  z-index: 120;
+}
+
+#calendarPopupOverlay,
+#summaryPopupOverlay {
+  z-index: 90;
+}
+
+#placeSearchModalOverlay,
+#recurringEditScopeOverlay {
+  z-index: 140;
+}
+
+.coin-ledger-edit-panel {
+  width: min(520px, calc(100vw - 24px));
+}
+
+.coin-ledger-edit-form {
+  display: grid;
+  gap: 12px;
+}
+
+.coin-ledger-edit-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.coin-ledger-edit-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .summary-popup-panel,
@@ -1532,10 +1680,9 @@ body.modal-open {
 }
 
 .summary-weekday-section {
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: #ffffff;
-  overflow: hidden;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  overflow: visible;
 }
 
 .summary-weekday-header {
@@ -1543,7 +1690,7 @@ body.modal-open {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px 2px 8px;
   cursor: pointer;
   color: var(--text-strong);
   font-size: 14px;
@@ -1556,13 +1703,13 @@ body.modal-open {
 }
 
 .summary-weekday-header::before {
-  content: "▾";
+  content: "-";
   color: #64748b;
   font-size: 12px;
 }
 
 .summary-weekday-section:not([open]) .summary-weekday-header::before {
-  content: "▸";
+  content: "+";
 }
 
 .summary-weekday-header span {
@@ -1582,7 +1729,7 @@ body.modal-open {
 .summary-weekday-body {
   display: grid;
   gap: 2px;
-  padding: 0 10px 10px;
+  padding: 0 0 10px;
 }
 
 .summary-popup-row {
@@ -1600,10 +1747,10 @@ body.modal-open {
 }
 
 .summary-popup-row .status-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  font-size: 15px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 14px;
   flex: 0 0 auto;
 }
 
@@ -1920,10 +2067,10 @@ body.modal-open {
 }
 
 .selected-item-card .status-btn {
-  width: 48px;
-  height: 48px;
-  font-size: 24px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  font-size: 20px;
+  border-radius: 999px;
 }
 
 .selected-item-time-block {
@@ -1975,6 +2122,29 @@ body.modal-open {
 .tab-icon {
   font-size: 18px;
   line-height: 1;
+}
+
+.tab-icon-with-badge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+}
+
+.tab-count-badge {
+  position: absolute;
+  top: -8px;
+  right: -12px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 17px;
+  box-shadow: 0 0 0 2px #fff;
 }
 
 .tab-text {
@@ -2080,6 +2250,29 @@ body.modal-open {
   .item-card,
   .selected-item-card {
     flex-direction: column;
+  }
+
+  .dashboard-date-body .item-card,
+  .summary-weekday-body .summary-popup-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dashboard-date-body .item-card .status-btn,
+  .summary-weekday-body .summary-popup-row .status-btn {
+    align-self: center;
+    margin: 0;
+  }
+
+  .dashboard-date-body .item-content,
+  .summary-weekday-body .summary-popup-row-main {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .dashboard-date-body .item-title {
+    margin-bottom: 6px;
   }
 
   .item-actions,
@@ -2299,6 +2492,45 @@ body.modal-open {
   border-left-color: #64748b;
 }
 
+.item-card.is-past-deadline,
+.selected-item-card.is-past-deadline,
+.project-task-row.is-past-deadline {
+  border-color: #fecaca;
+  border-left-color: #ef4444;
+  background: linear-gradient(180deg, #fff7f7 0%, #fff1f2 100%);
+}
+
+.item-card.is-past-deadline .item-title,
+.selected-item-card.is-past-deadline .selected-item-title,
+.project-task-row.is-past-deadline strong {
+  color: #b91c1c;
+}
+
+.item-card.is-past-deadline .meta-badge.compact,
+.selected-item-card.is-past-deadline .selected-item-meta > span,
+.project-task-row.is-past-deadline .project-row-main > span {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.timeline-point.is-past-deadline,
+.timeline-block.is-past-deadline,
+.timeline-item.is-past-deadline,
+.all-day-item.is-past-deadline,
+.calendar-event.is-past-deadline {
+  border-color: #fecaca;
+  background: #fff1f2;
+  box-shadow: inset 3px 0 0 #ef4444;
+}
+
+.timeline-point.is-past-deadline .timeline-title,
+.timeline-block.is-past-deadline .timeline-title,
+.timeline-item.is-past-deadline .timeline-title,
+.all-day-item.is-past-deadline .all-day-text,
+.calendar-event.is-past-deadline .calendar-title-inline {
+  color: #b91c1c;
+}
+
 .calendar-event.item-color-blue {
   box-shadow: inset 3px 0 0 #3b82f6;
 }
@@ -2328,6 +2560,8 @@ body.modal-open {
 }
 
 .timeline-board {
+  --timeline-hour-height: 81px;
+  --timeline-day-height: 1944px;
   border: 1px solid #e5eaf3;
   border-radius: 16px;
   overflow: hidden;
@@ -2347,7 +2581,7 @@ body.modal-open {
 }
 
 .timeline-hour-label {
-  height: 60px;
+  height: var(--timeline-hour-height);
   padding: 8px 10px;
   font-size: 13px;
   font-weight: 700;
@@ -2358,20 +2592,26 @@ body.modal-open {
 
 .timeline-grid-wrap {
   position: relative;
-  height: 1440px;
+  height: var(--timeline-day-height);
   background: #fff;
 }
 
 .timeline-grid-lines {
   position: absolute;
   inset: 0;
-  height: 1440px;
+  display: grid;
+  grid-template-rows: repeat(24, var(--timeline-hour-height));
+  height: var(--timeline-day-height);
+}
+
+.timeline-grid-line {
+  border-bottom: 1px solid #eef2f7;
 }
 
 .timeline-block-layer {
   position: absolute;
   inset: 0;
-  height: 1440px;
+  height: var(--timeline-day-height);
   z-index: 2;
 }
 
@@ -3884,6 +4124,11 @@ body.modal-open {
   margin-top: 16px;
 }
 
+.planner-stack-list {
+  gap: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
 .planner-inbox-entry,
 .planner-project-entry {
   border: 1px solid #d9e5ef;
@@ -3893,8 +4138,21 @@ body.modal-open {
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
+.planner-stack-list .planner-inbox-entry {
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 14px 2px;
+  background: transparent;
+  box-shadow: none;
+}
+
 .planner-inbox-entry.converted {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.planner-stack-list .planner-inbox-entry.converted {
+  background: transparent;
 }
 
 .planner-inbox-entry-top,
@@ -5032,7 +5290,6 @@ body.modal-open {
   .finance-extra-card,
   .routine-card,
   .routine-manage-item,
-  .coin-spend-row,
   .coin-ledger-row {
     display: grid;
     grid-template-columns: 1fr;
@@ -5081,10 +5338,10 @@ body.modal-open {
   .status-btn,
   #todayList .status-btn,
   .selected-item-card .status-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    font-size: 17px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    font-size: 15px;
   }
 
   .item-title,
@@ -5477,7 +5734,6 @@ body.modal-open {
   .form-grid-2,
   .form-row.two-cols,
   .planner-inline-row,
-  .coin-spend-row,
   .finance-account-split-grid,
   .finance-summary-grid,
   .finance-asset-insight-grid {
@@ -5491,26 +5747,23 @@ body.modal-open {
   }
 
   #tab-dashboard .filter-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
-    gap: 8px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding-bottom: 2px;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
   #tab-dashboard .filter-box {
-    flex: 0 0 132px;
-    width: 132px;
-    min-width: 132px;
-    scroll-snap-align: start;
+    width: auto;
+    min-width: 0;
   }
 
   #tab-dashboard .filter-box select {
     width: 100%;
     min-width: 0;
+    padding-inline: 10px 28px;
   }
 
   #financeExpenseListCard .filter-controls {
@@ -5607,12 +5860,35 @@ body.modal-open {
   }
 
   .coin-ledger-row {
-    grid-template-columns: 1fr;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
   }
 
   .coin-ledger-amount {
-    align-items: flex-start;
+    align-items: flex-end;
+    grid-column: 2;
+    grid-row: 1;
+    white-space: nowrap;
+  }
+
+  .coin-ledger-row > div:first-child {
+    min-width: 0;
+  }
+
+  .coin-ledger-row strong,
+  .coin-ledger-row span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .coin-ledger-row time {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    line-height: 1.1;
+    margin-top: -3px;
   }
 
   .coin-ledger-actions {
@@ -6239,11 +6515,18 @@ body.modal-open {
 }
 
 .finance-month-picker-label input {
-  width: 132px;
+  width: 148px;
   height: 34px;
   border: 0;
   border-radius: 999px;
-  padding: 0 10px;
+  padding: 0 12px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 0;
 }
 
 .finance-ledger-total-grid {
@@ -6336,6 +6619,28 @@ body.modal-open {
   grid-template-columns: 92px minmax(0, 1fr) 42px;
   align-items: center;
   gap: 10px;
+}
+
+.finance-ratio-button {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.finance-ratio-button:hover span,
+.finance-ratio-button:focus-visible span {
+  color: #2563eb;
+}
+
+.finance-ratio-button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 .finance-stat-sort {
@@ -6448,6 +6753,56 @@ body.modal-open {
   font-size: 0.74rem;
 }
 
+.finance-category-detail-view {
+  display: grid;
+  gap: 14px;
+}
+
+.finance-category-transaction-list {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.finance-category-transaction-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.finance-category-transaction-row:hover,
+.finance-category-transaction-row:focus-visible {
+  background: #f8fafc;
+}
+
+.finance-category-transaction-row:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: -2px;
+}
+
+.finance-category-transaction-row > b {
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.finance-category-transaction-row > b.is-income {
+  color: #2563eb;
+}
+
+.finance-category-transaction-row > b.is-expense {
+  color: #ef4444;
+}
+
 .finance-pagination,
 .finance-popup-actions {
   justify-content: center;
@@ -6526,6 +6881,12 @@ body.modal-open {
 .finance-category-option.selected {
   background: #2563eb;
   color: #fff;
+}
+
+.finance-pagination span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .finance-form-section {
@@ -6705,6 +7066,122 @@ body.modal-open {
     padding: 8px 0 92px;
   }
 
+  .finance-ledger-summary {
+    border-radius: 18px;
+    padding: 16px 18px 14px;
+  }
+
+  .finance-ledger-topline {
+    gap: 8px;
+  }
+
+  .finance-month-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    flex: 0 0 auto;
+  }
+
+  .finance-month-picker-label {
+    gap: 5px;
+    min-width: 0;
+    font-size: 1.35rem;
+  }
+
+  .finance-month-picker-label input {
+    width: 112px;
+    height: 32px;
+    font-size: 0.86rem;
+  }
+
+  .finance-ledger-total-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr) minmax(0, 1fr);
+    gap: 4px;
+    margin-top: 14px;
+  }
+
+  .finance-ledger-total-grid div {
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .finance-ledger-total-grid span,
+  .finance-ledger-budget-text span,
+  .finance-ledger-budget-text small,
+  .finance-ledger-summary p {
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .finance-ledger-total-grid strong,
+  .finance-ledger-budget-text strong {
+    min-width: 0;
+    max-width: 100%;
+    font-size: clamp(1rem, 5.4vw, 1.32rem);
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .finance-ledger-budget-text strong {
+    font-size: clamp(1.06rem, 5.7vw, 1.4rem);
+  }
+
+  .finance-ledger-total-grid > div:first-child strong {
+    text-align: left;
+  }
+
+  .finance-ledger-total-grid > div:last-child strong {
+    text-align: right;
+  }
+
+  .finance-ledger-budget-text {
+    gap: 3px;
+  }
+
+  .finance-ledger-summary p {
+    margin-top: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pagination-wrap,
+  .planner-pagination,
+  .coin-ledger-pagination,
+  .finance-pagination {
+    gap: 6px;
+    overflow-x: visible;
+  }
+
+  .pagination-wrap .secondary-btn,
+  .planner-pagination .secondary-btn,
+  .coin-ledger-pagination .secondary-btn,
+  .finance-pagination .secondary-btn {
+    min-width: 72px;
+    max-width: 120px;
+    min-height: 36px;
+    padding: 8px 12px;
+    flex: 1 1 0;
+  }
+
+  .pagination-text,
+  .planner-pagination-text,
+  .coin-ledger-pagination span,
+  .finance-pagination span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    white-space: nowrap;
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+
   .finance-account-grid,
   .finance-form-grid,
   .finance-type-grid,
@@ -6730,5 +7207,192 @@ body.modal-open {
     width: calc(100vw - 18px);
     max-height: min(50dvh, 720px);
     padding: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .popup-header,
+  .finance-popup-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .popup-header > div,
+  .finance-popup-header > div {
+    min-width: 0;
+  }
+
+  .popup-title,
+  .finance-popup-header h2,
+  .finance-popup-header h3 {
+    font-size: 20px;
+    line-height: 1.22;
+    overflow-wrap: anywhere;
+  }
+
+  .popup-subtext,
+  .finance-popup-header p {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .popup-close-btn,
+  .finance-popup-header > button[data-finance-action="close-finance-popup"] {
+    width: auto !important;
+    min-width: 58px;
+    max-width: 78px;
+    min-height: 36px;
+    padding: 8px 12px;
+    justify-self: end;
+    white-space: nowrap;
+  }
+
+  .planner-edit-popup-panel .planner-form-card,
+  .calendar-popup-panel #popupQuickAddForm {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .planner-edit-popup-panel .planner-form-card > h2,
+  .planner-edit-popup-panel .planner-form-card > #todoFields,
+  .planner-edit-popup-panel .planner-form-card > #scheduleFields,
+  .planner-edit-popup-panel .planner-form-card > .button-row,
+  .calendar-popup-panel #popupQuickAddForm > .planner-form-title,
+  .calendar-popup-panel #popupQuickAddForm > #popupTodoFields,
+  .calendar-popup-panel #popupQuickAddForm > #popupScheduleFields,
+  .calendar-popup-panel #popupQuickAddForm > .button-row {
+    grid-column: 1 / -1;
+  }
+
+  .planner-edit-popup-panel .planner-form-card > .form-grid-2,
+  .planner-edit-popup-panel .planner-form-card > .form-grid-2 > .form-grid-2,
+  .calendar-popup-panel #popupQuickAddForm > .form-row.two-cols,
+  .calendar-popup-panel #popupQuickAddForm > .form-row.two-cols > .form-row.two-cols {
+    display: contents;
+  }
+
+  .planner-edit-popup-panel .form-grid-2,
+  .planner-edit-popup-panel #todoFields .form-grid-2,
+  .planner-edit-popup-panel #scheduleFields .form-grid-2,
+  .calendar-popup-panel #popupTodoFields .form-row.two-cols,
+  .calendar-popup-panel #popupScheduleFields .form-row.two-cols,
+  .finance-edit-popup-panel .finance-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .planner-edit-popup-panel #singleLocationSection,
+  .planner-edit-popup-panel #todoWeeklyDaysWrap,
+  .planner-edit-popup-panel #todoRepeatIntervalWrap,
+  .planner-edit-popup-panel #scheduleWeeklyDaysWrap,
+  .planner-edit-popup-panel #scheduleRepeatIntervalWrap,
+  .planner-edit-popup-panel #dailyLocationsSection,
+  .calendar-popup-panel #popupSingleLocationSection,
+  .calendar-popup-panel #popupTodoWeeklyDaysWrap,
+  .calendar-popup-panel #popupTodoRepeatIntervalWrap,
+  .calendar-popup-panel #popupScheduleWeeklyDaysWrap,
+  .calendar-popup-panel #popupScheduleRepeatIntervalWrap,
+  .calendar-popup-panel #popupScheduleDailyLocationsSection,
+  .finance-edit-popup-panel .finance-form-wide,
+  .finance-edit-popup-panel .finance-form-section {
+    grid-column: 1 / -1;
+  }
+
+  .planner-edit-popup-panel .form-group,
+  .calendar-popup-panel .form-group,
+  .finance-edit-popup-panel label {
+    min-width: 0;
+    margin-bottom: 0;
+  }
+
+  .planner-edit-popup-panel input,
+  .planner-edit-popup-panel select,
+  .planner-edit-popup-panel textarea,
+  .planner-edit-popup-panel .time-picker-trigger,
+  .calendar-popup-panel input,
+  .calendar-popup-panel select,
+  .calendar-popup-panel textarea,
+  .calendar-popup-panel .time-picker-trigger,
+  .finance-edit-popup-panel input,
+  .finance-edit-popup-panel select,
+  .finance-edit-popup-panel textarea,
+  .finance-edit-popup-panel .finance-category-trigger {
+    min-width: 0;
+    height: auto;
+    min-height: 38px;
+    padding: 9px 10px;
+    font-size: 14px;
+  }
+
+  .planner-edit-popup-panel .repeat-until-control,
+  .calendar-popup-panel .repeat-until-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .planner-edit-popup-panel .repeat-until-toggle-btn,
+  .planner-edit-popup-panel .repeat-until-value-btn,
+  .calendar-popup-panel .repeat-until-toggle-btn,
+  .calendar-popup-panel .repeat-until-value-btn {
+    width: auto;
+    min-width: 74px;
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
+
+  .planner-edit-popup-panel .button-row,
+  .calendar-popup-panel .button-row,
+  .finance-edit-popup-panel .finance-popup-actions,
+  .coin-ledger-edit-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .planner-edit-popup-panel .button-row button,
+  .calendar-popup-panel .button-row button,
+  .finance-edit-popup-panel .finance-popup-actions button,
+  .coin-ledger-edit-actions button {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 12px;
+    white-space: nowrap;
+  }
+
+  .calendar-popup-panel .quick-add-header-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .calendar-popup-panel .quick-add-title {
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: 17px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .calendar-popup-panel #openPopupQuickAddBtn {
+    width: auto;
+    min-width: 64px;
+    flex: 0 0 auto;
+    padding-inline: 14px;
   }
 }

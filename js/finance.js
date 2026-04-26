@@ -49,7 +49,6 @@ const TRANSACTION_TYPES = [
 ];
 
 const LEDGER_CATEGORIES = [
-  "식비",
   "교육",
   "문화/여가",
   "패션/쇼핑",
@@ -58,7 +57,6 @@ const LEDGER_CATEGORIES = [
 ];
 
 const EXTRA_LEDGER_CATEGORIES = [
-  "\uC2DD\uBE44",
   "\uBC30\uB2EC\uC74C\uC2DD",
   "\uC2DD\uB8CC\uD488",
   "\uC0DD\uD65C\uC6A9\uD488",
@@ -75,9 +73,14 @@ const EXTRA_LEDGER_CATEGORIES = [
   "\uAE30\uD0C0",
 ];
 
+function normalizeLedgerCategory(category = "") {
+  const value = String(category || "").trim();
+  if (value === "\uC2DD\uBE44") return "\uC678\uC2DD";
+  return value || "\uAE30\uD0C0";
+}
+
 function getLedgerCategories(selectedCategory = "") {
   const categories = [
-    "\uC2DD\uBE44",
     "\uC678\uC2DD",
     "\uCE74\uD398",
     "\uBC30\uB2EC\uC74C\uC2DD",
@@ -107,7 +110,7 @@ function getLedgerCategories(selectedCategory = "") {
     "\uAE30\uD0C0",
   ];
 
-  const selected = String(selectedCategory || "").trim();
+  const selected = normalizeLedgerCategory(selectedCategory);
   if (selected && !categories.includes(selected)) {
     return [selected, ...categories];
   }
@@ -116,7 +119,7 @@ function getLedgerCategories(selectedCategory = "") {
 }
 
 function renderFinanceCategoryPicker(selectedCategory = "\uAE30\uD0C0") {
-  const selected = selectedCategory || "\uAE30\uD0C0";
+  const selected = normalizeLedgerCategory(selectedCategory);
   return `
     <div class="finance-category-picker">
       <input type="hidden" name="category" value="${escapeHtml(selected)}" />
@@ -448,7 +451,7 @@ function makeTransactionFromForm(form) {
     amount: Math.max(0, Number(formData.get("amount")) || 0),
     date: String(formData.get("date") || todayKey()),
     time: String(formData.get("time") || ""),
-    category: String(formData.get("category") || "기타"),
+    category: normalizeLedgerCategory(formData.get("category")),
     assetId,
     accountId:
       selectedAsset?.accountId ||
@@ -522,7 +525,7 @@ function getIncomeTransactions(list) {
 
 function getCategoryTotals(list) {
   return getExpenseLikeTransactions(list).reduce((acc, item) => {
-    const key = item.category || "기타";
+    const key = normalizeLedgerCategory(item.category);
     acc[key] = (acc[key] || 0) + (Number(item.amount) || 0);
     return acc;
   }, {});
@@ -567,6 +570,7 @@ export function renderFinance() {
 function renderAssetHome() {
   const mount = query("financeAssetHomeMount");
   if (!mount) return;
+  const rewardWallet = query("financeRewardWalletSection");
 
   const data = getFinanceData();
   const accounts = ACCOUNT_TYPES.map((template) => ({
@@ -615,6 +619,8 @@ function renderAssetHome() {
       </div>
     </section>
 
+    <section class="finance-reward-wallet-slot" id="financeRewardWalletSlot" aria-label="AI 보상 지갑"></section>
+
     <section class="finance-section-card">
       <div class="finance-section-title">
         <h3>보유 자산</h3>
@@ -625,6 +631,11 @@ function renderAssetHome() {
       </div>
     </section>
   `;
+
+  const rewardWalletSlot = query("financeRewardWalletSlot");
+  if (rewardWallet && rewardWalletSlot) {
+    rewardWalletSlot.appendChild(rewardWallet);
+  }
 }
 
 function renderAccountCard({ type, name, icon, color, account }) {
@@ -792,7 +803,7 @@ function toTransactionFormItem(item = {}) {
     accountId: item.accountId || getDefaultCaptureAccountId(type),
     date: item.date || todayKey(),
     time: item.time || "",
-    category: item.category || "기타",
+    category: normalizeLedgerCategory(item.category),
     paymentMethod: item.paymentMethod || "",
   };
 }
@@ -960,14 +971,71 @@ function renderCategoryRatios(categoryTotals, expenseTotal) {
     .map(([category, value]) => {
       const ratio = Math.round((value / Math.max(expenseTotal, 1)) * 100);
       return `
-        <div class="finance-ratio-row">
+        <button class="finance-ratio-row finance-ratio-button" type="button" data-finance-action="open-category-transactions" data-category="${escapeHtml(category)}">
           <span>${escapeHtml(category)}</span>
           <div><i style="width:${ratio}%"></i></div>
           <b>${ratio}%</b>
-        </div>
+        </button>
       `;
     })
     .join("");
+}
+
+function getCategoryTransactionsForMonth(category, monthKey = getMonthKey()) {
+  const normalizedCategory = normalizeLedgerCategory(category);
+
+  return getExpenseLikeTransactions(getTransactions())
+    .filter((item) => String(item.date || "").startsWith(monthKey))
+    .filter((item) => normalizeLedgerCategory(item.category) === normalizedCategory)
+    .sort((a, b) => `${b.date || ""} ${b.time || ""}`.localeCompare(`${a.date || ""} ${a.time || ""}`));
+}
+
+function openFinanceCategoryTransactionsPopup(category = "") {
+  const normalizedCategory = normalizeLedgerCategory(category);
+  const monthKey = getMonthKey();
+  const items = getCategoryTransactionsForMonth(normalizedCategory, monthKey);
+  const total = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const mount = getPopupMount();
+
+  mount.innerHTML = `
+    <div class="finance-detail-view finance-category-detail-view">
+      <div class="finance-popup-header">
+        <div>
+          <span class="finance-form-badge">월별 지출 통계</span>
+          <h2>${escapeHtml(normalizedCategory)}</h2>
+          <p>${escapeHtml(monthKey)} · ${items.length}건 · ${formatMoney(total)}</p>
+        </div>
+        <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+      </div>
+      <div class="finance-category-transaction-list">
+        ${
+          items.length
+            ? items.map(renderCategoryTransactionPopupRow).join("")
+            : `<p class="finance-empty-text">해당 카테고리 거래가 없습니다.</p>`
+        }
+      </div>
+    </div>
+  `;
+  openPopupOverlay();
+}
+
+function renderCategoryTransactionPopupRow(item) {
+  const accountLabel = getTransactionAccountLabel(item);
+  const direction = getTransactionAmountDirection(item);
+  const iconType = direction > 0 ? "income" : "expense";
+  const icon = direction > 0 ? "↗" : "↘";
+  const sign = direction > 0 ? "+" : direction < 0 ? "-" : "";
+
+  return `
+    <button class="finance-category-transaction-row" type="button" data-finance-action="open-transaction-detail" data-id="${escapeHtml(item.id)}">
+      <span class="finance-transaction-icon is-${iconType}" aria-hidden="true">${icon}</span>
+      <span class="finance-row-main">
+        <strong>${escapeHtml(item.title || item.merchant || "거래")}</strong>
+        <small>${escapeHtml(item.date || "날짜 없음")} ${escapeHtml(item.time || "")} · ${escapeHtml(item.paymentMethod || accountLabel)}</small>
+      </span>
+      <b class="${direction > 0 ? "is-income" : "is-expense"}">${sign}${formatMoney(item.amount)}</b>
+    </button>
+  `;
 }
 
 function formatLedgerDateHeader(dateKey) {
@@ -1021,6 +1089,7 @@ function renderTransactionDateGroups(transactions) {
 function renderTransactionRow(item) {
   const typeMeta = getTransactionTypeMeta(item.type || item.flowType);
   const accountLabel = getTransactionAccountLabel(item);
+  const categoryLabel = normalizeLedgerCategory(item.category);
   const direction = getTransactionAmountDirection(item);
   const amountClass = direction > 0 ? "is-income" : direction < 0 ? "is-expense" : "";
   const iconType = direction > 0 ? "income" : "expense";
@@ -1032,7 +1101,7 @@ function renderTransactionRow(item) {
       <span class="finance-transaction-icon is-${iconType}" aria-hidden="true">${icon}</span>
       <span class="finance-row-main">
         <strong>${escapeHtml(item.title || item.merchant || typeMeta.label)}</strong>
-        <small>${escapeHtml(item.time || "시간 없음")} | ${escapeHtml(item.category || "기타")} | ${escapeHtml(item.paymentMethod || accountLabel)}</small>
+        <small>${escapeHtml(item.time || "시간 없음")} | ${escapeHtml(categoryLabel)} | ${escapeHtml(item.paymentMethod || accountLabel)}</small>
       </span>
       <span class="finance-transaction-amount">
         <b class="${amountClass}">${direction > 0 ? "+" : direction < 0 ? "-" : ""}${formatMoney(item.amount)}</b>
@@ -1141,6 +1210,7 @@ function handleFinanceAction(target) {
   if (action === "open-account-detail") openAccountDetailPopup(target.dataset.id || "");
   if (action === "open-transaction-form") openFinanceEditPopup("expense");
   if (action === "open-transaction-detail") openTransactionDetail(target.dataset.id);
+  if (action === "open-category-transactions") openFinanceCategoryTransactionsPopup(target.dataset.category || "");
   if (action === "edit-transaction") startEditFinanceExpense(target.dataset.id);
   if (action === "delete-transaction") deleteFinanceExpense(target.dataset.id);
   if (action === "delete-asset") deleteEditingFinanceAsset();

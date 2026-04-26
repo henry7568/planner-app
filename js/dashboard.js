@@ -9,13 +9,18 @@ import {
   getItemsForDate,
 } from "./calendar.js";
 import { expandRecurringPlannerItemsInRange } from "./repeat.js";
-import { COIN_KRW_VALUE, getCoinBalance } from "./rewards.js";
+import {
+  COIN_KRW_VALUE,
+  getCoinBalance,
+  getCoinLedgerEntriesForMonth,
+  getCoinLedgerMonthKey,
+} from "./rewards.js";
 
 let deps = {};
 let coinLedgerPage = 1;
 let coinLedgerFilterKey = "";
 let todayPage = 1;
-const COIN_LEDGER_PAGE_SIZE = 5;
+const COIN_LEDGER_PAGE_SIZE = 3;
 const TODAY_PAGE_SIZE = 3;
 const STATUS_LEDGER_TYPES = new Set([
   "earn",
@@ -128,11 +133,8 @@ export function renderDashboard() {
   }
 
   if (dashboardUrgentTodoCount) {
-    dashboardUrgentTodoCount.textContent = filtered.filter((item) => {
-      if (item.type !== "todo") return false;
-      const diff = getTodoDiffMinutes(item);
-      return diff >= 0 && diff <= 1440;
-    }).length;
+    dashboardUrgentTodoCount.textContent =
+      filtered.filter(isUrgentPlannerItem).length;
   }
 
   const rate = getAchievementRate(filtered);
@@ -190,7 +192,7 @@ export function renderDashboard() {
   const visibleItems = visibleList.slice(startIndex, startIndex + pageSize);
 
   dashboardItemList.innerHTML = `
-    ${visibleItems.map((item) => renderCard(item, getStatusSymbol)).join("")}
+    ${renderDashboardDateSections(visibleItems)}
 
     <div class="pagination-wrap">
       <button
@@ -517,7 +519,8 @@ function getLegacyCoinLedgerLabel(type, fallback) {
 
 function renderLegacyCoinDashboard({ coinBalanceText, hobbyBudgetText, coinLedgerList }) {
   const rewards = getRewardsData();
-  const balance = getCoinBalance(rewards);
+  const coinMonthKey = getCoinLedgerMonthKey();
+  const balance = getCoinBalance(rewards, coinMonthKey);
   const hobbyBudget = balance * COIN_KRW_VALUE;
 
   if (coinBalanceText) coinBalanceText.textContent = `${balance.toLocaleString()}C`;
@@ -527,9 +530,9 @@ function renderLegacyCoinDashboard({ coinBalanceText, hobbyBudgetText, coinLedge
 
   if (!coinLedgerList) return;
 
-  const ledger = Array.isArray(rewards.ledger) ? rewards.ledger.slice(0, 8) : [];
+  const ledger = getCoinLedgerEntriesForMonth(rewards.ledger, coinMonthKey).slice(0, 3);
   if (ledger.length === 0) {
-    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">아직 코인 기록이 없습니다.</div>`;
+    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">이번 달 코인 기록이 없습니다.</div>`;
     return;
   }
 
@@ -548,7 +551,7 @@ function renderLegacyCoinDashboard({ coinBalanceText, hobbyBudgetText, coinLedge
       const krw = Math.abs(amount) * COIN_KRW_VALUE;
 
       return `
-        <div class="coin-ledger-row">
+        <div class="coin-ledger-row ${amount < 0 ? "negative" : "positive"}">
           <div>
             <strong>${getCoinLedgerLabel(entry.type, label)}</strong>
             <span>${escapeHtml(title)}</span>
@@ -578,6 +581,7 @@ function getFilteredRewardTargetKeys(filteredItems) {
 
 function getCoinFilterKey(targetKeys, isFilterActive) {
   return JSON.stringify({
+    coinMonth: getCoinLedgerMonthKey(),
     type: getSelectedFilterType(),
     year: getSelectedFilterYear(),
     month: getSelectedFilterMonth(),
@@ -638,6 +642,7 @@ function renderCoinDashboard({
     getSelectedFilterType() || getSelectedFilterYear() || getSelectedFilterMonth(),
   );
   const nextFilterKey = getCoinFilterKey(targetKeys, isFilterActive);
+  const coinMonthKey = getCoinLedgerMonthKey();
 
   if (nextFilterKey !== coinLedgerFilterKey) {
     coinLedgerFilterKey = nextFilterKey;
@@ -645,14 +650,11 @@ function renderCoinDashboard({
   }
 
   const ledger = getDisplayLedgerEntries(
-    Array.isArray(rewards.ledger) ? rewards.ledger : [],
+    getCoinLedgerEntriesForMonth(rewards.ledger, coinMonthKey),
     targetKeys,
     isFilterActive,
   );
-  const balance = ledger.reduce(
-    (sum, entry) => sum + (Number(entry.amount) || 0),
-    0,
-  );
+  const balance = getCoinBalance(rewards, coinMonthKey);
   const hobbyBudget = balance * COIN_KRW_VALUE;
 
   if (coinBalanceText) {
@@ -665,7 +667,7 @@ function renderCoinDashboard({
   if (!coinLedgerList) return;
 
   if (ledger.length === 0) {
-    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">아직 코인 기록이 없습니다.</div>`;
+    coinLedgerList.innerHTML = `<div class="empty-message compact-empty">이번 달 코인 기록이 없습니다.</div>`;
     return;
   }
 
@@ -688,7 +690,13 @@ function renderCoinDashboard({
         const krw = Math.abs(amount) * COIN_KRW_VALUE;
 
         return `
-          <div class="coin-ledger-row">
+          <div
+            class="coin-ledger-row ${amount < 0 ? "negative" : "positive"} clickable-item-card"
+            data-action="open-coin-ledger-edit"
+            data-id="${escapeHtml(entry.id || "")}"
+            role="button"
+            tabindex="0"
+          >
             <div>
               <strong>${getCoinLedgerLabel(entry.type)}</strong>
               <span>${escapeHtml(title)}</span>
@@ -697,16 +705,6 @@ function renderCoinDashboard({
               ${getCoinAmountHtml(Math.abs(amount), sign)}
               <small>${krw.toLocaleString()}원</small>
             </div>
-            ${
-              entry.type === "spend"
-                ? `
-                  <div class="coin-ledger-actions">
-                    <button class="secondary-btn" type="button" data-action="edit-coin-spend" data-id="${entry.id}">수정</button>
-                    <button class="secondary-btn" type="button" data-action="delete-coin-spend" data-id="${entry.id}">삭제</button>
-                  </div>
-                `
-                : ""
-            }
             <time>${date.toLocaleDateString("ko-KR")}</time>
           </div>
         `;
@@ -769,16 +767,29 @@ export function getSummaryList(type, filtered) {
     return sortItems(filtered.filter((item) => isItemOnDate(todayKey, item)));
   }
   if (type === "urgent") {
-    return sortItems(
-      filtered.filter((item) => {
-        if (item.type !== "todo") return false;
-        const diff = getTodoDiffMinutes(item);
-        return diff >= 0 && diff <= 1440;
-      }),
-    );
+    return sortItems(filtered.filter(isUrgentPlannerItem));
   }
 
   return [];
+}
+
+function getScheduleUrgentDiffMinutes(item) {
+  const nowDate = new Date();
+  const start = new Date(makeDateTime(item.startDate, item.startTime || "00:00"));
+  const end = new Date(
+    makeDateTime(item.endDate || item.startDate, item.endTime || "23:59"),
+  );
+  const target = nowDate <= start ? start : end;
+  return Math.floor((target - nowDate) / (1000 * 60));
+}
+
+function isUrgentPlannerItem(item) {
+  if (!item) return false;
+  const diff =
+    item.type === "schedule"
+      ? getScheduleUrgentDiffMinutes(item)
+      : getTodoDiffMinutes(item);
+  return diff >= 0 && diff <= 1440;
 }
 
 export function getFilteredItems() {
@@ -891,8 +902,8 @@ export function openSummaryPopup(type) {
     success: "완료 목록",
     todo: "할일 목록",
     schedule: "일정 목록",
-    today: "오늘 포함 항목",
-    urgent: "마감 임박 할일",
+    today: "오늘까지 작업",
+    urgent: "마감 임박 작업",
   };
 
   if (summaryPopupLabel) {
@@ -922,6 +933,29 @@ function getSummaryItemDateKey(item) {
 
 function getSummaryDateLabel(dateKey) {
   return dateKey ? formatKoreanDate(dateKey) : "날짜 없음";
+}
+
+function renderDashboardDateSections(list) {
+  const grouped = list.reduce((acc, item) => {
+    const key = getSummaryItemDateKey(item) || "none";
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key).push(item);
+    return acc;
+  }, new Map());
+
+  return [...grouped.entries()]
+    .map(([key, sectionItems]) => `
+      <details class="dashboard-date-section" open>
+        <summary class="dashboard-date-header">
+          <span>${getSummaryDateLabel(key === "none" ? "" : key)}</span>
+          <strong>${sectionItems.length}</strong>
+        </summary>
+        <div class="dashboard-date-body">
+          ${sectionItems.map((item) => renderCard(item, getStatusSymbol)).join("")}
+        </div>
+      </details>
+    `)
+    .join("");
 }
 
 function getSummaryRowDateText(item) {
