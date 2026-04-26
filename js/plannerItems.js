@@ -577,6 +577,14 @@ export function toggleItemStatus(items, id) {
   );
 }
 
+export function setItemStatus(items, id, status) {
+  return items.map((item) =>
+    item.id === id
+      ? { ...item, status, updatedAt: Date.now() }
+      : item,
+  );
+}
+
 export function toggleRecurringSingleSlotStatus(items, id) {
   const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
   const targetDate = occurrenceDateKey;
@@ -596,6 +604,28 @@ export function toggleRecurringSingleSlotStatus(items, id) {
     return {
       ...item,
       status: nextStatus,
+      updatedAt: Date.now(),
+    };
+  });
+}
+
+export function setRecurringSingleSlotStatus(items, id, status) {
+  const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
+  const targetDate = occurrenceDateKey;
+
+  return items.map((item) => {
+    if (item.id !== targetId) return item;
+    if (!item.repeat || item.repeat === "none") return item;
+    if (item.type !== "todo" && item.type !== "schedule") return item;
+    if (item.repeat === "weekly_days" && item.type === "schedule") return item;
+    if (!targetDate) return item;
+
+    const currentDate = item.type === "todo" ? item.dueDate : item.startDate;
+    if (currentDate !== targetDate) return item;
+
+    return {
+      ...item,
+      status,
       updatedAt: Date.now(),
     };
   });
@@ -979,6 +1009,37 @@ export function toggleRecurringScheduleSlotStatus(items, id) {
       ...item,
       status: nextStatus,
       repeatSlotDates: nextSlotDates,
+      repeatSlotStatuses: nextSlotStatuses,
+      updatedAt: Date.now(),
+    };
+  });
+}
+
+export function setRecurringScheduleSlotStatus(items, id, status) {
+  const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
+  const targetDate = occurrenceDateKey;
+
+  return items.map((item) => {
+    if (item.id !== targetId) return item;
+    if (item.type !== "schedule") return item;
+    if (item.repeat !== "weekly_days") return item;
+    if (!targetDate) return item;
+
+    const weekday = String(new Date(`${targetDate}T00:00`).getDay());
+    const currentSlotDate = item.repeatSlotDates?.[weekday];
+
+    if (currentSlotDate !== targetDate) {
+      return item;
+    }
+
+    const nextSlotStatuses = {
+      ...(item.repeatSlotStatuses || {}),
+      [weekday]: status,
+    };
+
+    return {
+      ...item,
+      status,
       repeatSlotStatuses: nextSlotStatuses,
       updatedAt: Date.now(),
     };

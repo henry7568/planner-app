@@ -76,12 +76,15 @@ import {
   getStatusSymbol,
   getStatusText,
   toggleItemStatus,
+  setItemStatus,
   toggleRecurringSingleSlotStatus,
+  setRecurringSingleSlotStatus,
   ensureNextRecurringItemAfterStatusChange,
   restoreRecurringItemAsPendingMaster,
   deleteItemById,
   applyRecurringScheduleEditScope,
   toggleRecurringScheduleSlotStatus,
+  setRecurringScheduleSlotStatus,
   applyRecurringScheduleDeleteScope,
 } from "./plannerItems.js";
 
@@ -283,6 +286,11 @@ let editingProjectId = null;
 let pendingInboxConversion = null;
 let popupQuickAddProjectId = "";
 let collapsedProjectSections = loadProjectSectionCollapseState();
+const STATUS_LONG_PRESS_MS = 2000;
+const STATUS_LONG_PRESS_MOVE_LIMIT = 12;
+let statusLongPressTimer = null;
+let statusLongPressPointer = null;
+let isLeftCtrlPressed = false;
 
 const authLoadingScreen = document.getElementById("authLoadingScreen");
 const authSection = document.getElementById("authScreen");
@@ -2111,6 +2119,17 @@ async function initAppOnce() {
     if (calendarTitleBtn?.contains(event.target)) return;
     closeCalendarDatePicker();
   });
+  document.addEventListener("pointerdown", handleStatusPointerDown);
+  document.addEventListener("pointermove", handleStatusPointerMove);
+  document.addEventListener("pointerup", cancelStatusLongPress);
+  document.addEventListener("pointercancel", cancelStatusLongPress);
+  document.addEventListener("pointerleave", cancelStatusLongPress);
+  document.addEventListener("keydown", trackLeftCtrlKey);
+  document.addEventListener("keyup", trackLeftCtrlKey);
+  window.addEventListener("blur", () => {
+    isLeftCtrlPressed = false;
+    cancelStatusLongPress();
+  });
 
   clearSelectedDateBtn?.addEventListener("click", closeDatePopupAndClearProjectContext);
   bindPopupBackdropClose(
@@ -3521,7 +3540,14 @@ function handleDocumentClick(e) {
   if (action === "toggle-status") {
     const id = actionTarget.dataset.id;
     if (!id) return;
-    toggleStatus(id);
+    if (actionTarget.dataset.longPressHandled === "true") {
+      delete actionTarget.dataset.longPressHandled;
+      e.preventDefault();
+      return;
+    }
+    toggleStatus(id, {
+      forceStatus: e.ctrlKey && isLeftCtrlPressed ? "success" : "",
+    });
     return;
   }
 
@@ -4504,7 +4530,73 @@ function applyShortcutTime(parsedTime, mode) {
   }
 }
 
-function toggleStatus(id) {
+function isMobileStatusPointer(event) {
+  if (!event) return false;
+  if (event.pointerType === "touch" || event.pointerType === "pen") return true;
+  return window.matchMedia?.("(pointer: coarse)")?.matches === true;
+}
+
+function getStatusActionButton(target) {
+  return target?.closest?.("[data-action='toggle-status']") || null;
+}
+
+function clearStatusLongPressTimer() {
+  if (statusLongPressTimer) {
+    clearTimeout(statusLongPressTimer);
+    statusLongPressTimer = null;
+  }
+}
+
+function cancelStatusLongPress() {
+  clearStatusLongPressTimer();
+  statusLongPressPointer = null;
+}
+
+function handleStatusPointerDown(event) {
+  const button = getStatusActionButton(event.target);
+  if (!button || !button.dataset.id) return;
+  if (!isMobileStatusPointer(event)) return;
+
+  clearStatusLongPressTimer();
+  statusLongPressPointer = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    button,
+  };
+
+  statusLongPressTimer = setTimeout(() => {
+    const currentButton = statusLongPressPointer?.button;
+    const id = currentButton?.dataset.id;
+    if (!id) return;
+
+    currentButton.dataset.longPressHandled = "true";
+    toggleStatus(id, { forceStatus: "success" });
+    cancelStatusLongPress();
+  }, STATUS_LONG_PRESS_MS);
+}
+
+function handleStatusPointerMove(event) {
+  if (!statusLongPressPointer) return;
+  if (statusLongPressPointer.id !== event.pointerId) return;
+
+  const movedX = Math.abs(event.clientX - statusLongPressPointer.x);
+  const movedY = Math.abs(event.clientY - statusLongPressPointer.y);
+  if (
+    movedX > STATUS_LONG_PRESS_MOVE_LIMIT ||
+    movedY > STATUS_LONG_PRESS_MOVE_LIMIT
+  ) {
+    cancelStatusLongPress();
+  }
+}
+
+function trackLeftCtrlKey(event) {
+  if (event.key !== "Control") return;
+  if (event.location !== KeyboardEvent.DOM_KEY_LOCATION_LEFT) return;
+  isLeftCtrlPressed = event.type === "keydown";
+}
+
+function toggleStatus(id, { forceStatus = "" } = {}) {
   const [targetId, occurrenceDateKey = ""] = String(id || "").split("__");
   const baseItem = items.find((item) => item.id === targetId);
   if (!baseItem) return;
@@ -4522,8 +4614,10 @@ function toggleStatus(id) {
   ) {
     const weekday = String(new Date(`${occurrenceDateKey}T00:00`).getDay());
     previousStatus = baseItem.repeatSlotStatuses?.[weekday] || "pending";
-    nextStatus = getNextStatus(previousStatus);
-    items = toggleRecurringScheduleSlotStatus(items, id);
+    nextStatus = forceStatus || getNextStatus(previousStatus);
+    items = forceStatus
+      ? setRecurringScheduleSlotStatus(items, id, nextStatus)
+      : toggleRecurringScheduleSlotStatus(items, id);
   } else if (
     baseItem &&
     baseItem.repeat &&
@@ -4531,11 +4625,18 @@ function toggleStatus(id) {
     occurrenceDateKey
   ) {
     previousStatus = baseItem.status || "pending";
-    nextStatus = getNextStatus(previousStatus);
-    items = toggleRecurringSingleSlotStatus(items, id);
+    nextStatus = forceStatus || getNextStatus(previousStatus);
+    items = forceStatus
+      ? setRecurringSingleSlotStatus(items, id, nextStatus)
+      : toggleRecurringSingleSlotStatus(items, id);
   } else {
-    items = toggleItemStatus(items, targetId);
+    nextStatus = forceStatus || getNextStatus(previousStatus);
+    items = forceStatus
+      ? setItemStatus(items, targetId, nextStatus)
+      : toggleItemStatus(items, targetId);
   }
+
+  if (previousStatus === nextStatus) return;
 
   rewardsData = applyStatusRewardTransition({
     rewardsData,
