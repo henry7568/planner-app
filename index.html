@@ -2,7 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <meta name="theme-color" content="#0f766e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -32,7 +35,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=163" />
+    <link rel="stylesheet" href="style.css?v=173" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -1072,7 +1075,21 @@
                 <button id="prevMonthBtn" class="secondary-btn" type="button">
                   이전 달
                 </button>
-                <strong id="calendarTitle" class="calendar-title-text"></strong>
+                <button
+                  id="calendarTitleBtn"
+                  class="calendar-title-button"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                >
+                  <strong id="calendarTitle" class="calendar-title-text"></strong>
+                </button>
+                <div
+                  id="calendarDatePickerPanel"
+                  class="calendar-date-picker-panel hidden"
+                  role="dialog"
+                  aria-label="달력 연월 선택"
+                ></div>
                 <button id="nextMonthBtn" class="secondary-btn" type="button">
                   다음 달
                 </button>
@@ -2887,6 +2904,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=163"></script>
+    <script type="module" src="./js/app.js?v=173"></script>
   </body>
 </html>

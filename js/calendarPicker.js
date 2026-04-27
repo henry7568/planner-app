@@ -9,6 +9,10 @@ function getPanel() {
   return deps.refs?.calendarDatePickerPanel || null;
 }
 
+function getTitleButton() {
+  return deps.refs?.calendarTitleBtn || null;
+}
+
 function getCalendarState() {
   return deps.getCalendarState?.() || {
     year: new Date().getFullYear(),
@@ -24,10 +28,12 @@ export function openCalendarDatePicker() {
   pickerYear = year;
   renderCalendarDatePicker();
   panel.classList.remove("hidden");
+  getTitleButton()?.setAttribute("aria-expanded", "true");
 }
 
 export function closeCalendarDatePicker() {
   getPanel()?.classList.add("hidden");
+  getTitleButton()?.setAttribute("aria-expanded", "false");
 }
 
 export function toggleCalendarDatePicker() {
@@ -73,7 +79,7 @@ function renderCalendarDatePicker() {
       ${monthButtons.join("")}
     </div>
     <div class="calendar-picker-footer">
-      <button class="calendar-picker-link" type="button" data-picker-action="clear">삭제</button>
+      <button class="calendar-picker-link" type="button" data-picker-action="clear">닫기</button>
       <button class="calendar-picker-link" type="button" data-picker-action="today">오늘</button>
     </div>
   `;
@@ -121,7 +127,5 @@ export function handleCalendarPickerAction(target) {
 
   if (action === "clear") {
     closeCalendarDatePicker();
-    deps.closeDatePopupAndClearProjectContext?.();
-    deps.renderCalendar?.();
   }
 }

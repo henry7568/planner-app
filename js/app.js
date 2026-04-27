@@ -1350,6 +1350,7 @@ configureCalendarModule({
 
 configureCalendarPickerModule({
   refs: {
+    calendarTitleBtn,
     calendarDatePickerPanel,
   },
   getCalendarState: () => ({
@@ -1841,6 +1842,7 @@ async function initAppOnce() {
   setupTimePickers();
   setupPlannerForm();
   setupFormAccessibilityGuard();
+  observePopupOverlayState();
 
   initFinance();
   await initPlaceAutocompleteWidgets();
@@ -3889,6 +3891,9 @@ function addItemFromSelectedDate() {
 }
 
 function saveEditedSingleItem(type, title) {
+  const datePopupRefreshKey = selectedDate;
+  const shouldRefreshDatePopup =
+    !!datePopupRefreshKey && !calendarPopupOverlay?.classList.contains("hidden");
   const color = itemColor?.value || "blue";
   const tag = itemTag?.value.trim() || "";
   const projectId = itemProjectId?.value || "";
@@ -3963,15 +3968,25 @@ function saveEditedSingleItem(type, title) {
     closePlannerFormCard();
   }
 
-  if (selectedDate) {
-    const dayItems = getItemsForDate(selectedDate);
+  if (shouldRefreshDatePopup) {
+    refreshDatePopupAfterItemMutation(datePopupRefreshKey);
+  }
+}
+
+function refreshDatePopupAfterItemMutation(dateKey) {
+  if (!dateKey) return;
+
+  requestAnimationFrame(() => {
+    const dayItems = getItemsForDate(dateKey);
 
     if (dayItems.length === 0) {
       closeDatePopup();
-    } else {
-      openDatePopup(selectedDate);
+      return;
     }
-  }
+
+    selectedDate = dateKey;
+    openDatePopup(dateKey);
+  });
 }
 
 function saveTodoSeries(title) {
@@ -5115,10 +5130,42 @@ function openPlaceLink(mode) {
   window.open(link.href, "_blank", "noopener,noreferrer");
 }
 
+let modalScrollY = 0;
+
+function lockBodyScroll() {
+  if (document.body.classList.contains("modal-open")) return;
+
+  modalScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${modalScrollY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockBodyScroll() {
+  if (!document.body.classList.contains("modal-open")) return;
+
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, modalScrollY);
+}
+
 function updateBodyModalLock() {
   const hasOpenPopup = !!document.querySelector(".popup-overlay:not(.hidden)");
-  document.body.classList.toggle("modal-open", hasOpenPopup);
-  document.documentElement.classList.toggle("modal-open", hasOpenPopup);
+  if (hasOpenPopup) {
+    lockBodyScroll();
+    document.body.classList.add("modal-open");
+    document.documentElement.classList.add("modal-open");
+    return;
+  }
+
+  unlockBodyScroll();
+  document.body.classList.remove("modal-open");
+  document.documentElement.classList.remove("modal-open");
 }
 
 function observePopupOverlayState() {

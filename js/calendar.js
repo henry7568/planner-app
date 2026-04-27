@@ -14,11 +14,61 @@ import {
 
 let deps = {};
 const TIMELINE_MINUTE_PX = 1.35;
-const TIMELINE_DAY_HEIGHT = 1440 * TIMELINE_MINUTE_PX;
 const TIMELINE_HOUR_HEIGHT = 60 * TIMELINE_MINUTE_PX;
+const TIMELINE_DAY_HEIGHT = 1440 * TIMELINE_MINUTE_PX;
+const TIMELINE_MIN_CARD_HEIGHT = 58;
+let activeTimelineMetrics = null;
 
-function getTimelineOffset(minutes) {
-  return Math.round(minutes * TIMELINE_MINUTE_PX);
+function getTimelineMetrics(blocks = []) {
+  const hourHeights = Array.from({ length: 24 }, () => TIMELINE_HOUR_HEIGHT);
+
+  blocks.forEach((block) => {
+    const startHour = Math.max(0, Math.min(23, Math.floor(block.startMinutes / 60)));
+    const endHour = Math.max(
+      startHour,
+      Math.min(23, Math.floor(Math.max(block.endMinutes - 1, block.startMinutes) / 60)),
+    );
+    const rowPressure = Math.max(0, (block.totalColumns || 1) - 1) * 52;
+    const titlePressure = Math.min(
+      24,
+      Math.ceil(String(block.item?.title || "").length / 14) * 8,
+    );
+    const required = TIMELINE_MIN_CARD_HEIGHT + rowPressure + titlePressure;
+
+    if (!block.isTodoPoint) {
+      const duration = Math.max(1, block.endMinutes - block.startMinutes);
+      const requiredHourHeight = Math.ceil((required * 60) / duration);
+      for (let hour = startHour; hour <= endHour; hour += 1) {
+        hourHeights[hour] = Math.max(hourHeights[hour], requiredHourHeight);
+      }
+    }
+
+    if (block.isTodoPoint) {
+      hourHeights[startHour] = Math.max(hourHeights[startHour], required);
+    }
+  });
+
+  const offsets = [0];
+  hourHeights.forEach((height) => {
+    offsets.push(offsets[offsets.length - 1] + height);
+  });
+
+  return {
+    hourHeights,
+    offsets,
+    dayHeight: offsets[24],
+  };
+}
+
+function getTimelineOffset(minutes, metrics = activeTimelineMetrics) {
+  if (!metrics) return Math.round(minutes * TIMELINE_MINUTE_PX);
+
+  const safeMinutes = Math.max(0, Math.min(minutes, 1440));
+  const hour = Math.min(23, Math.floor(safeMinutes / 60));
+  const minute = safeMinutes - hour * 60;
+  const hourHeight = metrics.hourHeights[hour] || TIMELINE_HOUR_HEIGHT;
+
+  return Math.round(metrics.offsets[hour] + (minute / 60) * hourHeight);
 }
 
 export function configureCalendarModule(config) {
@@ -345,21 +395,23 @@ export function renderSelectedDateTimeline(dateKey, itemsForDate) {
   }
 
   const laidOutBlocks = layoutTimelineBlocks(blocks);
+  const timelineMetrics = getTimelineMetrics(laidOutBlocks);
+  activeTimelineMetrics = timelineMetrics;
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const nowLineHtml = buildCurrentTimeLine(dateKey);
+  const nowLineHtml = buildCurrentTimeLine(dateKey, timelineMetrics);
 
   selectedDateTimeline.innerHTML = `
     <div
       id="timelineBoard"
       class="timeline-board"
-      style="--timeline-day-height: ${TIMELINE_DAY_HEIGHT}px; --timeline-hour-height: ${TIMELINE_HOUR_HEIGHT}px;"
+      style="--timeline-day-height: ${timelineMetrics.dayHeight}px;"
     >
       <div class="timeline-scroll-area">
         <div class="timeline-hour-column">
           ${hours
             .map(
               (hour) => `
-            <div class="timeline-hour-label">${formatHourLabel(hour)}</div>
+            <div class="timeline-hour-label" style="height: ${timelineMetrics.hourHeights[hour]}px;">${formatHourLabel(hour)}</div>
           `,
             )
             .join("")}
@@ -367,13 +419,13 @@ export function renderSelectedDateTimeline(dateKey, itemsForDate) {
 
         <div id="timelineGridWrap" class="timeline-grid-wrap">
           <div class="timeline-grid-lines">
-            ${hours.map(() => `<div class="timeline-grid-line"></div>`).join("")}
+            ${hours.map((hour) => `<div class="timeline-grid-line" style="height: ${timelineMetrics.hourHeights[hour]}px;"></div>`).join("")}
           </div>
 
           ${nowLineHtml}
 
           <div class="timeline-block-layer">
-            ${laidOutBlocks.map((block) => renderPositionedTimelineBlock(block)).join("")}
+            ${laidOutBlocks.map((block) => renderPositionedTimelineBlock(block, timelineMetrics)).join("")}
           </div>
         </div>
       </div>
@@ -384,14 +436,14 @@ export function renderSelectedDateTimeline(dateKey, itemsForDate) {
   startTimelineNowAutoRefresh(dateKey);
 }
 
-export function buildCurrentTimeLine(dateKey) {
+export function buildCurrentTimeLine(dateKey, metrics = activeTimelineMetrics) {
   const todayKey = formatDateKey(new Date());
 
   if (dateKey !== todayKey) return "";
 
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const currentTop = getTimelineOffset(currentMinutes);
+  const currentTop = getTimelineOffset(currentMinutes, metrics);
   const currentTimeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return `
@@ -590,7 +642,7 @@ export function layoutTimelineBlocks(blocks) {
   return result;
 }
 
-export function renderPositionedTimelineBlock(block) {
+export function renderPositionedTimelineBlock(block, metrics = activeTimelineMetrics) {
   const item = block.item;
   const colorClass = `item-color-${item.color || "blue"}`;
   const timeStateClass = getItemTimeStateClass(item);
@@ -600,10 +652,11 @@ export function renderPositionedTimelineBlock(block) {
       ? `<span class="timeline-repeat">↻</span>`
       : "";
 
-  const top = getTimelineOffset(block.startMinutes);
+  const top = getTimelineOffset(block.startMinutes, metrics);
   const height = Math.max(
-    getTimelineOffset(block.endMinutes) - getTimelineOffset(block.startMinutes),
-    44,
+    getTimelineOffset(block.endMinutes, metrics) -
+      getTimelineOffset(block.startMinutes, metrics),
+    TIMELINE_MIN_CARD_HEIGHT,
   );
 
   const widthPercent = 100 / block.totalColumns;
@@ -631,6 +684,7 @@ export function renderPositionedTimelineBlock(block) {
         tabindex="0"
         title="클릭해서 수정"
         style="
+          --timeline-column: ${block.column || 0};
           top: ${top}px;
           left: calc(${leftPercent}% + 4px);
           width: calc(${widthPercent}% - 8px);
@@ -663,6 +717,7 @@ export function renderPositionedTimelineBlock(block) {
       tabindex="0"
       title="클릭해서 수정"
       style="
+        --timeline-column: ${block.column || 0};
         top: ${top}px;
         height: ${height}px;
         left: calc(${leftPercent}% + 4px);

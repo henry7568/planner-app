@@ -29,6 +29,9 @@ let isFinanceCaptureReviewActive = false;
 let financeCaptureSelectedFileName = "";
 const FINANCE_CATEGORY_STAT_SORT_KEY = "lifePlanner.financeCategoryStatSort";
 let financeCategoryStatSort = localStorage.getItem(FINANCE_CATEGORY_STAT_SORT_KEY) || "default";
+const FINANCE_CATEGORY_POPUP_SORT_KEY = "lifePlanner.financeCategoryPopupSort";
+let financeCategoryPopupSort =
+  localStorage.getItem(FINANCE_CATEGORY_POPUP_SORT_KEY) || "date-desc";
 
 const LEDGER_PAGE_SIZE = 5;
 
@@ -987,7 +990,36 @@ function getCategoryTransactionsForMonth(category, monthKey = getMonthKey()) {
   return getExpenseLikeTransactions(getTransactions())
     .filter((item) => String(item.date || "").startsWith(monthKey))
     .filter((item) => normalizeLedgerCategory(item.category) === normalizedCategory)
-    .sort((a, b) => `${b.date || ""} ${b.time || ""}`.localeCompare(`${a.date || ""} ${a.time || ""}`));
+    .sort((a, b) => sortCategoryPopupTransactions(a, b));
+}
+
+function getTransactionDateTimeKey(item) {
+  return `${item?.date || ""} ${item?.time || ""}`;
+}
+
+function sortCategoryPopupTransactions(a, b) {
+  const amountA = Number(a?.amount) || 0;
+  const amountB = Number(b?.amount) || 0;
+  const titleA = String(a?.title || a?.merchant || "");
+  const titleB = String(b?.title || b?.merchant || "");
+
+  if (financeCategoryPopupSort === "date-asc") {
+    return getTransactionDateTimeKey(a).localeCompare(getTransactionDateTimeKey(b));
+  }
+
+  if (financeCategoryPopupSort === "amount-desc") {
+    return amountB - amountA || getTransactionDateTimeKey(b).localeCompare(getTransactionDateTimeKey(a));
+  }
+
+  if (financeCategoryPopupSort === "amount-asc") {
+    return amountA - amountB || getTransactionDateTimeKey(b).localeCompare(getTransactionDateTimeKey(a));
+  }
+
+  if (financeCategoryPopupSort === "name") {
+    return titleA.localeCompare(titleB, "ko") || getTransactionDateTimeKey(b).localeCompare(getTransactionDateTimeKey(a));
+  }
+
+  return getTransactionDateTimeKey(b).localeCompare(getTransactionDateTimeKey(a));
 }
 
 function openFinanceCategoryTransactionsPopup(category = "") {
@@ -1006,6 +1038,16 @@ function openFinanceCategoryTransactionsPopup(category = "") {
           <p>${escapeHtml(monthKey)} · ${items.length}건 · ${formatMoney(total)}</p>
         </div>
         <button class="secondary-btn" type="button" data-finance-action="close-finance-popup">닫기</button>
+      </div>
+      <div class="finance-category-popup-toolbar">
+        <label for="financeCategoryPopupSortSelect">정렬</label>
+        <select id="financeCategoryPopupSortSelect" data-category="${escapeHtml(normalizedCategory)}" aria-label="카테고리 거래 정렬">
+          <option value="date-desc" ${financeCategoryPopupSort === "date-desc" ? "selected" : ""}>최신순</option>
+          <option value="date-asc" ${financeCategoryPopupSort === "date-asc" ? "selected" : ""}>오래된순</option>
+          <option value="amount-desc" ${financeCategoryPopupSort === "amount-desc" ? "selected" : ""}>금액 높은순</option>
+          <option value="amount-asc" ${financeCategoryPopupSort === "amount-asc" ? "selected" : ""}>금액 낮은순</option>
+          <option value="name" ${financeCategoryPopupSort === "name" ? "selected" : ""}>이름순</option>
+        </select>
       </div>
       <div class="finance-category-transaction-list">
         ${
@@ -1171,6 +1213,13 @@ function bindFinanceEvents() {
 
     if (event.target?.id === "financeCategoryStatSortSelect") {
       setFinanceCategoryStatSort(event.target.value || "default");
+    }
+
+    if (event.target?.id === "financeCategoryPopupSortSelect") {
+      setFinanceCategoryPopupSort(
+        event.target.value || "date-desc",
+        event.target.dataset.category || "",
+      );
     }
 
     if (event.target?.id === "financeCaptureImageInput") {
@@ -2071,6 +2120,20 @@ function setFinanceCategoryStatSort(value) {
     : "default";
   localStorage.setItem(FINANCE_CATEGORY_STAT_SORT_KEY, financeCategoryStatSort);
   renderLedgerHome();
+}
+
+function setFinanceCategoryPopupSort(value, category) {
+  financeCategoryPopupSort = [
+    "date-desc",
+    "date-asc",
+    "amount-desc",
+    "amount-asc",
+    "name",
+  ].includes(value)
+    ? value
+    : "date-desc";
+  localStorage.setItem(FINANCE_CATEGORY_POPUP_SORT_KEY, financeCategoryPopupSort);
+  openFinanceCategoryTransactionsPopup(category);
 }
 
 export function saveFinanceExpense() {
