@@ -1,4 +1,4 @@
-const CACHE_VERSION = "life-planner-v184";
+const CACHE_VERSION = "life-planner-v188";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -39,12 +39,16 @@ const APP_SHELL_ASSETS = [
   "./js/timePicker.js",
   "./js/utils.js",
   "./js/vocabularyData.js",
+  "./js/vocabularyAudio.js",
+  "./js/vocabularyDeckModal.js",
   "./js/vocabularyHelpers.js",
   "./js/vocabularyMarkdown.js",
   "./js/vocabularyParts.js",
   "./js/vocabularyRoots.js",
   "./js/vocabularyReview.js",
   "./js/vocabularyTest.js",
+  "./js/vocabularyWordDetails.js",
+  "./js/vocabularyWordRow.js",
   "./js/vocabulary.js"
 ];
 

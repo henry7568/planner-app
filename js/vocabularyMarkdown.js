@@ -1,5 +1,6 @@
 import { inferVocabularyRoot } from "./vocabularyRoots.js";
 import { extractVocabularyPartFromFront, normalizeVocabularyPart } from "./vocabularyParts.js";
+import { normalizeVocabularyList } from "./vocabularyWordDetails.js";
 
 function cleanMarkdownValue(value) {
   return String(value || "")
@@ -27,7 +28,14 @@ function parseBulletLine(line) {
       front,
       meaning,
       example: exampleParts.filter(Boolean).join(" | ").trim(),
+      exampleMeaning: "",
       partOfSpeech: explicitPart || frontInfo.partOfSpeech,
+      pronunciation: "",
+      synonyms: [],
+      antonyms: [],
+      phrasalVerb: "",
+      phrasalVerbMeaning: "",
+      audioUrl: "",
     };
   }
 
@@ -38,8 +46,30 @@ function parseBulletLine(line) {
     front: frontInfo.front,
     meaning: colonMatch[2].trim(),
     example: "",
+    exampleMeaning: "",
     partOfSpeech: frontInfo.partOfSpeech,
+    pronunciation: "",
+    synonyms: [],
+    antonyms: [],
+    phrasalVerb: "",
+    phrasalVerbMeaning: "",
+    audioUrl: "",
   };
+}
+
+function parseExampleLine(value) {
+  const [example, exampleMeaning = ""] = String(value || "").split(/\s+\/\s+(?:example\s*[:：]\s*)?/i);
+  return {
+    example: cleanMarkdownValue(example),
+    exampleMeaning: cleanMarkdownValue(exampleMeaning),
+  };
+}
+
+function parsePhrasalVerb(value) {
+  const match = String(value || "").trim().match(/^(.+?)\s*\((.+)\)\s*$/);
+  return match
+    ? { phrasalVerb: match[1].trim(), phrasalVerbMeaning: match[2].trim() }
+    : { phrasalVerb: String(value || "").trim(), phrasalVerbMeaning: "" };
 }
 
 export function parseVocabularyMarkdown(text) {
@@ -66,9 +96,21 @@ export function parseVocabularyMarkdown(text) {
       }
     }
 
-    const exampleMatch = line.match(/^(?:[-*]\s*)?(?:예문|example)\s*[:：]\s*(.+)$/i);
+    const exampleMatch = line.match(/^(?:[-*]\s*)?(?:예문|example|하위 줄 예문)\s*[:：]\s*(.+)$/i);
     if (exampleMatch && currentWord) {
-      currentWord.example = cleanMarkdownValue(exampleMatch[1]);
+      Object.assign(currentWord, parseExampleLine(exampleMatch[1]));
+      return;
+    }
+
+    const fieldMatch = line.match(/^(?:[-*]\s*)?(발음|동의어|반의어|phrasal verb|오디오|audio)\s*[:：]\s*(.+)$/i);
+    if (fieldMatch && currentWord) {
+      const key = fieldMatch[1].toLowerCase();
+      const value = cleanMarkdownValue(fieldMatch[2]);
+      if (key === "발음") currentWord.pronunciation = value;
+      if (key === "동의어") currentWord.synonyms = normalizeVocabularyList(value);
+      if (key === "반의어") currentWord.antonyms = normalizeVocabularyList(value);
+      if (key === "오디오" || key === "audio") currentWord.audioUrl = value;
+      if (key === "phrasal verb") Object.assign(currentWord, parsePhrasalVerb(value));
     }
   });
 
@@ -107,7 +149,7 @@ export function renderVocabularyMarkdownImport(data, escapeHtml) {
         </label>
         <label>
           <span>Markdown 텍스트</span>
-          <textarea name="markdownText" autocomplete="off" placeholder="- hello | 안녕하세요 | She said hello."></textarea>
+          <textarea name="markdownText" autocomplete="off" placeholder="- achieve (v) | 성취하다 | I achieved my goal.&#10;발음: /əˈtʃiːv/&#10;동의어: accomplish, attain"></textarea>
         </label>
         <button class="primary-btn vocab-full-btn" type="submit">Markdown 가져오기</button>
       </form>
@@ -154,8 +196,15 @@ export function buildVocabularyMarkdownImport({
       front: word.front.trim(),
       meaning: word.meaning.trim(),
       example: word.example.trim(),
+      exampleMeaning: word.exampleMeaning?.trim() || "",
       root: inferVocabularyRoot(word.front),
       partOfSpeech: normalizeVocabularyPart(word.partOfSpeech),
+      pronunciation: word.pronunciation?.trim() || "",
+      synonyms: normalizeVocabularyList(word.synonyms),
+      antonyms: normalizeVocabularyList(word.antonyms),
+      phrasalVerb: word.phrasalVerb?.trim() || "",
+      phrasalVerbMeaning: word.phrasalVerbMeaning?.trim() || "",
+      audioUrl: word.audioUrl?.trim() || "",
       memo: "",
       status: "new",
       nextReview: todayKey,

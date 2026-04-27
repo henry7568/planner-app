@@ -687,6 +687,11 @@ span {
   cursor: pointer;
 }
 
+.vocab-deck-card-wrap {
+  display: grid;
+  gap: 8px;
+}
+
 .vocab-word-row {
   display: flex;
   align-items: center;
@@ -736,6 +741,137 @@ span {
 
 .vocab-word-right em {
   font-style: normal;
+}
+
+.vocab-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 40px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vocab-word-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.vocab-word-details span {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.vocab-word-details b {
+  margin-right: 4px;
+  color: #1e40af;
+}
+
+.vocab-review-audio {
+  display: flex;
+  justify-content: center;
+}
+
+.vocab-deck-actions,
+.vocab-modal-actions,
+.vocab-modal-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vocab-deck-actions {
+  justify-content: flex-end;
+}
+
+.vocab-deck-actions button,
+.vocab-modal-actions button,
+.vocab-modal-pager button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.vocab-deck-modal-panel {
+  display: grid;
+  gap: 14px;
+  max-height: min(680px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+.vocab-deck-modal-overlay {
+  z-index: 140;
+}
+
+.vocab-modal-word-list {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.vocab-modal-word-row {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.vocab-modal-word-row strong,
+.vocab-modal-word-row small,
+.vocab-modal-word-row em {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vocab-modal-word-row small,
+.vocab-modal-word-row em {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.vocab-modal-word-row em {
+  font-style: normal;
+}
+
+.vocab-modal-pager {
+  justify-content: space-between;
+}
+
+.vocab-modal-pager span {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.vocab-modal-actions {
+  justify-content: flex-end;
+  padding-top: 2px;
+  border-top: 1px solid var(--line-soft);
+}
+
+body.vocab-modal-open .bottom-tabbar {
+  pointer-events: none;
 }
 
 .vocab-dot {
@@ -1161,7 +1297,11 @@ span {
 }
 
 .vocab-add-grid.compact {
-  grid-template-columns: minmax(0, 0.6fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.vocab-add-grid.compact > label:only-child {
+  max-width: min(100%, 420px);
 }
 
 .vocab-add-form textarea {
@@ -3187,6 +3327,28 @@ body.modal-open {
 
   .vocab-deck-card {
     min-height: 78px;
+  }
+
+  .vocab-deck-actions,
+  .vocab-modal-actions,
+  .vocab-modal-pager {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vocab-modal-pager span {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    text-align: center;
+  }
+
+  .vocab-modal-pager button {
+    grid-row: 2;
+  }
+
+  .vocab-deck-modal-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
   }
 
   .vocab-rating-row {
@@ -8582,5 +8744,20 @@ body.modal-open {
   .time-picker-trigger,
   .finance-category-trigger {
     font-size: 16px;
+  }
+}
+
+body .vocab-deck-modal-panel {
+  max-height: min(680px, calc(100dvh - 24px));
+}
+
+@media (max-width: 720px) {
+  body .vocab-deck-modal-overlay {
+    padding: 12px;
+  }
+
+  body .vocab-deck-modal-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
   }
 }

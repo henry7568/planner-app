@@ -12,6 +12,16 @@ import {
   populateVocabularyMarkdownFileInput,
   renderVocabularyMarkdownImport,
 } from "./vocabularyMarkdown.js";
+import { deleteVocabularyDeck, renderDeckModal, renderDeckPanel, renameVocabularyDeck, setVocabularyDeckModalOpenClass } from "./vocabularyDeckModal.js";
+import { playVocabularyWordAudio } from "./vocabularyAudio.js";
+import {
+  getEmptyVocabularyDraftExtras,
+  getVocabularyDraftExtras,
+  getVocabularyExtraFields,
+  renderVocabularyAudioButton,
+  renderVocabularyExtraFields,
+} from "./vocabularyWordDetails.js";
+import { renderVocabularyWordRow } from "./vocabularyWordRow.js";
 import { inferVocabularyRoot, renderVocabularyRootGroups } from "./vocabularyRoots.js";
 import { rateVocabularyReviewWord, renderVocabularyReviewPanel } from "./vocabularyReview.js";
 import {
@@ -24,17 +34,17 @@ import {
   startVocabularyTest,
   updateVocabularyTestAnswer,
 } from "./vocabularyTest.js";
-import { renderVocabularyPartBadge, renderVocabularyPartOptions } from "./vocabularyParts.js";
+import { renderVocabularyPartOptions } from "./vocabularyParts.js";
 
 const PANEL_KEYS = ["home", "review", "test", "add", "decks"];
 let deps = {};
 let reviewFlipped = false;
-
+let deckModalState = { open: false, deckId: "", page: 0 };
 function getData() { return normalizeVocabularyData(deps.getVocabularyData?.()); }
 function setData(nextData) { deps.setVocabularyData?.(normalizeVocabularyData(nextData)); }
 function getMainMount() { return deps.refs?.vocabularyMount || null; }
 function getHomeMount() { return deps.refs?.vocabularyHomeCardMount || null; }
-
+function getDeckModalMount() { return document.getElementById("vocabularyDeckModalMount"); }
 function getActiveDeck(data) {
   return data.decks.find((deck) => deck.id === data.activeDeckId) || data.decks[0] || null;
 }
@@ -42,7 +52,6 @@ function getActiveDeck(data) {
 function getDeckWords(data, deckId = data.activeDeckId) {
   return data.words.filter((word) => word.deckId === deckId);
 }
-
 function getDueWords(data) {
   const today = getVocabularyTodayKey();
   return getDeckWords(data).filter((word) => (word.nextReview || today) <= today);
@@ -123,19 +132,7 @@ function renderHomePanel(data) {
 }
 
 function renderWordRow(word) {
-  return `
-    <div class="vocab-word-row">
-      <span>
-        <strong>${escapeHtml(word.front)}</strong>
-        ${renderVocabularyPartBadge(word, escapeHtml)}
-        <small>${escapeHtml(word.meaning || "뜻 없음")}</small>
-      </span>
-      <span class="vocab-word-right">
-        <i class="vocab-dot ${getVocabularyStatusClass(word)}"></i>
-        <em>${getVocabularyReviewLabel(word)}</em>
-      </span>
-    </div>
-  `;
+  return renderVocabularyWordRow(word, { escapeHtml, getStatusClass: getVocabularyStatusClass, getReviewLabel: getVocabularyReviewLabel });
 }
 
 function renderAddPanel(data) {
@@ -171,6 +168,7 @@ function renderAddPanel(data) {
           <input name="root" autocomplete="off" value="${escapeHtml(inferredRoot)}" placeholder="예: act, port, spect" aria-label="단어 어근" />
         </label>
       </div>
+      ${renderVocabularyExtraFields(data, escapeHtml)}
       <div class="vocab-add-grid compact">
         <label><span>덱 선택</span>
           <select name="deckId" aria-label="덱 선택">
@@ -206,41 +204,11 @@ function renderSuggestion(suggestion, draftFront) {
   `;
 }
 
-function renderDeckPanel(data) {
-  return `
-    <div class="vocab-deck-grid">
-      ${data.decks.map((deck) => renderDeckCard(data, deck)).join("")}
-    </div>
-    <form class="vocab-deck-form" data-vocab-form="deck">
-      <label><span>덱 이름</span>
-        <input name="deckName" autocomplete="off" placeholder="예: TOEIC 빈출" />
-      </label>
-      <button class="secondary-btn" type="submit">덱 추가</button>
-    </form>
-    ${renderVocabularyMarkdownImport(data, escapeHtml)}
-  `;
-}
-
-function renderDeckCard(data, deck) {
-  const words = getDeckWords(data, deck.id);
-  const dueCount = words.filter((word) => word.nextReview <= getVocabularyTodayKey()).length;
-  const progress = words.length
-    ? Math.round((words.filter((word) => word.status === "known").length / words.length) * 100)
-    : 0;
-  return `
-    <button class="vocab-deck-card ${deck.id === data.activeDeckId ? "active" : ""}" type="button" data-vocab-action="select-deck" data-id="${escapeHtml(deck.id)}">
-      <strong>${escapeHtml(deck.name)}</strong>
-      <span>${words.length}개 · 오늘 ${dueCount}개 복습</span>
-      <i><b style="width:${progress}%"></b></i>
-    </button>
-  `;
-}
-
 function renderActivePanel(data) {
   if (data.activePanel === "review") return renderVocabularyReviewPanel(data, getDueWords(data), reviewFlipped);
   if (data.activePanel === "test") return renderVocabularyTestPanel(data, getDeckWords(data));
   if (data.activePanel === "add") return renderAddPanel(data);
-  if (data.activePanel === "decks") return renderDeckPanel(data);
+  if (data.activePanel === "decks") return renderDeckPanel(data, escapeHtml, renderVocabularyMarkdownImport, getVocabularyTodayKey());
   return renderHomePanel(data);
 }
 
@@ -248,7 +216,11 @@ export function renderVocabulary() {
   const data = getData();
   const homeMount = getHomeMount();
   const mainMount = getMainMount();
+  const deckModalMount = getDeckModalMount();
   if (homeMount) homeMount.innerHTML = renderHomeCard(data);
+  if (deckModalMount) deckModalMount.innerHTML = renderDeckModal(data, deckModalState, escapeHtml);
+  bindVocabularyEvents(deckModalMount);
+  setVocabularyDeckModalOpenClass(deckModalState.open);
   if (!mainMount) return;
   mainMount.innerHTML = `
     <div class="vocab-header">
@@ -292,6 +264,7 @@ function saveWord(form) {
     front,
     meaning: elements.meaning.value.trim(),
     example: elements.example.value.trim(),
+    ...getVocabularyExtraFields(elements),
     root: elements.root.value.trim() || inferVocabularyRoot(front),
     partOfSpeech: elements.partOfSpeech.value,
     memo: "",
@@ -315,6 +288,7 @@ function saveWord(form) {
     draftExample: "",
     draftRoot: "",
     draftPartOfSpeech: "",
+    ...getEmptyVocabularyDraftExtras(),
   });
   deps.queueSavePlannerData?.();
   renderVocabulary();
@@ -349,6 +323,7 @@ function cancelWordDraft() {
     draftExample: "",
     draftRoot: "",
     draftPartOfSpeech: "",
+    ...getEmptyVocabularyDraftExtras(),
   });
   deps.queueSavePlannerData?.();
   renderVocabulary();
@@ -364,17 +339,57 @@ function updateDraft(form) {
     draftExample: elements.example?.value || "",
     draftRoot: elements.root?.value || "",
     draftPartOfSpeech: elements.partOfSpeech?.value || "",
+    ...getVocabularyDraftExtras(elements),
   });
 }
 
 function isInsideVocabulary(eventTarget) {
-  return getHomeMount()?.contains(eventTarget) || getMainMount()?.contains(eventTarget);
+  return getHomeMount()?.contains(eventTarget) || getMainMount()?.contains(eventTarget) || getDeckModalMount()?.contains(eventTarget);
 }
 
 function saveAndRender(nextData, shouldSave = true) {
   setData(nextData);
   if (shouldSave) deps.queueSavePlannerData?.();
   renderVocabulary();
+}
+
+function openDeckModal(deckId) {
+  const data = getData();
+  const nextDeckId = deckId || data.activeDeckId;
+  deckModalState = { open: true, deckId: nextDeckId, page: 0 };
+  saveAndRender({ ...data, activeDeckId: nextDeckId });
+}
+
+function closeDeckModal() { deckModalState = { open: false, deckId: "", page: 0 }; setVocabularyDeckModalOpenClass(false); renderVocabulary(); }
+
+function moveDeckModalPage(direction) {
+  deckModalState = { ...deckModalState, page: Math.max(0, (deckModalState.page || 0) + direction) };
+  renderVocabulary();
+}
+
+function editDeck(deckId) {
+  const data = getData();
+  const deck = data.decks.find((item) => item.id === deckId);
+  if (!deck) return;
+  const nextName = window.prompt("덱 이름을 입력하세요.", deck.name);
+  if (nextName === null) return;
+  saveAndRender(renameVocabularyDeck(data, deck.id, nextName));
+}
+
+function deleteDeck(deckId) {
+  const data = getData();
+  const deck = data.decks.find((item) => item.id === deckId);
+  if (!deck) return;
+  if (data.decks.length <= 1) {
+    window.alert("기본 단어장은 마지막 덱이라 삭제할 수 없습니다.");
+    return;
+  }
+  const words = getDeckWords(data, deck.id);
+  const ok = window.confirm(`"${deck.name}" 덱과 포함된 단어 ${words.length}개를 삭제할까요?`);
+  if (!ok) return;
+  const nextData = deleteVocabularyDeck(data, deck.id);
+  if (deckModalState.deckId === deck.id) deckModalState = { open: false, deckId: "", page: 0 };
+  saveAndRender(nextData);
 }
 
 function handleTestAction(action, target) {
@@ -393,6 +408,9 @@ function handleClick(event) {
   const target = event.target.closest("[data-vocab-action]");
   if (!target || !isInsideVocabulary(target)) return;
   const action = target.dataset.vocabAction;
+  if (action === "close-deck-modal" && event.target.closest("[data-vocab-modal-panel]") && !event.target.closest(".popup-close-btn")) {
+    return;
+  }
   if (action === "open-vocabulary-page") return deps.openVocabularyPage?.();
   if (action === "back-home") return deps.openHomePage?.();
   if (action === "switch-panel") return switchPanel(target.dataset.panel || "home");
@@ -405,10 +423,13 @@ function handleClick(event) {
     reviewFlipped = false;
     return saveAndRender(rateVocabularyReviewWord(getData(), getDueWords(getData()), target.dataset.rating || "good"));
   }
-  if (action === "select-deck") {
-    const data = getData();
-    return saveAndRender({ ...data, activeDeckId: target.dataset.id || data.activeDeckId });
-  }
+  if (action === "open-deck-modal") return openDeckModal(target.dataset.id);
+  if (action === "close-deck-modal") return closeDeckModal();
+  if (action === "deck-modal-prev") return moveDeckModalPage(-1);
+  if (action === "deck-modal-next") return moveDeckModalPage(1);
+  if (action === "edit-deck") return editDeck(target.dataset.id);
+  if (action === "delete-deck") return deleteDeck(target.dataset.id);
+  if (action === "play-word-audio") return playVocabularyWordAudio(getData().words.find((word) => word.id === target.dataset.id));
   if (action === "apply-suggestion") return applySuggestion();
   if (action === "cancel-word-draft") return cancelWordDraft();
   return handleTestAction(action, target);

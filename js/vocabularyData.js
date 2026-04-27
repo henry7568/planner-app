@@ -1,4 +1,5 @@
 import { normalizeVocabularyPart } from "./vocabularyParts.js";
+import { normalizeVocabularyList } from "./vocabularyWordDetails.js";
 
 const DEFAULT_DECK_ID = "deck-default";
 
@@ -32,8 +33,15 @@ function normalizeVocabularyWord(word, fallbackDeckId = DEFAULT_DECK_ID) {
     front,
     meaning: String(source.meaning || source.back || "").trim(),
     example: String(source.example || "").trim(),
+    exampleMeaning: String(source.exampleMeaning || source.exampleTranslation || "").trim(),
     root: String(source.root || "").trim(),
     partOfSpeech: normalizeVocabularyPart(source.partOfSpeech || source.pos || ""),
+    pronunciation: String(source.pronunciation || source.pron || "").trim(),
+    synonyms: normalizeVocabularyList(source.synonyms),
+    antonyms: normalizeVocabularyList(source.antonyms),
+    phrasalVerb: String(source.phrasalVerb || "").trim(),
+    phrasalVerbMeaning: String(source.phrasalVerbMeaning || "").trim(),
+    audioUrl: String(source.audioUrl || source.soundUrl || "").trim(),
     memo: String(source.memo || "").trim(),
     status: ["new", "learning", "known"].includes(source.status)
       ? source.status
@@ -96,8 +104,15 @@ export function normalizeVocabularyData(data = {}) {
     draftFront: source.draftFront || "",
     draftMeaning: source.draftMeaning || "",
     draftExample: source.draftExample || "",
+    draftExampleMeaning: source.draftExampleMeaning || "",
     draftRoot: source.draftRoot || "",
     draftPartOfSpeech: normalizeVocabularyPart(source.draftPartOfSpeech || ""),
+    draftPronunciation: source.draftPronunciation || "",
+    draftSynonyms: source.draftSynonyms || "",
+    draftAntonyms: source.draftAntonyms || "",
+    draftPhrasalVerb: source.draftPhrasalVerb || "",
+    draftPhrasalVerbMeaning: source.draftPhrasalVerbMeaning || "",
+    draftAudioUrl: source.draftAudioUrl || "",
     words,
     decks,
   };

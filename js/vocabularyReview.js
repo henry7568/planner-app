@@ -1,6 +1,7 @@
 import { escapeHtml } from "./utils.js";
 import { addVocabularyDays, getVocabularyTodayKey } from "./vocabularyHelpers.js";
 import { renderVocabularyPartBadge } from "./vocabularyParts.js";
+import { renderVocabularyAudioButton, renderVocabularyWordDetails } from "./vocabularyWordDetails.js";
 
 function advanceVocabularyReview(data) {
   return { ...data, reviewIndex: data.reviewIndex + 1 };
@@ -21,18 +22,21 @@ export function renderVocabularyReviewPanel(data, dueWords, reviewFlipped) {
 
   return `
     <div class="vocab-review-count">${index + 1} / ${dueWords.length}</div>
+    <div class="vocab-review-audio">${renderVocabularyAudioButton(word, escapeHtml)}</div>
     <button class="vocab-flip-wrap" type="button" data-vocab-action="flip-card" aria-label="단어 카드 뒤집기">
       <span class="vocab-flip-card ${reviewFlipped ? "flipped" : ""}">
         <span class="vocab-flip-face front">
           <small>카드를 눌러 뜻 보기</small>
           <strong>${escapeHtml(word.front)}</strong>
           ${renderVocabularyPartBadge(word, escapeHtml)}
+          ${word.pronunciation ? `<small>${escapeHtml(word.pronunciation)}</small>` : ""}
           <small>뜻을 확인한 뒤 기억 정도를 선택하세요.</small>
         </span>
         <span class="vocab-flip-face back">
           <strong>${escapeHtml(word.meaning || "뜻 없음")}</strong>
           ${renderVocabularyPartBadge(word, escapeHtml)}
           <small>${escapeHtml(word.example || "예문 없음")}</small>
+          ${renderVocabularyWordDetails(word, escapeHtml)}
         </span>
       </span>
     </button>
