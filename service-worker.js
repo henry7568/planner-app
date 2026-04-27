@@ -1,4 +1,4 @@
-const CACHE_VERSION = "life-planner-v174";
+const CACHE_VERSION = "life-planner-v184";
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -37,7 +37,15 @@ const APP_SHELL_ASSETS = [
   "./js/serviceWorkerRegistration.js",
   "./js/storage.js",
   "./js/timePicker.js",
-  "./js/utils.js"
+  "./js/utils.js",
+  "./js/vocabularyData.js",
+  "./js/vocabularyHelpers.js",
+  "./js/vocabularyMarkdown.js",
+  "./js/vocabularyParts.js",
+  "./js/vocabularyRoots.js",
+  "./js/vocabularyReview.js",
+  "./js/vocabularyTest.js",
+  "./js/vocabulary.js"
 ];
 
 self.addEventListener("install", (event) => {

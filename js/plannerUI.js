@@ -118,6 +118,7 @@ export function switchTab(tabName) {
     const btnTab = btn.dataset.tab || "";
     const isActive =
       btnTab === tabName ||
+      (tabName === "vocabulary" && btnTab === "home") ||
       (tabName === "finance" && btnTab === "finance") ||
       (tabName === "salary" && btnTab === "salary");
 

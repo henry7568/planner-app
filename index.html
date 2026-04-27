@@ -35,7 +35,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./app-icon.svg" />
-    <link rel="stylesheet" href="style.css?v=174" />
+    <link rel="stylesheet" href="style.css?v=184" />
   </head>
   <body>
     <div id="authLoadingScreen" class="auth-loading-screen">
@@ -186,6 +186,19 @@
               </button>
             </div>
           </section>
+
+          <section
+            id="vocabularyHomeCardMount"
+            class="card vocabulary-card"
+            aria-label="Vocabulary"
+          ></section>
+        </section>
+        <section id="tab-vocabulary" class="tab-section hidden">
+          <section
+            id="vocabularyMount"
+            class="card vocabulary-card vocabulary-page-card"
+            aria-label="Vocabulary"
+          ></section>
         </section>
         <section id="tab-dashboard" class="tab-section hidden">
           <section class="card">
@@ -2904,6 +2917,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script type="module" src="./js/app.js?v=174"></script>
+    <script type="module" src="./js/app.js?v=184"></script>
   </body>
 </html>

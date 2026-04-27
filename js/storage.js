@@ -1,5 +1,6 @@
 // storage.js
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { normalizeVocabularyData } from "./vocabularyData.js";
 
 let financeSaveTimer = null;
 const FINANCE_BUDGET_VERSION = 3;
@@ -35,6 +36,7 @@ export function normalizePlannerData(data) {
       inboxItems: [],
       routines: [],
       ignoredRecommendationIds: [],
+      vocabulary: normalizeVocabularyData(),
       rewards: {
         coinVersion: 1,
         ledger: [],
@@ -52,6 +54,7 @@ export function normalizePlannerData(data) {
     ignoredRecommendationIds: Array.isArray(source.ignoredRecommendationIds)
       ? source.ignoredRecommendationIds
       : [],
+    vocabulary: normalizeVocabularyData(source.vocabulary),
     rewards: {
       coinVersion: Number(source.rewards?.coinVersion) || 1,
       ledger: Array.isArray(source.rewards?.ledger) ? source.rewards.ledger : [],
@@ -439,6 +442,7 @@ export async function loadRemotePlannerData(uid) {
       state.inboxItems = data.inboxItems;
       state.routines = data.routines;
       state.ignoredRecommendationIds = data.ignoredRecommendationIds;
+      state.vocabularyData = data.vocabulary;
       state.rewardsData = data.rewards;
     } else {
       const localData = loadLocalBackup();
@@ -447,6 +451,7 @@ export async function loadRemotePlannerData(uid) {
       state.inboxItems = localData.inboxItems;
       state.routines = localData.routines;
       state.ignoredRecommendationIds = localData.ignoredRecommendationIds;
+      state.vocabularyData = localData.vocabulary;
       state.rewardsData = localData.rewards;
       await savePlannerDataToCloud();
     }
@@ -458,6 +463,7 @@ export async function loadRemotePlannerData(uid) {
     state.inboxItems = localData.inboxItems;
     state.routines = localData.routines;
     state.ignoredRecommendationIds = localData.ignoredRecommendationIds;
+    state.vocabularyData = localData.vocabulary;
     state.rewardsData = localData.rewards;
   } finally {
     state.isRemoteLoading = false;
@@ -566,6 +572,7 @@ export async function savePlannerDataToCloud() {
         ignoredRecommendationIds: Array.isArray(state.ignoredRecommendationIds)
           ? state.ignoredRecommendationIds
           : [],
+        vocabulary: normalizeVocabularyData(state.vocabularyData),
         rewards: state.rewardsData || { coinVersion: 1, ledger: [] },
         updatedAt: Date.now(),
       },
@@ -590,6 +597,7 @@ export function saveLocalBackup() {
           inboxItems: state.inboxItems,
           routines: state.routines,
           ignoredRecommendationIds: state.ignoredRecommendationIds,
+          vocabulary: state.vocabularyData,
           rewards: state.rewardsData,
         }),
       ),

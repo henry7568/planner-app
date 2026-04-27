@@ -35,6 +35,11 @@ import {
   normalizeDailyLocationEntries,
 } from "./placeUtils.js";
 import { registerPlannerServiceWorker } from "./serviceWorkerRegistration.js";
+import {
+  configureVocabularyModule,
+  normalizeVocabularyData,
+  renderVocabulary,
+} from "./vocabulary.js";
 
 import {
   setupTimePickers,
@@ -513,6 +518,8 @@ const monthFilter = document.getElementById("monthFilter");
 
 const dashboardItemList = document.getElementById("dashboardItemList");
 const todayList = document.getElementById("todayList");
+const vocabularyHomeCardMount = document.getElementById("vocabularyHomeCardMount");
+const vocabularyMount = document.getElementById("vocabularyMount");
 const todayAchievementRate = document.getElementById("todayAchievementRate");
 const todayAchievementBarFill = document.getElementById(
   "todayAchievementBarFill",
@@ -1148,6 +1155,7 @@ let items = [];
 let projects = [];
 let inboxItems = [];
 let ignoredRecommendationIds = [];
+let vocabularyData = normalizeVocabularyData();
 let rewardsData = normalizeRewardsData();
 let isRemoteLoading = false;
 let saveTimer = null;
@@ -1191,6 +1199,13 @@ window.AppState = {
   },
   set ignoredRecommendationIds(value) {
     ignoredRecommendationIds = Array.isArray(value) ? value : [];
+  },
+
+  get vocabularyData() {
+    return vocabularyData;
+  },
+  set vocabularyData(value) {
+    vocabularyData = normalizeVocabularyData(value);
   },
 
   get rewardsData() {
@@ -1455,6 +1470,20 @@ configureProductivityReportModule({
   getItems: () => items,
   getProjects: () => projects,
   getRewardsData: () => rewardsData,
+});
+
+configureVocabularyModule({
+  refs: {
+    vocabularyHomeCardMount,
+    vocabularyMount,
+  },
+  getVocabularyData: () => vocabularyData,
+  setVocabularyData: (value) => {
+    vocabularyData = normalizeVocabularyData(value);
+  },
+  openVocabularyPage: () => switchTab("vocabulary"),
+  openHomePage: enterHomeTab,
+  queueSavePlannerData,
 });
 
 configureAiRecommendationModule({
@@ -2372,6 +2401,7 @@ function renderAll() {
   renderMonthOptions();
   renderDashboard();
   renderProductivityReport();
+  renderVocabulary();
   renderTodayList();
   renderAiRecommendations();
   renderCalendar();
